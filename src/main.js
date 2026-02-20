@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { createHorse } from "./World/Components/Horse.js";
-import { createUserUI } from "./World/Components/UserUI.js"; // Import the component
+import { createUserUI } from "./World/Components/UserUI.js";
+import { Timer } from "three/src/core/Timer.js";
 
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, onSnapshot } from "firebase/firestore";
@@ -14,13 +15,14 @@ const firebaseConfig = {
   messagingSenderId: "834343341431",
   appId: "1:834343341431:web:ecc15539578a25dda06572",
 };
+
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 async function init() {
-  // ... Standard Scene Setup (Camera, Renderer, Controls) ...
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000000);
+
   const camera = new THREE.PerspectiveCamera(
     75,
     window.innerWidth / window.innerHeight,
@@ -28,18 +30,25 @@ async function init() {
     1000,
   );
   camera.position.set(0, 0, 2.5);
+
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Better performance on high-res screens
   document.body.appendChild(renderer.domElement);
 
   const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
   controls.target.set(0, 0, 0);
 
-  const clock = new THREE.Clock();
+  // Use Timer instead of Clock to avoid deprecation warnings
+  const timer = new Timer();
   let horseUpdater = null;
 
   try {
     const { horseGroup, update, addUserSphere } = await createHorse();
+
+    // Slight rotation adjustment as per previous versions
+    horseGroup.rotation.y = THREE.MathUtils.degToRad(-20);
     scene.add(horseGroup);
     horseUpdater = update;
 
@@ -53,16 +62,33 @@ async function init() {
       });
     });
   } catch (error) {
-    console.error(error);
+    console.error("Error initializing horse:", error);
   }
 
-  function animate() {
+  // Handle Window Resize
+  window.addEventListener("resize", () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  function animate(timestamp) {
     requestAnimationFrame(animate);
-    if (horseUpdater) horseUpdater(clock.getDelta());
+
+    // Update Timer with the requestAnimationFrame timestamp
+    timer.update(timestamp);
+    const delta = timer.getDelta();
+
     controls.update();
+
+    if (horseUpdater) {
+      horseUpdater(delta);
+    }
+
     renderer.render(scene, camera);
   }
-  animate();
+
+  requestAnimationFrame(animate);
 }
 
 init();
