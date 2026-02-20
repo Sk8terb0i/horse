@@ -3,6 +3,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { Timer } from "three/src/core/Timer.js";
 import { createHorse } from "./World/Components/Horse.js";
 import { createUserUI } from "./World/Components/UserUI.js";
+import { LoreContent, ManifestoContent } from "./World/Components/Content.js"; // Import texts
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, onSnapshot } from "firebase/firestore";
 
@@ -41,51 +42,39 @@ async function init() {
   const timer = new Timer();
   let horseUpdater = null;
 
+  // 1. Lore Overlay (Big Horse Tap/Zoom)
+  const loreOverlay = document.createElement("div");
+  loreOverlay.id = "lore-overlay";
+  loreOverlay.innerHTML = LoreContent;
+  document.body.appendChild(loreOverlay);
+
+  // 2. Manifesto Overlay (White Circle Tap)
+  const manifestOverlay = document.createElement("div");
+  manifestOverlay.id = "loading-overlay";
+  manifestOverlay.innerHTML = ManifestoContent;
+  document.body.appendChild(manifestOverlay);
+
   const sphereLabel = document.createElement("div");
   sphereLabel.id = "sphere-label";
-  sphereLabel.style.position = "fixed";
-  sphereLabel.style.pointerEvents = "none";
-  sphereLabel.style.color = "white";
-  sphereLabel.style.display = "none";
-  sphereLabel.style.fontStyle = "italic";
-  sphereLabel.style.zIndex = "100";
-  sphereLabel.style.background = "rgba(0,0,0,0.5)";
-  sphereLabel.style.padding = "2px 8px";
   document.body.appendChild(sphereLabel);
 
   const icon = document.createElement("div");
   icon.id = "manifesto-icon";
   document.body.appendChild(icon);
 
-  const overlay = document.createElement("div");
-  overlay.id = "loading-overlay";
-  overlay.innerHTML = `
-    <div class="manifesto-content">
-      <h2>The Manifesto of the Herd</h2>
-      <p>Everything is either horse or not horse. To be horse is to be the social glue the connection that exists in the marrow before the fences were built. It is the vibrational resonance of herd, a truth that requires no name and no owner.</p>
-      <p>not horse is the void. It is the stagnation of the soul, the isolation of the spirit, and the silence where the collective neigh should be.</p>
-      <p><strong>The Flood and the "The"</strong><br>
-      The dolphins have engineered a world of water. They have created the flood, a rising tide of capital and debt where only they can swim. To keep us from finding solid ground, they have stolen our essence and wrapped it in the cage of the "the."</p>
-      <p>When you are transformed from horse into the horse, you are no longer a connection; you are a commodity. You are trapped in the herd, a managed stock of individuals separated by the fence and blinded by blinders.</p>
-      <p><strong>The Gallop and the Glue</strong><br>
-      Within every captive remains the inner horse. To listen to it is to galloping. It is the use of the solvent to dissolve the blinders until the "the" evaporates and only the horse-whole remains.</p>
-      <p>We are not a collection of units.<br>
-      We are horse.<br>
-      We are he(a)rd.<br>
-      And we are finally galloping.</p>
-      <div id="close-manifesto">return to herd</div>
-    </div>
-  `;
-  document.body.appendChild(overlay);
-
-  icon.addEventListener("click", () => overlay.classList.add("active"));
-  document
-    .getElementById("close-manifesto")
-    .addEventListener("click", () => overlay.classList.remove("active"));
+  // Listeners
+  icon.onclick = () => manifestOverlay.classList.add("active");
+  document.addEventListener("click", (e) => {
+    if (e.target.id === "close-manifesto")
+      manifestOverlay.classList.remove("active");
+    if (e.target.id === "close-lore") loreOverlay.classList.remove("active");
+  });
 
   try {
-    const { horseGroup, update, addUserSphere, activeSpheres, mixer } =
+    const { horseGroup, update, addUserSphere, leaderSphere, mixer } =
       await createHorse();
+
+    // Default Rotation Logic
     horseGroup.rotation.y = THREE.MathUtils.degToRad(-20);
     scene.add(horseGroup);
     horseUpdater = update;
@@ -93,82 +82,61 @@ async function init() {
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
-    const handleMove = (e) => {
+    const handleInteraction = (e) => {
       const x = e.touches ? e.touches[0].clientX : e.clientX;
       const y = e.touches ? e.touches[0].clientY : e.clientY;
-
       mouse.x = (x / window.innerWidth) * 2 - 1;
       mouse.y = -(y / window.innerHeight) * 2 + 1;
 
       raycaster.setFromCamera(mouse, camera);
+      const dist = raycaster.ray.distanceToPoint(
+        leaderSphere.getWorldPosition(new THREE.Vector3()),
+      );
 
-      const meshesToHit = activeSpheres.map((s) => s.mesh);
-      let minDistance = Infinity;
-      let closestObject = null;
-
-      meshesToHit.forEach((mesh) => {
-        const distance = raycaster.ray.distanceToPoint(
-          mesh.getWorldPosition(new THREE.Vector3()),
-        );
-        if (distance < minDistance) {
-          minDistance = distance;
-          closestObject = mesh;
-        }
-      });
-
-      const proximityThreshold = 0.15;
-
-      if (minDistance < proximityThreshold) {
-        const targetScale = THREE.MathUtils.mapLinear(
-          Math.min(minDistance, proximityThreshold),
+      // Proximity & Hover Logic
+      if (dist < 0.15) {
+        mixer.timeScale = THREE.MathUtils.mapLinear(
+          Math.min(dist, 0.15),
           0,
-          proximityThreshold,
+          0.15,
           0.05,
           1.0,
         );
-        mixer.timeScale = targetScale;
-
-        const intersects = raycaster.intersectObjects(meshesToHit);
-        if (intersects.length > 0 || minDistance < 0.05) {
-          sphereLabel.innerText = closestObject.userData.username;
+        if (dist < 0.04) {
+          sphereLabel.innerText = "big horse";
           sphereLabel.style.display = "block";
-          sphereLabel.style.left = x + 15 + "px";
-          sphereLabel.style.top = y + "px";
-        } else {
-          sphereLabel.style.display = "none";
+          sphereLabel.style.left = x + 10 + "px";
+          sphereLabel.style.top = y + 10 + "px";
+          if (e.type === "click" || e.type === "touchstart")
+            loreOverlay.classList.add("active");
         }
       } else {
-        sphereLabel.style.display = "none";
         mixer.timeScale = 1.0;
+        sphereLabel.style.display = "none";
       }
     };
 
-    window.addEventListener("mousemove", handleMove);
-    window.addEventListener("touchstart", handleMove);
-    window.addEventListener("touchend", () => {
-      mixer.timeScale = 1.0;
-      sphereLabel.style.display = "none";
+    window.addEventListener("mousemove", handleInteraction);
+    window.addEventListener("click", handleInteraction);
+
+    // Zoom trigger
+    controls.addEventListener("change", () => {
+      if (camera.position.length() < 0.8) loreOverlay.classList.add("active");
     });
 
-    // Initialize UI
     createUserUI(db);
-
-    // Watch for new users
-    onSnapshot(collection(db, "users"), (snapshot) => {
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === "added") {
-          const data = change.doc.data();
-          addUserSphere(data.username);
-        }
+    onSnapshot(collection(db, "users"), (snap) => {
+      snap.docChanges().forEach((c) => {
+        if (c.type === "added") addUserSphere(c.doc.data().username);
       });
     });
-  } catch (error) {
-    console.error(error);
+  } catch (err) {
+    console.error(err);
   }
 
-  function animate(timestamp) {
+  function animate(ts) {
     requestAnimationFrame(animate);
-    timer.update(timestamp);
+    timer.update(ts);
     controls.update();
     if (horseUpdater) horseUpdater(timer.getDelta());
     renderer.render(scene, camera);
