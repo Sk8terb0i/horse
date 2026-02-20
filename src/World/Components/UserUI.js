@@ -2,11 +2,12 @@ import { doc, getDoc, setDoc } from "firebase/firestore";
 
 export function createUserUI(db) {
   const container = document.getElementById("ui-container");
+  container.classList.add("hidden");
 
-  // Create HTML structure dynamically
   container.innerHTML = `
-    <input type="text" id="nameInput" placeholder="Your Name" />
-    <input type="text" id="usernameInput" placeholder="Unique Username" />
+    <div id="ui-header">unite with horse become a point of connection</div>
+    <input type="text" id="nameInput" placeholder="your name" />
+    <input type="text" id="usernameInput" placeholder="unique username" />
     <button id="submitBtn">join horse</button>
     <p id="msg"></p>
   `;
@@ -21,7 +22,7 @@ export function createUserUI(db) {
     const username = usernameInput.value.trim().toLowerCase();
 
     if (!name || !username) {
-      updateMessage("Please fill in both fields.", "error");
+      updateMessage("please fill in both fields.", "error");
       return;
     }
 
@@ -30,21 +31,20 @@ export function createUserUI(db) {
       const userSnap = await getDoc(userRef);
 
       if (userSnap.exists()) {
-        updateMessage("Username already taken!", "error");
+        updateMessage("username already taken!", "error");
       } else {
         await setDoc(userRef, {
           realName: name,
           username: username,
           createdAt: Date.now(),
         });
-
-        updateMessage("Success! You've joined.", "success");
+        updateMessage("success! you are horse.", "success");
         nameInput.value = "";
         usernameInput.value = "";
       }
     } catch (err) {
       console.error(err);
-      updateMessage("Database error.", "error");
+      updateMessage("database error.", "error");
     }
   });
 
