@@ -57,7 +57,7 @@ export const UserLoreContent = `
   <div class="lore-layout">
     <div id="close-user-lore" class="close-icon"></div>
     <div class="lore-sphere-side">
-      <div class="horse-silhouette-icon"></div>
+      <div class="static-glow-sphere"></div>
     </div>
     <div class="lore-text-side">
       <div class="centered-content">

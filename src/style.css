@@ -1,9 +1,16 @@
-/* --- 1. Base Styles --- */
+/* --- 1. Base Styles & Theme Variables --- */
+:root {
+  --big-horse-color: #fff5b5;
+  --user-horse-color: #ded2ff;
+  --bg-color: #000;
+  --text-dim: #444; /* Darker for the "inactive" archive look */
+}
+
 body {
   margin: 0;
   padding: 0;
   overflow: hidden;
-  background-color: #000;
+  background-color: var(--bg-color);
   color: white;
   font-family: serif;
 }
@@ -95,7 +102,7 @@ body {
 }
 
 /* --- 4. Overlays --- */
-#lore-overlay, #loading-overlay {
+#lore-overlay, #loading-overlay, #user-lore-overlay {
   position: fixed;
   top: 0;
   left: 0;
@@ -108,11 +115,11 @@ body {
   transition: opacity 0.5s ease;
   overflow-y: auto;
   display: flex;
-  align-items: center; /* Vertical centering */
-  justify-content: center; /* Horizontal centering */
+  align-items: center;
+  justify-content: center;
 }
 
-#lore-overlay.active, #loading-overlay.active {
+#lore-overlay.active, #loading-overlay.active, #user-lore-overlay.active {
   opacity: 1;
   pointer-events: auto;
 }
@@ -125,7 +132,6 @@ body {
   position: relative;
 }
 
-/* Lore specific: split view */
 .lore-sphere-side {
   flex: 1;
   display: flex;
@@ -144,6 +150,11 @@ body {
   box-shadow: 0 0 40px 10px rgba(255, 255, 255, 0.3);
 }
 
+#user-lore-overlay .static-glow-sphere {
+  box-shadow: none;
+  background: #fff;
+}
+
 .lore-text-side {
   flex: 1;
   display: flex;
@@ -152,7 +163,6 @@ body {
   padding: 80px 60px;
 }
 
-/* Manifesto specific: singular centered column */
 .manifesto-layout {
   justify-content: center;
   align-items: center;
@@ -168,7 +178,7 @@ body {
   font-size: 1.3rem;
   margin-bottom: 2rem;
   font-style: italic;
-  text-align: center; /* Centering header for the manifesto */
+  text-align: center;
 }
 
 /* --- 6. Close Icon --- */
@@ -184,10 +194,7 @@ body {
   transition: opacity 0.3s;
 }
 
-.close-icon:hover {
-  opacity: 1;
-}
-
+.close-icon:hover { opacity: 1; }
 .close-icon::before, .close-icon::after {
   content: '';
   position: absolute;
@@ -196,7 +203,6 @@ body {
   height: 1px;
   background-color: white;
 }
-
 .close-icon::before { transform: rotate(45deg); }
 .close-icon::after { transform: rotate(-45deg); }
 
@@ -215,13 +221,11 @@ summary {
 }
 
 summary h2 { margin: 0; font-size: 1.1rem; }
-
 summary::after {
   content: '+';
   font-family: monospace;
   color: #444;
 }
-
 details[open] summary::after { content: '−'; color: white; }
 
 p {
@@ -232,11 +236,150 @@ p {
 
 .hidden { display: none !important; }
 
-/* --- 8. Mobile --- */
+/* --- 8. Archive UI --- */
+.toggle-wrapper {
+  position: fixed;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  z-index: 3100;
+}
+
+.toggle-label {
+  font-style: italic;
+  font-size: 0.8rem;
+  color: #555;
+  transition: color 0.3s;
+}
+
+.toggle-label.active { color: white; }
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 24px;
+}
+
+.switch input { opacity: 0; width: 0; height: 0; }
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: transparent;
+  border: 1px solid #333;
+  transition: .4s;
+  border-radius: 24px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 16px; width: 16px;
+  left: 4px; bottom: 3px;
+  background-color: #444;
+  transition: .4s;
+  border-radius: 50%;
+}
+
+input:checked + .slider { border-color: white; }
+input:checked + .slider:before {
+  transform: translateX(24px);
+  background-color: white;
+  box-shadow: 0 0 10px white;
+}
+
+#archive-nav {
+  position: fixed;
+  right: 80px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 3000;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s ease;
+  text-align: right;
+}
+
+#archive-nav.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Navigation Structure */
+.nav-section {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.nav-meta {
+  font-family: monospace;
+  font-size: 0.65rem;
+  letter-spacing: 2px;
+  color: #333;
+  margin-bottom: 5px;
+  transition: color 0.4s ease;
+}
+
+.nav-item {
+  font-style: italic;
+  font-size: 1.8rem;
+  cursor: pointer;
+  position: relative;
+  color: var(--text-dim);
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  padding-right: 0;
+  user-select: none;
+}
+
+/* Dynamic Hover States */
+#nav-big-horse:hover {
+  color: var(--big-horse-color);
+  transform: translateX(-15px);
+  text-shadow: 0 0 20px rgba(255, 221, 0, 0.3);
+}
+
+#nav-the-horse:hover {
+  color: var(--user-horse-color);
+  transform: translateX(-15px);
+  text-shadow: 0 0 20px rgba(0, 255, 204, 0.3);
+}
+
+/* Metadata lighting up on hover */
+.nav-section:hover .nav-meta {
+  color: #666;
+}
+
+/* Decorative Dash */
+.nav-item::after {
+  content: '';
+  display: block;
+  width: 0;
+  height: 1px;
+  background: currentColor;
+  transition: width 0.4s ease;
+  margin-top: 4px;
+}
+
+.nav-item:hover::after {
+  width: 40px;
+}
+
+/* --- 9. Mobile --- */
 @media (max-width: 1024px) {
   .lore-layout { flex-direction: column; }
   .lore-sphere-side { height: 30vh; position: relative; flex: none; }
   .lore-text-side, .manifesto-inner { padding: 40px 20px; align-items: flex-start; }
   .manifesto-inner h2 { text-align: left; }
   .close-icon { top: 20px; right: 20px; }
+  #archive-nav { right: 30px; }
+  .nav-item { font-size: 1.4rem; }
 }
