@@ -1,8 +1,4 @@
-import {
-  doc,
-  getDoc,
-  setDoc,
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 
 export function createUserUI(db) {
   const container = document.getElementById("ui-container");

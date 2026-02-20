@@ -4,6 +4,7 @@ import { createHorse } from "./World/Components/Horse.js";
 import { createUserUI } from "./World/Components/UserUI.js";
 import { Timer } from "three/src/core/Timer.js";
 
+// Import directly from the sub-modules to ensure compatibility
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, onSnapshot } from "firebase/firestore";
 
@@ -16,6 +17,7 @@ const firebaseConfig = {
   appId: "1:834343341431:web:ecc15539578a25dda06572",
 };
 
+// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
