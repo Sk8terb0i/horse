@@ -2,7 +2,6 @@ import { doc, getDoc, setDoc } from "firebase/firestore";
 
 export function createUserUI(db) {
   const container = document.getElementById("ui-container");
-  container.classList.add("hidden");
 
   container.innerHTML = `
     <div id="ui-header">unite with horse become a point of connection</div>
@@ -38,7 +37,13 @@ export function createUserUI(db) {
           username: username,
           createdAt: Date.now(),
         });
+
         updateMessage("success! you are horse.", "success");
+
+        // REVEAL MANIFESTO ICON ON JOIN
+        const icon = document.getElementById("manifesto-icon");
+        if (icon) icon.classList.add("visible");
+
         nameInput.value = "";
         usernameInput.value = "";
       }

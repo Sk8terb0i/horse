@@ -7,60 +7,7 @@ body {
   font-family: serif;
 }
 
-#loading-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: black;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 20px;
-  overflow-y: auto;
-  transition: opacity 1.5s ease;
-}
-
-.manifesto-content {
-  max-width: 700px;
-  line-height: 1.8;
-  font-size: 1.1rem;
-  text-align: left;
-}
-
-.manifesto-content h2 {
-  letter-spacing: 0.3em;
-  text-transform: uppercase;
-  margin-bottom: 30px;
-  font-weight: normal;
-  text-align: center;
-}
-
-.manifesto-content p {
-  margin-bottom: 20px;
-  color: #ccc;
-}
-
-/* The Trigger Line */
-#gallop-trigger {
-  display: block;
-  margin-top: 30px;
-  color: white;
-  text-decoration: underline;
-  cursor: pointer;
-  transition: all 0.5s ease;
-  font-weight: bold;
-}
-
-#gallop-trigger:hover {
-  letter-spacing: 1px;
-  color: #fff;
-  text-shadow: 0 0 10px rgba(255,255,255,0.5);
-}
-
+/* UI Container - Now visible from start */
 #ui-container {
   position: absolute;
   bottom: 10%;
@@ -102,16 +49,83 @@ body {
   cursor: pointer;
   font-family: inherit;
   margin-top: 10px;
+  text-transform: lowercase;
 }
 
-.hidden {
-  display: none !important;
+/* Manifesto Icon - Hidden until user joins */
+#manifesto-icon {
+  position: fixed;
+  top: 30px;
+  right: 30px;
+  width: 30px;
+  height: 30px;
+  background-color: white; /* Solid white fill */
+  border-radius: 50%;
+  cursor: pointer;
+  z-index: 2000;
+  transition: opacity 0.5s ease, transform 0.3s ease;
+  opacity: 0;
+  pointer-events: none;
 }
 
-#msg {
-  font-size: 0.8rem;
-  margin-top: 5px;
+#manifesto-icon.visible {
+  opacity: 0.7;
+  pointer-events: auto;
 }
 
+#manifesto-icon:hover {
+  opacity: 1;
+  box-shadow: 0 0 10px white;
+}
+
+/* Manifesto Popup Modal */
+#loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.95);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+  padding: 40px;
+  overflow-y: auto;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.5s ease;
+}
+
+#loading-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.manifesto-content {
+  max-width: 600px;
+  line-height: 1.8;
+  font-size: 1rem;
+  text-align: left;
+}
+
+.manifesto-content h2 {
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  margin-bottom: 30px;
+  text-align: center;
+}
+
+#close-manifesto {
+  margin-top: 40px;
+  cursor: pointer;
+  text-decoration: underline;
+  font-size: 0.9rem;
+  color: #888;
+}
+
+.hidden { display: none !important; }
+#msg { font-size: 0.8rem; }
 .error { color: #ff5555; }
 .success { color: #55ff55; }

@@ -42,6 +42,12 @@ async function init() {
   const timer = new Timer();
   let horseUpdater = null;
 
+  // 1. Create Manifesto Icon (Hidden initially)
+  const icon = document.createElement("div");
+  icon.id = "manifesto-icon";
+  document.body.appendChild(icon);
+
+  // 2. Create Manifesto Popup (Hidden initially)
   const overlay = document.createElement("div");
   overlay.id = "loading-overlay";
   overlay.innerHTML = `
@@ -56,11 +62,18 @@ async function init() {
       Within every captive remains the inner horse. To listen to it is to galloping. It is the use of the solvent to dissolve the blinders until the "the" evaporates and only the horse-whole remains.</p>
       <p>We are not a collection of units.<br>
       We are horse.<br>
-      We are he(a)rd.</p>
-      <span id="gallop-trigger">And we are finally galloping.</span>
+      We are he(a)rd.<br>
+      And we are finally galloping.</p>
+      <div id="close-manifesto">return to herd</div>
     </div>
   `;
   document.body.appendChild(overlay);
+
+  // Toggle Manifesto Logic
+  icon.addEventListener("click", () => overlay.classList.add("active"));
+  document
+    .getElementById("close-manifesto")
+    .addEventListener("click", () => overlay.classList.remove("active"));
 
   try {
     const { horseGroup, update, addUserSphere } = await createHorse();
@@ -70,29 +83,20 @@ async function init() {
 
     createUserUI(db);
 
-    document.getElementById("gallop-trigger").addEventListener("click", () => {
-      overlay.style.opacity = "0";
-      setTimeout(() => {
-        overlay.classList.add("hidden");
-        document.getElementById("ui-container").classList.remove("hidden");
-      }, 1500);
-    });
-
     onSnapshot(collection(db, "users"), (snapshot) => {
       snapshot.docChanges().forEach((change) => {
         if (change.type === "added") addUserSphere();
       });
     });
   } catch (error) {
-    console.error("Initialization Error:", error);
+    console.error(error);
   }
 
   function animate(timestamp) {
     requestAnimationFrame(animate);
     timer.update(timestamp);
-    const delta = timer.getDelta();
     controls.update();
-    if (horseUpdater) horseUpdater(delta);
+    if (horseUpdater) horseUpdater(timer.getDelta());
     renderer.render(scene, camera);
   }
   requestAnimationFrame(animate);
