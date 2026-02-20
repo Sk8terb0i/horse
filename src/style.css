@@ -1,18 +1,40 @@
-/* --- 1. Base Styles & Theme Variables --- */
-:root {
-  --big-horse-color: #fff5b5;
-  --user-horse-color: #ded2ff;
-  --bg-color: #000;
-  --text-dim: #444; 
+/* --- 1. Theme Definitions --- */
+:root, [data-theme="herd"] {
+  --big-horse-color: #ffeab5;   /* Warm Gold */
+  --user-horse-color: #baa4f8;  /* Soft Lavender */
+  --bg-color: #0b0807;
+  --text-main: #ccc;
+  --text-dim: #444;
+  --accent-white: #ffffff;
 }
 
+[data-theme="dolphin"] {
+  --big-horse-color: #00f2ff;   /* Clinical Cyan */
+  --user-horse-color: #0077ff;  /* Deep Sea Blue */
+  --bg-color: #00121a;
+  --text-main: #a0bacc;
+  --text-dim: #263942;
+  --accent-white: #e0faff;
+}
+
+[data-theme="void"] {
+  --big-horse-color: #ff0055;   /* Neon Crimson */
+  --user-horse-color: #555;     /* Monochromatic Grey */
+  --bg-color: #0c0c0c;
+  --text-main: #eee;
+  --text-dim: #222;
+  --accent-white: #f7f7f7;
+}
+
+/* --- 2. Apply Variables to Elements --- */
 body {
   margin: 0;
   padding: 0;
   overflow: hidden;
   background-color: var(--bg-color);
-  color: white;
+  color: var(--accent-white);
   font-family: serif;
+  transition: background-color 1s ease;
 }
 
 /* --- 2. Join/Login UI --- */
@@ -111,7 +133,7 @@ body {
   left: 0;
   width: 100%;
   height: 100%;
-  background: black;
+  background: rgba(0, 0, 0, 0.95);
   z-index: 4000;
   opacity: 0;
   pointer-events: none;
@@ -164,18 +186,38 @@ body {
   cursor: default;
 }
 
+/* Manifesto Specific Readability Improvements */
 .manifesto-inner {
-  max-width: 550px;
-  width: 100%;
+  max-width: 600px;
+  width: 90%;
   margin: auto;
+  padding: 80px 0; /* padding on top/bottom only */
+  background-color: transparent; /* removed box */
+  border: none; /* removed border */
+  box-shadow: none; /* removed shadow */
   cursor: default;
 }
 
-.manifesto-inner h2 {
-  font-size: 1.3rem;
-  margin-bottom: 2rem;
-  font-style: italic;
-  text-align: center;
+.m-body {
+  font-family: serif;
+  font-size: 1.15rem;
+  line-height: 2; /* wide spacing for readability on dark bg */
+  color: var(--text-main);
+  text-align: left;
+}
+
+.m-body p {
+  margin-bottom: 40px;
+}
+
+.m-body strong {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 400;
+  letter-spacing: 0.15em;
+  color: var(--big-horse-color);
+  margin-top: 50px;
+  margin-bottom: 10px;
 }
 
 /* --- 6. Hashtags & Filtered Results --- */
@@ -187,17 +229,14 @@ body {
   transition: all 0.3s;
 }
 
-/* Dynamic color coding by text content */
-/* Color hashtags based on content or data-tag */
 .hashtag[data-tag="horse"], 
 .hashtag[data-tag="#horse"] { color: var(--big-horse-color); }
 
 .hashtag[data-tag="the"], 
 .hashtag[data-tag="#the"] { color: var(--user-horse-color); }
 
-/* Fallback: if data-tag is missing, color based on the text content */
 .hashtag:not([data-tag]) {
-  color: var(--user-horse-color); /* Default to captured color */
+  color: var(--user-horse-color);
 }
 
 .hashtag:hover {
@@ -396,11 +435,32 @@ input:checked + .slider:before {
   box-shadow: 0 0 15px 2px rgba(255, 255, 255, 0.6);
 }
 
-/* --- 11. Mobile --- */
+/* --- 11. Theme Cycle Dot --- */
+#theme-cycle-dot {
+  position: fixed;
+  bottom: 25px; 
+  right: 38px;  /* Adjusted to sit better under the manifesto icon */
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid var(--accent-white);
+  background-color: var(--text-dim);
+  cursor: pointer;
+  z-index: 5001; /* Above overlays to remain clickable */
+  transition: all 0.3s ease;
+}
+
+#theme-cycle-dot:hover {
+  background-color: var(--accent-white);
+  transform: scale(1.2);
+}
+
+/* --- 12. Mobile --- */
 @media (max-width: 1024px) {
   .lore-layout { flex-direction: column; }
   .lore-sphere-side { height: 30vh; position: relative; flex: none; }
   .lore-text-side { padding: 40px 20px; }
   #archive-nav { right: 30px; }
   .nav-item { font-size: 1.4rem; }
+  .manifesto-inner { width: 95%; padding: 40px 20px; }
 }

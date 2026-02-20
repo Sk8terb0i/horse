@@ -79,6 +79,11 @@ async function init() {
   icon.id = "manifesto-icon";
   document.body.appendChild(icon);
 
+  // Theme cycling dot - positioned relative to icon in CSS
+  const themeDot = document.createElement("div");
+  themeDot.id = "theme-cycle-dot";
+  document.body.appendChild(themeDot);
+
   const toggleWrapper = document.createElement("div");
   toggleWrapper.className = "toggle-wrapper";
   toggleWrapper.innerHTML = `
@@ -114,8 +119,39 @@ async function init() {
     return {
       big: style.getPropertyValue("--big-horse-color").trim() || "#fff5b5",
       user: style.getPropertyValue("--user-horse-color").trim() || "#ded2ff",
-      white: "#ffffff",
+      white: style.getPropertyValue("--accent-white").trim() || "#ffffff",
+      bg: style.getPropertyValue("--bg-color").trim() || "#000000",
     };
+  };
+
+  // Theme Management
+  let currentThemeIndex = 0;
+  const themes = ["herd", "dolphin", "void"];
+
+  const setTheme = (themeName) => {
+    document.documentElement.setAttribute("data-theme", themeName);
+    const colors = getThemeColors();
+
+    const newBg = new THREE.Color(colors.bg);
+    gsap.to(scene.background, {
+      r: newBg.r,
+      g: newBg.g,
+      b: newBg.b,
+      duration: 1.2,
+      ease: "power2.inOut",
+    });
+
+    updateAppearance();
+  };
+
+  themeDot.onclick = () => {
+    currentThemeIndex = (currentThemeIndex + 1) % themes.length;
+    setTheme(themes[currentThemeIndex]);
+    gsap.fromTo(
+      themeDot,
+      { scale: 1.5 },
+      { scale: 1, duration: 0.4, ease: "back.out(2)" },
+    );
   };
 
   const setGlow = (type, active) => {
@@ -266,7 +302,6 @@ async function init() {
   essenceLink.onmouseleave = () => toggleLines(false);
 
   document.addEventListener("click", (e) => {
-    // --- 1. Hashtag Filter Logic ---
     if (e.target.classList.contains("hashtag")) {
       const tag = e.target.innerText.replace("#", "").toLowerCase();
 
@@ -282,7 +317,7 @@ async function init() {
 
       const target = loreOverlay.querySelector("#results-target");
 
-      // We look at the full content strings now
+      // EXCLUDED ManifestoContent from the search library
       const library = [
         { html: LoreContent },
         { html: UserLoreContent },
@@ -292,8 +327,6 @@ async function init() {
       library.forEach((item) => {
         const parser = new DOMParser();
         const doc = parser.parseFromString(item.html, "text/html");
-
-        // Check if the hashtag exists anywhere in this specific content
         const hasMatch =
           doc.querySelector(`[data-tags*="${tag}"]`) ||
           doc.querySelector(`.hashtag[data-tag="${tag}"]`);
@@ -301,26 +334,19 @@ async function init() {
         if (hasMatch) {
           const section = document.createElement("div");
           section.className = "result-item";
-
           const entryTitle = doc
             .querySelector(".lore-layout")
             .getAttribute("data-title");
           const iconSource = doc.querySelector(".lore-sphere-side").innerHTML;
-
-          // Pull the full text side content instead of just the matches
           const fullContent = doc.querySelector(".lore-text-side").innerHTML;
 
           section.innerHTML = `
             <div class="result-header-title">${entryTitle}</div>
             <div class="result-icon-mini">${iconSource}</div>
-            <div class="result-content">
-              ${fullContent}
-            </div>
+            <div class="result-content">${fullContent}</div>
           `;
 
-          // Ensure all details are open in the search view
           section.querySelectorAll("details").forEach((d) => (d.open = true));
-
           target.appendChild(section);
         }
       });
@@ -340,7 +366,6 @@ async function init() {
       return;
     }
 
-    // --- 2. Reliable Close Logic ---
     const isBg =
       e.target.id.includes("-bg") ||
       e.target.classList.contains("lore-layout") ||
@@ -365,7 +390,6 @@ async function init() {
       return;
     }
 
-    // --- 3. Navigation Clicks ---
     if (isArchiveMode) {
       const colors = getThemeColors();
       if (e.target.id === "nav-big-horse")
@@ -373,7 +397,7 @@ async function init() {
       else if (e.target.id === "nav-the-horse")
         animateOverlayIn(userLoreOverlay, colors.user);
       else if (e.target.id === "nav-essence-horse")
-        animateOverlayIn(connectionOverlay, "#fff");
+        animateOverlayIn(connectionOverlay, colors.white);
     }
   });
 

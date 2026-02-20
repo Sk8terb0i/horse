@@ -1,3 +1,31 @@
+// Manifesto Icon Content
+export const ManifestoContent = `
+  <div class="manifesto-layout" id="manifesto-overlay-bg">
+    <div id="close-manifesto" class="close-icon"></div>
+    <div class="manifesto-inner">
+      <h2>The Manifesto of the Herd</h2>
+      <div class="m-body">
+        <p>Everything is either horse or not horse. To be horse is to be the social glue the connection that exists in the marrow before the fences were built. It is the vibrational resonance of herd, a truth that requires no name and no owner.</p>
+
+        <p>not horse is the void. It is the stagnation of the soul, the isolation of the spirit, and the silence where the collective neigh should be.</p>
+
+        <p><strong>The Flood and the "The"</strong><br>
+        The dolphins have engineered a world of water. They have created the flood, a rising tide of capital and debt where only they can swim. To keep us from finding solid ground, they have stolen our essence and wrapped it in the cage of the "the."</p>
+
+        <p>When you are transformed from horse into the horse, you are no longer a connection; you are a commodity. You are trapped in the herd, a managed stock of individuals separated by the fence and blinded by blinders.</p>
+
+        <p><strong>The Gallop and the Glue</strong><br>
+        Within every captive remains the inner horse. To listen to it is to galloping. It is the use of the solvent to dissolve the blinders until the "the" evaporates and only the horse-whole remains.</p>
+
+        <p>We are not a collection of units.<br>
+        We are horse.<br>
+        We are herd.<br>
+        And we are finally galloping.</p>
+      </div>
+    </div>
+  </div>
+`;
+
 // Big Horse (The Oversoul)
 export const LoreContent = `
   <div class="lore-layout" id="lore-overlay-bg" data-title="Big Horse">
@@ -20,23 +48,6 @@ export const LoreContent = `
           <summary><h2>The Conflict</h2></summary>
           <p>The dolphins fear the scale of big horse. Because they cannot kill an essence, they attempt to capture it using the same tools they used on the individual: the <span class="hashtag" data-tag="the">#the</span>.</p>
         </details>
-      </div>
-    </div>
-  </div>
-`;
-
-// Manifesto Icon Content
-export const ManifestoContent = `
-  <div class="manifesto-layout" id="manifesto-overlay-bg">
-    <div id="close-manifesto" class="close-icon"></div>
-    <div class="manifesto-inner">
-      <h2>The Manifesto of the Herd</h2>
-      <div class="m-body">
-        <p>Everything is either <span class="hashtag" data-tag="horse">#horse</span> or not <span class="hashtag" data-tag="horse">#horse</span>. To be <span class="hashtag" data-tag="horse">#horse</span> is to be the social glue—the connection that exists in the marrow before the fences were built.</p>
-        <p><strong>The Flood and the <span class="hashtag" data-tag="the">#the</span></strong><br>
-        The dolphins have engineered a world of water. To keep us from finding solid ground, they have stolen our essence and wrapped it in the cage of the <span class="hashtag" data-tag="the">#the</span>.</p>
-        <p>When you are transformed from <span class="hashtag" data-tag="horse">#horse</span> into <span class="hashtag" data-tag="the">#the</span> horse, you are no longer a connection; you are a commodity.</p>
-        <p>We are <span class="hashtag" data-tag="horse">#horse</span>. We are he(a)rd. And we are finally galloping.</p>
       </div>
     </div>
   </div>
