@@ -3,58 +3,97 @@ import { doc, getDoc, setDoc } from "firebase/firestore";
 export function createUserUI(db) {
   const container = document.getElementById("ui-container");
 
-  container.innerHTML = `
-    <div id="ui-header">unite with horse become a point of connection</div>
-    <input type="text" id="nameInput" placeholder="your name" />
-    <input type="text" id="usernameInput" placeholder="unique username" />
-    <button id="submitBtn">join horse</button>
-    <p id="msg"></p>
-  `;
+  // Check if user is already remembered
+  const savedUsername = localStorage.getItem("horse_herd_username");
+  if (savedUsername) {
+    showAscendedState();
+    return;
+  }
 
-  const nameInput = document.getElementById("nameInput");
-  const usernameInput = document.getElementById("usernameInput");
-  const submitBtn = document.getElementById("submitBtn");
-  const msg = document.getElementById("msg");
+  renderJoinForm();
 
-  submitBtn.addEventListener("click", async () => {
-    const name = nameInput.value.trim();
-    const username = usernameInput.value.trim().toLowerCase();
+  function renderJoinForm() {
+    container.innerHTML = `
+      <div id="ui-header">unite with horse become a point of connection</div>
+      <div id="input-fields">
+        <input type="text" id="nameInput" placeholder="your name" />
+        <input type="text" id="usernameInput" placeholder="unique username" />
+      </div>
+      <button id="submitBtn">join horse</button>
+      <div id="toggle-ui">I'm part of the herd</div>
+      <p id="msg"></p>
+    `;
+    attachListeners(false);
+  }
 
-    if (!name || !username) {
-      updateMessage("please fill in both fields.", "error");
-      return;
-    }
+  function renderLoginForm() {
+    container.innerHTML = `
+      <div id="ui-header">welcome back to the marrow</div>
+      <div id="input-fields">
+        <input type="text" id="usernameInput" placeholder="your username" />
+      </div>
+      <button id="submitBtn">reunite</button>
+      <div id="toggle-ui">I need to join</div>
+      <p id="msg"></p>
+    `;
+    attachListeners(true);
+  }
 
-    try {
-      const userRef = doc(db, "users", username);
-      const userSnap = await getDoc(userRef);
+  function attachListeners(isLogin) {
+    const submitBtn = document.getElementById("submitBtn");
+    const toggleBtn = document.getElementById("toggle-ui");
+    const msg = document.getElementById("msg");
 
-      if (userSnap.exists()) {
-        updateMessage("username already taken!", "error");
-      } else {
-        await setDoc(userRef, {
-          realName: name,
-          username: username,
-          createdAt: Date.now(),
-        });
+    toggleBtn.addEventListener("click", () => {
+      isLogin ? renderJoinForm() : renderLoginForm();
+    });
 
-        updateMessage("success! you are horse.", "success");
+    submitBtn.addEventListener("click", async () => {
+      const username = document
+        .getElementById("usernameInput")
+        .value.trim()
+        .toLowerCase();
+      if (!username) return;
 
-        // REVEAL MANIFESTO ICON ON JOIN
-        const icon = document.getElementById("manifesto-icon");
-        if (icon) icon.classList.add("visible");
+      try {
+        const userRef = doc(db, "users", username);
+        const userSnap = await getDoc(userRef);
 
-        nameInput.value = "";
-        usernameInput.value = "";
+        if (isLogin) {
+          if (userSnap.exists()) {
+            loginUser(username);
+          } else {
+            msg.innerText = "username not found in herd.";
+          }
+        } else {
+          const name = document.getElementById("nameInput").value.trim();
+          if (!name) return;
+          if (userSnap.exists()) {
+            msg.innerText = "username already taken.";
+          } else {
+            await setDoc(userRef, {
+              realName: name,
+              username,
+              createdAt: Date.now(),
+            });
+            loginUser(username);
+          }
+        }
+      } catch (e) {
+        console.error(e);
+        msg.innerText = "database error.";
       }
-    } catch (err) {
-      console.error(err);
-      updateMessage("database error.", "error");
-    }
-  });
+    });
+  }
 
-  function updateMessage(text, type) {
-    msg.innerText = text;
-    msg.className = type;
+  function loginUser(username) {
+    localStorage.setItem("horse_herd_username", username);
+    showAscendedState();
+  }
+
+  function showAscendedState() {
+    container.style.display = "none";
+    const icon = document.getElementById("manifesto-icon");
+    if (icon) icon.classList.add("visible");
   }
 }

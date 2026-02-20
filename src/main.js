@@ -49,7 +49,6 @@ async function init() {
   sphereLabel.style.display = "none";
   sphereLabel.style.fontStyle = "italic";
   sphereLabel.style.zIndex = "100";
-  // Adding some padding and background for legibility
   sphereLabel.style.background = "rgba(0,0,0,0.5)";
   sphereLabel.style.padding = "2px 8px";
   document.body.appendChild(sphereLabel);
@@ -63,8 +62,17 @@ async function init() {
   overlay.innerHTML = `
     <div class="manifesto-content">
       <h2>The Manifesto of the Herd</h2>
-      <p>Everything is either horse or not horse...</p>
-      <p>We are horse. We are he(a)rd. And we are finally galloping.</p>
+      <p>Everything is either horse or not horse. To be horse is to be the social glue the connection that exists in the marrow before the fences were built. It is the vibrational resonance of herd, a truth that requires no name and no owner.</p>
+      <p>not horse is the void. It is the stagnation of the soul, the isolation of the spirit, and the silence where the collective neigh should be.</p>
+      <p><strong>The Flood and the "The"</strong><br>
+      The dolphins have engineered a world of water. They have created the flood, a rising tide of capital and debt where only they can swim. To keep us from finding solid ground, they have stolen our essence and wrapped it in the cage of the "the."</p>
+      <p>When you are transformed from horse into the horse, you are no longer a connection; you are a commodity. You are trapped in the herd, a managed stock of individuals separated by the fence and blinded by blinders.</p>
+      <p><strong>The Gallop and the Glue</strong><br>
+      Within every captive remains the inner horse. To listen to it is to galloping. It is the use of the solvent to dissolve the blinders until the "the" evaporates and only the horse-whole remains.</p>
+      <p>We are not a collection of units.<br>
+      We are horse.<br>
+      We are he(a)rd.<br>
+      And we are finally galloping.</p>
       <div id="close-manifesto">return to herd</div>
     </div>
   `;
@@ -83,8 +91,6 @@ async function init() {
     horseUpdater = update;
 
     const raycaster = new THREE.Raycaster();
-    // Be generous with the raycasting distance
-    raycaster.params.Mesh.threshold = 0.5;
     const mouse = new THREE.Vector2();
 
     const handleMove = (e) => {
@@ -97,8 +103,6 @@ async function init() {
       raycaster.setFromCamera(mouse, camera);
 
       const meshesToHit = activeSpheres.map((s) => s.mesh);
-
-      // Calculate distances for a more "magnetic" proximity feel
       let minDistance = Infinity;
       let closestObject = null;
 
@@ -112,12 +116,9 @@ async function init() {
         }
       });
 
-      // Threshold for "Proximity Slowdown" (approx 0.15 is generous)
       const proximityThreshold = 0.15;
 
       if (minDistance < proximityThreshold) {
-        // Linear Interpolation: Closer = Slower
-        // Maps distance [0 to 0.15] to timescale [0.05 to 1.0]
         const targetScale = THREE.MathUtils.mapLinear(
           Math.min(minDistance, proximityThreshold),
           0,
@@ -125,10 +126,8 @@ async function init() {
           0.05,
           1.0,
         );
-
         mixer.timeScale = targetScale;
 
-        // Only show label if we are very close or directly intersecting
         const intersects = raycaster.intersectObjects(meshesToHit);
         if (intersects.length > 0 || minDistance < 0.05) {
           sphereLabel.innerText = closestObject.userData.username;
@@ -151,8 +150,10 @@ async function init() {
       sphereLabel.style.display = "none";
     });
 
+    // Initialize UI
     createUserUI(db);
 
+    // Watch for new users
     onSnapshot(collection(db, "users"), (snapshot) => {
       snapshot.docChanges().forEach((change) => {
         if (change.type === "added") {

@@ -125,6 +125,26 @@ body {
   color: #888;
 }
 
+#toggle-ui {
+  font-size: 0.8rem;
+  color: #666;
+  cursor: pointer;
+  text-decoration: underline;
+  margin-top: 10px;
+  transition: color 0.3s;
+}
+
+#toggle-ui:hover {
+  color: white;
+}
+
+#input-fields {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .hidden { display: none !important; }
 #msg { font-size: 0.8rem; }
 .error { color: #ff5555; }
