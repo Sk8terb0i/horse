@@ -1,11 +1,25 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 
 export async function createHorse() {
   const loader = new GLTFLoader();
-  const horseData = await loader.loadAsync("/assets/horse.glb");
-  const model = horseData.scene;
 
+  // 1. Set up the Draco loader
+  const dracoLoader = new DRACOLoader();
+
+  // 2. Point to the decoder (This path works for most Vite/Node setups)
+  // These files are usually served from a CDN for ease of use
+  dracoLoader.setDecoderPath(
+    "https://www.gstatic.com/draco/versioned/decoders/1.5.6/",
+  );
+
+  // 3. Tell the GLTFLoader to use it
+  loader.setDRACOLoader(dracoLoader);
+
+  const horseData = await loader.loadAsync("/assets/horse.glb");
+  // ... rest of your code remains exactly the same ...
+  const model = horseData.scene;
   const horseGroup = new THREE.Group();
   horseGroup.add(model);
 
