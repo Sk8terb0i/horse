@@ -3,7 +3,7 @@
   --big-horse-color: #fff5b5;
   --user-horse-color: #ded2ff;
   --bg-color: #000;
-  --text-dim: #444; /* Darker for the "inactive" archive look */
+  --text-dim: #444; 
 }
 
 body {
@@ -102,7 +102,10 @@ body {
 }
 
 /* --- 4. Overlays --- */
-#lore-overlay, #loading-overlay, #user-lore-overlay {
+#lore-overlay, 
+#loading-overlay, 
+#user-lore-overlay, 
+#connection-lore-overlay {
   position: fixed;
   top: 0;
   left: 0;
@@ -115,11 +118,12 @@ body {
   transition: opacity 0.5s ease;
   overflow-y: auto;
   display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
-#lore-overlay.active, #loading-overlay.active, #user-lore-overlay.active {
+#lore-overlay.active, 
+#loading-overlay.active, 
+#user-lore-overlay.active, 
+#connection-lore-overlay.active {
   opacity: 1;
   pointer-events: auto;
 }
@@ -127,7 +131,7 @@ body {
 /* --- 5. Layout Containers --- */
 .lore-layout, .manifesto-layout {
   width: 100%;
-  min-height: 100%;
+  min-height: 100vh;
   display: flex;
   position: relative;
 }
@@ -140,6 +144,7 @@ body {
   position: sticky;
   top: 0;
   height: 100vh;
+  cursor: pointer;
 }
 
 .static-glow-sphere {
@@ -150,28 +155,20 @@ body {
   box-shadow: 0 0 40px 10px rgba(255, 255, 255, 0.3);
 }
 
-#user-lore-overlay .static-glow-sphere {
-  box-shadow: none;
-  background: #fff;
-}
-
 .lore-text-side {
   flex: 1;
   display: flex;
   flex-direction: column;
   justify-content: center;
   padding: 80px 60px;
+  cursor: default;
 }
 
-.manifesto-layout {
-  justify-content: center;
-  align-items: center;
-  padding: 80px 20px;
-}
-
-.centered-content, .manifesto-inner {
+.manifesto-inner {
   max-width: 550px;
   width: 100%;
+  margin: auto;
+  cursor: default;
 }
 
 .manifesto-inner h2 {
@@ -181,7 +178,65 @@ body {
   text-align: center;
 }
 
-/* --- 6. Close Icon --- */
+/* --- 6. Hashtags & Filtered Results --- */
+.hashtag {
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-weight: bold;
+  transition: all 0.3s;
+}
+
+/* Dynamic color coding by text content */
+/* Color hashtags based on content or data-tag */
+.hashtag[data-tag="horse"], 
+.hashtag[data-tag="#horse"] { color: var(--big-horse-color); }
+
+.hashtag[data-tag="the"], 
+.hashtag[data-tag="#the"] { color: var(--user-horse-color); }
+
+/* Fallback: if data-tag is missing, color based on the text content */
+.hashtag:not([data-tag]) {
+  color: var(--user-horse-color); /* Default to captured color */
+}
+
+.hashtag:hover {
+  color: #fff !important;
+  text-shadow: 0 0 10px currentColor;
+}
+
+.search-results-container {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 120px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 80px;
+}
+
+.result-item {
+  border-left: 1px solid #222;
+  padding-left: 40px;
+  margin-bottom: 20px;
+}
+
+.result-header-title {
+  font-family: monospace;
+  font-size: 0.7rem;
+  letter-spacing: 3px;
+  color: #555;
+  text-transform: uppercase;
+  margin-bottom: 15px;
+}
+
+.result-icon-mini {
+  transform: scale(0.6);
+  transform-origin: left center;
+  height: 100px;
+}
+
+/* --- 7. Close Icon --- */
 .close-icon {
   position: fixed;
   top: 40px;
@@ -206,7 +261,7 @@ body {
 .close-icon::before { transform: rotate(45deg); }
 .close-icon::after { transform: rotate(-45deg); }
 
-/* --- 7. Typography Details --- */
+/* --- 8. Typography & Details --- */
 details {
   border-bottom: 1px solid #1a1a1a;
   padding: 10px 0;
@@ -234,9 +289,7 @@ p {
   margin-bottom: 1.5rem;
 }
 
-.hidden { display: none !important; }
-
-/* --- 8. Archive UI --- */
+/* --- 9. Archive UI --- */
 .toggle-wrapper {
   position: fixed;
   bottom: 40px;
@@ -304,7 +357,7 @@ input:checked + .slider:before {
   gap: 40px;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s ease;
+  transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1);
   text-align: right;
 }
 
@@ -313,73 +366,41 @@ input:checked + .slider:before {
   pointer-events: auto;
 }
 
-/* Navigation Structure */
-.nav-section {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-}
-
-.nav-meta {
-  font-family: monospace;
-  font-size: 0.65rem;
-  letter-spacing: 2px;
-  color: #333;
-  margin-bottom: 5px;
-  transition: color 0.4s ease;
-}
-
 .nav-item {
   font-style: italic;
   font-size: 1.8rem;
   cursor: pointer;
-  position: relative;
   color: var(--text-dim);
-  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-  padding-right: 0;
-  user-select: none;
+  transition: all 0.4s;
+  opacity: 0.6;
 }
 
-/* Dynamic Hover States */
-#nav-big-horse:hover {
-  color: var(--big-horse-color);
+.nav-item:hover {
+  opacity: 1;
+  color: #fff;
   transform: translateX(-15px);
-  text-shadow: 0 0 20px rgba(255, 221, 0, 0.3);
 }
 
-#nav-the-horse:hover {
-  color: var(--user-horse-color);
-  transform: translateX(-15px);
-  text-shadow: 0 0 20px rgba(0, 255, 204, 0.3);
+/* --- 10. Components --- */
+.vertical-dash-separator {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  align-items: center;
 }
 
-/* Metadata lighting up on hover */
-.nav-section:hover .nav-meta {
-  color: #666;
+.vertical-dash-separator span {
+  width: 2px;
+  height: 20px;
+  background-color: #fff;
+  box-shadow: 0 0 15px 2px rgba(255, 255, 255, 0.6);
 }
 
-/* Decorative Dash */
-.nav-item::after {
-  content: '';
-  display: block;
-  width: 0;
-  height: 1px;
-  background: currentColor;
-  transition: width 0.4s ease;
-  margin-top: 4px;
-}
-
-.nav-item:hover::after {
-  width: 40px;
-}
-
-/* --- 9. Mobile --- */
+/* --- 11. Mobile --- */
 @media (max-width: 1024px) {
   .lore-layout { flex-direction: column; }
   .lore-sphere-side { height: 30vh; position: relative; flex: none; }
-  .lore-text-side, .manifesto-inner { padding: 40px 20px; align-items: flex-start; }
-  .manifesto-inner h2 { text-align: left; }
-  .close-icon { top: 20px; right: 20px; }
+  .lore-text-side { padding: 40px 20px; }
   #archive-nav { right: 30px; }
   .nav-item { font-size: 1.4rem; }
 }

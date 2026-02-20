@@ -7,6 +7,7 @@ import {
   LoreContent,
   ManifestoContent,
   UserLoreContent,
+  ConnectionLoreContent,
 } from "./World/Components/Content.js";
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, onSnapshot } from "firebase/firestore";
@@ -49,22 +50,26 @@ async function init() {
   let isArchiveMode = false;
   let allSpheres = [];
   let horseMixer = null;
+  let leaderSphere = null;
 
-  // --- UI Elements ---
-  const loreOverlay = document.createElement("div");
-  loreOverlay.id = "lore-overlay";
-  loreOverlay.innerHTML = LoreContent;
-  document.body.appendChild(loreOverlay);
+  let connectionLines = null;
+  let linesActive = false;
 
-  const userLoreOverlay = document.createElement("div");
-  userLoreOverlay.id = "user-lore-overlay";
-  userLoreOverlay.innerHTML = UserLoreContent;
-  document.body.appendChild(userLoreOverlay);
+  const createOverlay = (id, content) => {
+    const div = document.createElement("div");
+    div.id = id;
+    div.innerHTML = content;
+    document.body.appendChild(div);
+    return div;
+  };
 
-  const manifestOverlay = document.createElement("div");
-  manifestOverlay.id = "loading-overlay";
-  manifestOverlay.innerHTML = ManifestoContent;
-  document.body.appendChild(manifestOverlay);
+  const loreOverlay = createOverlay("lore-overlay", LoreContent);
+  const userLoreOverlay = createOverlay("user-lore-overlay", UserLoreContent);
+  const connectionOverlay = createOverlay(
+    "connection-lore-overlay",
+    ConnectionLoreContent,
+  );
+  const manifestOverlay = createOverlay("loading-overlay", ManifestoContent);
 
   const sphereLabel = document.createElement("div");
   sphereLabel.id = "sphere-label";
@@ -97,28 +102,111 @@ async function init() {
       <span class="nav-meta">02</span>
       <div class="nav-item" id="nav-the-horse">the horse</div>
     </div>
+    <div class="nav-section">
+      <span class="nav-meta">03</span>
+      <div class="nav-item" id="nav-essence-horse">horse</div>
+    </div>
   `;
   document.body.appendChild(archiveNav);
 
-  // --- Theme Helpers ---
   const getThemeColors = () => {
     const style = getComputedStyle(document.documentElement);
     return {
-      big: style.getPropertyValue("--big-horse-color").trim() || "#ffdd00",
-      user: style.getPropertyValue("--user-horse-color").trim() || "#00ffcc",
+      big: style.getPropertyValue("--big-horse-color").trim() || "#fff5b5",
+      user: style.getPropertyValue("--user-horse-color").trim() || "#ded2ff",
       white: "#ffffff",
     };
   };
 
+  const setGlow = (type, active) => {
+    allSpheres.forEach((s) => {
+      const isLeader = s.mesh.userData.username === "big horse";
+      if ((type === "big" && isLeader) || (type === "users" && !isLeader)) {
+        const targetScale = active ? 2.5 : 1.0;
+        const baseScale = isLeader ? 0.02 : 0.005;
+        gsap.to(s.mesh.scale, {
+          x: baseScale * targetScale,
+          y: baseScale * targetScale,
+          z: baseScale * targetScale,
+          duration: 0.6,
+          ease: "power2.out",
+        });
+      }
+    });
+  };
+
+  const updateLines = () => {
+    if (!connectionLines || !linesActive) return;
+    const positions = [];
+    const tempVecA = new THREE.Vector3();
+    const tempVecB = new THREE.Vector3();
+    allSpheres.forEach((s1, i) => {
+      let nearestDist = Infinity;
+      let nearestIdx = -1;
+      s1.mesh.getWorldPosition(tempVecA);
+      allSpheres.forEach((s2, j) => {
+        if (i === j) return;
+        s2.mesh.getWorldPosition(tempVecB);
+        const d = tempVecA.distanceTo(tempVecB);
+        if (d < nearestDist) {
+          nearestDist = d;
+          nearestIdx = j;
+        }
+      });
+      if (nearestIdx !== -1) {
+        allSpheres[nearestIdx].mesh.getWorldPosition(tempVecB);
+        positions.push(
+          tempVecA.x,
+          tempVecA.y,
+          tempVecA.z,
+          tempVecB.x,
+          tempVecB.y,
+          tempVecB.z,
+        );
+      }
+    });
+    connectionLines.geometry.setAttribute(
+      "position",
+      new THREE.Float32BufferAttribute(positions, 3),
+    );
+    connectionLines.geometry.attributes.position.needsUpdate = true;
+    connectionLines.computeLineDistances();
+  };
+
+  const toggleLines = (active) => {
+    linesActive = active;
+    if (active) {
+      const geometry = new THREE.BufferGeometry();
+      const material = new THREE.LineDashedMaterial({
+        color: 0x888888,
+        dashSize: 0.05,
+        gapSize: 0.03,
+        transparent: true,
+        opacity: 0,
+      });
+      connectionLines = new THREE.LineSegments(geometry, material);
+      scene.add(connectionLines);
+      gsap.to(material, { opacity: 0.8, duration: 0.5 });
+    } else if (connectionLines) {
+      gsap.to(connectionLines.material, {
+        opacity: 0,
+        duration: 0.3,
+        onComplete: () => {
+          scene.remove(connectionLines);
+          connectionLines = null;
+        },
+      });
+    }
+  };
+
   const updateAppearance = () => {
     const colors = getThemeColors();
-    if (horseMixer) {
+    if (horseMixer)
       gsap.to(horseMixer, {
         timeScale: isArchiveMode ? 0.1 : 1.0,
         duration: 1.5,
         ease: "power2.inOut",
       });
-    }
     allSpheres.forEach((s) => {
       const isLeader = s.mesh.userData.username === "big horse";
       const targetColor = isArchiveMode
@@ -135,10 +223,8 @@ async function init() {
 
   const animateOverlayIn = (overlay, color) => {
     overlay.classList.add("active");
-
     const staticSphere = overlay.querySelector(".static-glow-sphere");
     if (staticSphere) staticSphere.style.backgroundColor = color;
-
     const content = overlay.querySelectorAll(
       ".centered-content > *, .manifesto-inner > *, .lore-sphere-side",
     );
@@ -156,24 +242,6 @@ async function init() {
     );
   };
 
-  const setGlow = (type, active) => {
-    allSpheres.forEach((s) => {
-      const isLeader = s.mesh.userData.username === "big horse";
-      if ((type === "big" && isLeader) || (type === "users" && !isLeader)) {
-        const targetScale = active ? 1.6 : 1.0;
-        const baseScale = isLeader ? 0.02 : 0.005;
-        gsap.to(s.mesh.scale, {
-          x: baseScale * targetScale,
-          y: baseScale * targetScale,
-          z: baseScale * targetScale,
-          duration: 0.4,
-          ease: "back.out(2)",
-        });
-      }
-    });
-  };
-
-  // --- Listeners ---
   document.getElementById("archive-checkbox").onchange = (e) => {
     isArchiveMode = e.target.checked;
     document
@@ -188,77 +256,160 @@ async function init() {
 
   const bigLink = document.getElementById("nav-big-horse");
   const userLink = document.getElementById("nav-the-horse");
+  const essenceLink = document.getElementById("nav-essence-horse");
 
   bigLink.onmouseenter = () => isArchiveMode && setGlow("big", true);
   bigLink.onmouseleave = () => setGlow("big", false);
   userLink.onmouseenter = () => isArchiveMode && setGlow("users", true);
   userLink.onmouseleave = () => setGlow("users", false);
-
-  icon.onclick = () => animateOverlayIn(manifestOverlay, "#ffffff");
+  essenceLink.onmouseenter = () => isArchiveMode && toggleLines(true);
+  essenceLink.onmouseleave = () => toggleLines(false);
 
   document.addEventListener("click", (e) => {
-    // 1. Close logic: Triggered by close icons OR clicking the overlay background (layout containers)
-    const isOverlayContainer =
-      e.target.classList.contains("lore-layout") ||
-      e.target.classList.contains("manifesto-layout") ||
-      e.target.classList.contains("lore-sphere-side");
-    const isCloseIcon = e.target.classList.contains("close-icon");
+    // --- 1. Hashtag Filter Logic ---
+    if (e.target.classList.contains("hashtag")) {
+      const tag = e.target.innerText.replace("#", "").toLowerCase();
 
-    if (isCloseIcon || isOverlayContainer) {
-      manifestOverlay.classList.remove("active");
-      loreOverlay.classList.remove("active");
-      userLoreOverlay.classList.remove("active");
-      return; // Stop execution here if we are closing
+      loreOverlay.innerHTML = `
+        <div class="lore-layout" id="search-results-bg">
+          <div class="close-icon" id="close-search"></div>
+          <div class="search-results-container">
+            <div style="font-style: italic; color: #444; margin-bottom: 20px;">Filtering essence: #${tag}</div>
+            <div id="results-target"></div>
+          </div>
+        </div>
+      `;
+
+      const target = loreOverlay.querySelector("#results-target");
+
+      // We look at the full content strings now
+      const library = [
+        { html: LoreContent },
+        { html: UserLoreContent },
+        { html: ConnectionLoreContent },
+      ];
+
+      library.forEach((item) => {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(item.html, "text/html");
+
+        // Check if the hashtag exists anywhere in this specific content
+        const hasMatch =
+          doc.querySelector(`[data-tags*="${tag}"]`) ||
+          doc.querySelector(`.hashtag[data-tag="${tag}"]`);
+
+        if (hasMatch) {
+          const section = document.createElement("div");
+          section.className = "result-item";
+
+          const entryTitle = doc
+            .querySelector(".lore-layout")
+            .getAttribute("data-title");
+          const iconSource = doc.querySelector(".lore-sphere-side").innerHTML;
+
+          // Pull the full text side content instead of just the matches
+          const fullContent = doc.querySelector(".lore-text-side").innerHTML;
+
+          section.innerHTML = `
+            <div class="result-header-title">${entryTitle}</div>
+            <div class="result-icon-mini">${iconSource}</div>
+            <div class="result-content">
+              ${fullContent}
+            </div>
+          `;
+
+          // Ensure all details are open in the search view
+          section.querySelectorAll("details").forEach((d) => (d.open = true));
+
+          target.appendChild(section);
+        }
+      });
+
+      [manifestOverlay, userLoreOverlay, connectionOverlay].forEach((o) =>
+        o.classList.remove("active"),
+      );
+      loreOverlay.classList.add("active");
+
+      gsap.from(".result-item", {
+        opacity: 0,
+        y: 30,
+        stagger: 0.1,
+        duration: 0.8,
+        ease: "power2.out",
+      });
+      return;
     }
 
-    // 2. Archive Navigation Clicks
+    // --- 2. Reliable Close Logic ---
+    const isBg =
+      e.target.id.includes("-bg") ||
+      e.target.classList.contains("lore-layout") ||
+      e.target.classList.contains("lore-sphere-side");
+    const isClose =
+      e.target.classList.contains("close-icon") ||
+      e.target.id.includes("close-");
+
+    if (isBg || isClose) {
+      [
+        manifestOverlay,
+        loreOverlay,
+        userLoreOverlay,
+        connectionOverlay,
+      ].forEach((o) => o.classList.remove("active"));
+
+      setTimeout(() => {
+        if (!loreOverlay.classList.contains("active")) {
+          loreOverlay.innerHTML = LoreContent;
+        }
+      }, 500);
+      return;
+    }
+
+    // --- 3. Navigation Clicks ---
     if (isArchiveMode) {
       const colors = getThemeColors();
       if (e.target.id === "nav-big-horse")
         animateOverlayIn(loreOverlay, colors.big);
-      if (e.target.id === "nav-the-horse")
+      else if (e.target.id === "nav-the-horse")
         animateOverlayIn(userLoreOverlay, colors.user);
+      else if (e.target.id === "nav-essence-horse")
+        animateOverlayIn(connectionOverlay, "#fff");
     }
   });
 
+  icon.onclick = () => animateOverlayIn(manifestOverlay, "#ffffff");
+
   try {
-    const {
-      horseGroup,
-      update,
-      addUserSphere,
-      activeSpheres,
-      leaderSphere,
-      mixer,
-    } = await createHorse();
+    const horseData = await createHorse();
+    const { horseGroup, update, addUserSphere, activeSpheres, mixer } =
+      horseData;
+    leaderSphere = horseData.leaderSphere;
     horseGroup.rotation.y = THREE.MathUtils.degToRad(-20);
     scene.add(horseGroup);
     horseUpdater = update;
     allSpheres = activeSpheres;
     horseMixer = mixer;
 
-    allSpheres.forEach((s) => {
-      s.mesh.material = new THREE.MeshBasicMaterial({ color: 0xffffff });
-    });
+    allSpheres.forEach(
+      (s) =>
+        (s.mesh.material = new THREE.MeshBasicMaterial({ color: 0xffffff })),
+    );
 
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
-
     window.addEventListener("mousemove", (e) => {
-      if (isArchiveMode) return;
+      if (isArchiveMode || !leaderSphere) return;
       mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
       mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
       raycaster.setFromCamera(mouse, camera);
       const dist = raycaster.ray.distanceToPoint(
         leaderSphere.getWorldPosition(new THREE.Vector3()),
       );
-
-      if (dist < 0.15) {
-        if (dist < 0.04) {
-          sphereLabel.innerText = "big horse";
-          sphereLabel.style.display = "block";
-          sphereLabel.style.left = e.clientX + 10 + "px";
-          sphereLabel.style.top = e.clientY + 10 + "px";
-        }
+      if (dist < 0.15 && dist < 0.04) {
+        sphereLabel.innerText = "big horse";
+        sphereLabel.style.display = "block";
+        sphereLabel.style.left = e.clientX + 10 + "px";
+        sphereLabel.style.top = e.clientY + 10 + "px";
       } else {
         sphereLabel.style.display = "none";
       }
@@ -269,10 +420,6 @@ async function init() {
       snap.docChanges().forEach((c) => {
         if (c.type === "added") {
           addUserSphere(c.doc.data().username);
-          const newSphere = activeSpheres[activeSpheres.length - 1];
-          newSphere.mesh.material = new THREE.MeshBasicMaterial({
-            color: 0xffffff,
-          });
           if (isArchiveMode) updateAppearance();
         }
       });
@@ -286,9 +433,9 @@ async function init() {
     timer.update(ts);
     controls.update();
     if (horseUpdater) horseUpdater(timer.getDelta());
+    if (linesActive) updateLines();
     renderer.render(scene, camera);
   }
   requestAnimationFrame(animate);
 }
-
 init();
