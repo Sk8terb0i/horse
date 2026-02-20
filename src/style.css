@@ -111,23 +111,8 @@ body {
   pointer-events: auto;
 }
 
-#sphere-label {
-  position: fixed;
-  pointer-events: none;
-  color: white;
-  display: none;
-  font-style: italic;
-  font-size: 1rem;
-  z-index: 1000;
-  background: rgba(0, 0, 0, 0.7);
-  padding: 5px 12px;
-}
-
 /* --- 4. Overlays --- */
-#lore-overlay, 
-#loading-overlay, 
-#user-lore-overlay, 
-#connection-lore-overlay {
+#loading-overlay {
   position: fixed;
   top: 0;
   left: 0;
@@ -142,74 +127,45 @@ body {
   display: flex;
 }
 
-#lore-overlay.active, 
-#loading-overlay.active, 
-#user-lore-overlay.active, 
-#connection-lore-overlay.active {
+#loading-overlay.active {
   opacity: 1;
   pointer-events: auto;
 }
 
-/* --- 5. Layout Containers --- */
-.lore-layout, .manifesto-layout {
+.manifesto-layout {
   width: 100%;
   min-height: 100vh;
   display: flex;
   position: relative;
 }
 
-.lore-sphere-side {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  position: sticky;
-  top: 0;
-  height: 100vh;
-  cursor: pointer;
-}
-
-.static-glow-sphere {
-  width: 60px;
-  height: 60px;
-  background: white;
-  border-radius: 50%;
-  box-shadow: 0 0 40px 10px rgba(255, 255, 255, 0.3);
-}
-
-.lore-text-side {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: 80px 60px;
-  cursor: default;
-}
-
-/* Manifesto Specific Readability Improvements */
 .manifesto-inner {
   max-width: 600px;
   width: 90%;
+  color: var(--big-horse-color);
   margin: auto;
-  padding: 80px 0; /* padding on top/bottom only */
-  background-color: transparent; /* removed box */
-  border: none; /* removed border */
-  box-shadow: none; /* removed shadow */
+  padding: 80px 0;
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
   cursor: default;
 }
 
 .m-body {
   font-family: serif;
   font-size: 1.15rem;
-  line-height: 2; /* wide spacing for readability on dark bg */
+  line-height: 2;
+  /* Unified color for all manifesto body text */
   color: var(--text-main);
   text-align: left;
 }
 
 .m-body p {
   margin-bottom: 40px;
+  color: var(--text-main);
 }
 
+/* Section Headers - using theme accent color */
 .m-body strong {
   display: block;
   font-size: 0.9rem;
@@ -220,62 +176,7 @@ body {
   margin-bottom: 10px;
 }
 
-/* --- 6. Hashtags & Filtered Results --- */
-.hashtag {
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  font-weight: bold;
-  transition: all 0.3s;
-}
-
-.hashtag[data-tag="horse"], 
-.hashtag[data-tag="#horse"] { color: var(--big-horse-color); }
-
-.hashtag[data-tag="the"], 
-.hashtag[data-tag="#the"] { color: var(--user-horse-color); }
-
-.hashtag:not([data-tag]) {
-  color: var(--user-horse-color);
-}
-
-.hashtag:hover {
-  color: #fff !important;
-  text-shadow: 0 0 10px currentColor;
-}
-
-.search-results-container {
-  width: 100%;
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 120px 40px;
-  display: flex;
-  flex-direction: column;
-  gap: 80px;
-}
-
-.result-item {
-  border-left: 1px solid #222;
-  padding-left: 40px;
-  margin-bottom: 20px;
-}
-
-.result-header-title {
-  font-family: monospace;
-  font-size: 0.7rem;
-  letter-spacing: 3px;
-  color: #555;
-  text-transform: uppercase;
-  margin-bottom: 15px;
-}
-
-.result-icon-mini {
-  transform: scale(0.6);
-  transform-origin: left center;
-  height: 100px;
-}
-
-/* --- 7. Close Icon --- */
+/* --- 5. Close Icon --- */
 .close-icon {
   position: fixed;
   top: 40px;
@@ -300,167 +201,22 @@ body {
 .close-icon::before { transform: rotate(45deg); }
 .close-icon::after { transform: rotate(-45deg); }
 
-/* --- 8. Typography & Details --- */
-details {
-  border-bottom: 1px solid #1a1a1a;
-  padding: 10px 0;
-}
-
-summary {
-  list-style: none;
-  cursor: pointer;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-summary h2 { margin: 0; font-size: 1.1rem; }
-summary::after {
-  content: '+';
-  font-family: monospace;
-  color: #444;
-}
-details[open] summary::after { content: '−'; color: white; }
-
-p {
-  line-height: 1.8;
-  color: #ccc;
-  margin-bottom: 1.5rem;
-}
-
-/* --- 9. Archive UI --- */
-.toggle-wrapper {
-  position: fixed;
-  bottom: 40px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  z-index: 3100;
-}
-
-.toggle-label {
-  font-style: italic;
-  font-size: 0.8rem;
-  color: #555;
-  transition: color 0.3s;
-}
-
-.toggle-label.active { color: white; }
-
-.switch {
-  position: relative;
-  display: inline-block;
-  width: 50px;
-  height: 24px;
-}
-
-.switch input { opacity: 0; width: 0; height: 0; }
-
-.slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background-color: transparent;
-  border: 1px solid #333;
-  transition: .4s;
-  border-radius: 24px;
-}
-
-.slider:before {
-  position: absolute;
-  content: "";
-  height: 16px; width: 16px;
-  left: 4px; bottom: 3px;
-  background-color: #444;
-  transition: .4s;
-  border-radius: 50%;
-}
-
-input:checked + .slider { border-color: white; }
-input:checked + .slider:before {
-  transform: translateX(24px);
-  background-color: white;
-  box-shadow: 0 0 10px white;
-}
-
-#archive-nav {
-  position: fixed;
-  right: 80px;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 3000;
-  display: flex;
-  flex-direction: column;
-  gap: 40px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1);
-  text-align: right;
-}
-
-#archive-nav.visible {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.nav-item {
-  font-style: italic;
-  font-size: 1.8rem;
-  cursor: pointer;
-  color: var(--text-dim);
-  transition: all 0.4s;
-  opacity: 0.6;
-}
-
-.nav-item:hover {
-  opacity: 1;
-  color: #fff;
-  transform: translateX(-15px);
-}
-
-/* --- 10. Components --- */
-.vertical-dash-separator {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-  align-items: center;
-}
-
-.vertical-dash-separator span {
-  width: 2px;
-  height: 20px;
-  background-color: #fff;
-  box-shadow: 0 0 15px 2px rgba(255, 255, 255, 0.6);
-}
-
-/* --- 11. Theme Cycle Dot --- */
+/* --- 6. Theme Cycle Dot --- */
 #theme-cycle-dot {
   position: fixed;
   bottom: 25px; 
-  right: 38px;  /* Adjusted to sit better under the manifesto icon */
+  right: 38px;
   width: 14px;
   height: 14px;
   border-radius: 50%;
   border: 1.5px solid var(--accent-white);
   background-color: var(--text-dim);
   cursor: pointer;
-  z-index: 5001; /* Above overlays to remain clickable */
+  z-index: 5001;
   transition: all 0.3s ease;
 }
 
 #theme-cycle-dot:hover {
   background-color: var(--accent-white);
   transform: scale(1.2);
-}
-
-/* --- 12. Mobile --- */
-@media (max-width: 1024px) {
-  .lore-layout { flex-direction: column; }
-  .lore-sphere-side { height: 30vh; position: relative; flex: none; }
-  .lore-text-side { padding: 40px 20px; }
-  #archive-nav { right: 30px; }
-  .nav-item { font-size: 1.4rem; }
-  .manifesto-inner { width: 95%; padding: 40px 20px; }
 }
