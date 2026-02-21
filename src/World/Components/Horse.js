@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
+import { CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 
 export async function createHorse() {
   const loader = new GLTFLoader();
@@ -29,17 +30,42 @@ export async function createHorse() {
     }
   });
 
-  // Create Big Horse
+  const createLabel = (mesh, text) => {
+    const div = document.createElement("div");
+    div.className = "sphere-label";
+    div.innerText = text === "big horse" ? text : `the horse: ${text}`;
+
+    const label = new CSS2DObject(div);
+
+    // logic: anchor the LEFT edge of the label to the point
+    label.center.set(0, 0.5);
+
+    // because the label is a child of the mesh, its position is relative
+    // to the mesh's scale. since our geometry radius is 1:
+    // 1.0 = exactly on the sphere's surface
+    // 1.1 = slightly outside the surface (regardless of if the sphere is big or small)
+    label.position.set(1.1, 0, 0);
+
+    mesh.add(label);
+    return label;
+  };
+
+  // --- create big horse ---
   const chestBone =
     availableBones.find((b) => b.name === "DEF-chest_082") || availableBones[0];
   const leaderSphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
   leaderSphere.scale.setScalar(baseSphereSize * 4);
   leaderSphere.userData = { username: "big horse" };
   horseGroup.add(leaderSphere);
+
+  // now uses the normalized 1.1 offset relative to its larger scale
+  const leaderLabel = createLabel(leaderSphere, "big horse");
+
   activeSpheres.push({
     mesh: leaderSphere,
     bone: chestBone,
     offset: new THREE.Vector3(),
+    label: leaderLabel,
   });
 
   const addUserSphere = (username = "horse") => {
@@ -54,7 +80,13 @@ export async function createHorse() {
       (Math.random() - 0.5) * 0.05,
     );
     horseGroup.add(sphere);
-    activeSpheres.push({ mesh: sphere, bone: bone, offset: offset });
+    const label = createLabel(sphere, username);
+    activeSpheres.push({
+      mesh: sphere,
+      bone: bone,
+      offset: offset,
+      label: label,
+    });
   };
 
   const mixer = new THREE.AnimationMixer(model);
@@ -65,7 +97,6 @@ export async function createHorse() {
     horseGroup,
     addUserSphere,
     activeSpheres,
-    leaderSphere, // Targeted interaction
     mixer,
     update: (delta) => {
       mixer.update(delta);

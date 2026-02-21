@@ -220,3 +220,26 @@ body {
   background-color: var(--accent-white);
   transform: scale(1.2);
 }
+
+.sphere-label {
+  color: var(--accent-white);
+  font-family: serif;
+  font-style: italic;
+  font-size: 13px;
+  white-space: nowrap;
+  pointer-events: none;
+  background: none !important;
+  border: none !important;
+  
+  /* we add a tiny bit of left padding for a visual breathing room gap */
+  padding-left: 25px; 
+  
+  /* smooth appearance when zooming in */
+  transition: opacity 0.3s ease;
+}
+
+/* optional: highlight the big horse text with its theme color */
+.sphere-label:contains("big horse") {
+  color: var(--big-horse-color);
+  font-size: 14px;
+}
