@@ -1,7 +1,10 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { Timer } from "three/src/core/Timer.js";
-import { CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer.js";
+import {
+  CSS2DRenderer,
+  CSS2DObject,
+} from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import { createHorse } from "./World/Components/Horse.js";
 import { createUserUI } from "./World/Components/UserUI.js";
 import { ManifestoContent } from "./World/Components/Content.js";
@@ -55,6 +58,7 @@ async function init() {
   const timer = new Timer();
   const raycaster = new THREE.Raycaster();
   raycaster.params.Mesh.threshold = 0.06;
+  raycaster.params.Line.threshold = 0.02; // threshold for clicking thin dashed lines
   const mouse = new THREE.Vector2();
 
   let horseUpdater = null;
@@ -82,6 +86,14 @@ async function init() {
     depthWrite: false,
   });
 
+  // single label for the lines
+  const lineLabelDiv = document.createElement("div");
+  lineLabelDiv.className = "sphere-label";
+  lineLabelDiv.innerText = "horse";
+  lineLabelDiv.style.opacity = "0";
+  const lineLabel = new CSS2DObject(lineLabelDiv);
+  scene.add(lineLabel);
+
   const updateConnections = () => {
     lineGroup.clear();
     if (!horseDataRef) return;
@@ -93,11 +105,9 @@ async function init() {
       return pos;
     });
 
-    // connect each sphere to its 3 nearest neighbors
     for (let i = 0; i < spherePositions.length; i++) {
       const posA = spherePositions[i];
       const distances = [];
-
       for (let j = 0; j < spherePositions.length; j++) {
         if (i === j) continue;
         distances.push({
@@ -105,17 +115,15 @@ async function init() {
           dist: posA.distanceTo(spherePositions[j]),
         });
       }
-
-      // sort by distance (asc)
       distances.sort((a, b) => a.dist - b.dist);
 
-      // use top 3 nearest
       for (let n = 0; n < Math.min(3, distances.length); n++) {
         const geometry = new THREE.BufferGeometry().setFromPoints([
           posA,
           distances[n].pos,
         ]);
         const line = new THREE.Line(geometry, lineMaterial);
+        line.userData = { start: posA.clone(), end: distances[n].pos.clone() };
         line.computeLineDistances();
         lineGroup.add(line);
       }
@@ -171,27 +179,47 @@ async function init() {
     }
   });
 
+  const handleLineInteraction = (intersects) => {
+    const lineIntersect = intersects.find((hit) => hit.object.type === "Line");
+    if (lineIntersect) {
+      const line = lineIntersect.object;
+      const midPoint = new THREE.Vector3()
+        .addVectors(line.userData.start, line.userData.end)
+        .multiplyScalar(0.5);
+      lineLabel.position.copy(midPoint);
+      lineLabelDiv.style.opacity = "1";
+    }
+  };
+
   window.addEventListener("mousemove", (event) => {
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
     raycaster.setFromCamera(mouse, camera);
 
     if (horseDataRef) {
-      const meshes = [];
+      const targets = [];
       horseDataRef.activeSpheres.forEach((s) => {
         if (s.mesh.isGroup) {
           s.mesh.traverse((child) => {
-            if (child.isMesh && child.type !== "Sprite") meshes.push(child);
+            if (child.isMesh && child.type !== "Sprite") targets.push(child);
           });
         } else {
-          meshes.push(s.mesh);
+          targets.push(s.mesh);
         }
       });
+      // add lines to detection list if they are visible
+      if (lineMaterial.opacity > 0)
+        lineGroup.children.forEach((l) => targets.push(l));
 
-      const intersects = raycaster.intersectObjects(meshes);
+      const intersects = raycaster.intersectObjects(targets);
 
-      if (intersects.length > 0) {
-        const group = intersects[0].object.parent;
+      // handle line hover
+      handleLineInteraction(intersects);
+
+      // handle sphere hover
+      const sphereHit = intersects.find((hit) => hit.object.type === "Mesh");
+      if (sphereHit) {
+        const group = sphereHit.object.parent;
         if (hoveredGroup !== group && group.userData.glow) {
           if (hoveredGroup)
             gsap.to(hoveredGroup.userData.glow.material, {
@@ -235,24 +263,31 @@ async function init() {
 
     raycaster.setFromCamera(mouse, camera);
     if (horseDataRef) {
-      const meshes = [];
+      const targets = [];
       horseDataRef.activeSpheres.forEach((s) => {
         if (s.mesh.isGroup) {
           s.mesh.traverse((child) => {
-            if (child.isMesh && child.type !== "Sprite") meshes.push(child);
+            if (child.isMesh && child.type !== "Sprite") targets.push(child);
           });
         } else {
-          meshes.push(s.mesh);
+          targets.push(s.mesh);
         }
       });
-      const intersects = raycaster.intersectObjects(meshes);
+      if (lineMaterial.opacity > 0)
+        lineGroup.children.forEach((l) => targets.push(l));
 
-      if (intersects.length > 0) {
+      const intersects = raycaster.intersectObjects(targets);
+
+      // handle line click
+      handleLineInteraction(intersects);
+
+      const sphereHit = intersects.find((hit) => hit.object.type === "Mesh");
+
+      if (sphereHit) {
         isPaused = true;
-        // show connections
         gsap.to(lineMaterial, { opacity: 0.4, duration: 1 });
 
-        const targetObj = intersects[0].object;
+        const targetObj = sphereHit.object;
         const targetPos = new THREE.Vector3();
         targetObj.getWorldPosition(targetPos);
         const zoomFactor = targetObj.parent.scale.x * 12;
@@ -290,9 +325,10 @@ async function init() {
           0,
         );
       } else {
+        // click background
         isPaused = false;
-        // hide connections
         gsap.to(lineMaterial, { opacity: 0, duration: 0.5 });
+        lineLabelDiv.style.opacity = "0"; // hide connection label on reset
 
         const tl = gsap.timeline();
         tl.to(
@@ -361,6 +397,7 @@ async function init() {
       if (camDistFromOrigin >= FULL_SPEED_DIST) {
         isPaused = false;
         gsap.to(lineMaterial, { opacity: 0, duration: 0.5 });
+        lineLabelDiv.style.opacity = "0";
       }
     }
 
