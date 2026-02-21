@@ -226,19 +226,25 @@ async function init() {
       snap.docChanges().forEach((c) => {
         const data = c.doc.data();
         if (c.type === "added") {
+          // pass data.innerColor - if it exists in firebase, horse will use it
           horseData.addUserSphere(data.username, data.innerColor);
+
+          // if this is the logged-in user, update their UI dots/prompts
           if (data.username === currentUsername) {
-            overlay.setInitialColor(data.innerColor);
+            if (data.innerColor) {
+              overlay.setInitialColor(data.innerColor);
+              // ensure the prompt "choose your inner horse" disappears
+              // if they already have a color saved
+              const prompt = document.getElementById("color-prompt");
+              if (prompt && data.innerColor !== "#ffffff") {
+                prompt.style.display = "none";
+              }
+            }
           }
         }
         if (c.type === "modified") {
-          const sphere = horseData.activeSpheres.find(
-            (s) => s.username === data.username,
-          );
-          if (sphere && data.innerColor) {
-            sphere.mesh.userData.color = data.innerColor;
-            if (sphere.mesh.userData.inner)
-              sphere.mesh.userData.inner.material.color.set(data.innerColor);
+          if (data.username && data.innerColor) {
+            horseData.updateUserColor(data.username, data.innerColor);
           }
         }
       });

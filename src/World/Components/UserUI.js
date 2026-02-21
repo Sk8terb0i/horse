@@ -69,9 +69,12 @@ export function createUserUI(db, overlay) {
           if (userSnap.exists()) {
             msg.innerText = "username already taken.";
           } else {
+            // add a default color here so it's never empty in firebase
+            const defaultColor = "#ffffff";
             await setDoc(userRef, {
               realName: name,
               username,
+              innerColor: defaultColor, // save initial color
               createdAt: Date.now(),
             });
             loginUser(username);

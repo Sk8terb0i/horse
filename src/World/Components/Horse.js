@@ -62,15 +62,14 @@ export async function createHorse() {
     const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
     const core = new THREE.Mesh(geometry, coreMat);
 
-    // the inner horse sphere
     const innerMat = new THREE.MeshBasicMaterial({
       color: initialColor || 0xffffff,
-      depthTest: false, // ensures it shows on front
+      depthTest: false,
     });
     const inner = new THREE.Mesh(geometry, innerMat);
     inner.scale.setScalar(0.6);
     inner.renderOrder = 999;
-    inner.visible = false; // hidden until click/active lines
+    inner.visible = false;
 
     const glowMat = new THREE.SpriteMaterial({
       map: glowTexture,
@@ -88,12 +87,18 @@ export async function createHorse() {
   };
 
   const addUserSphere = (username = "horse", existingColor = null) => {
-    const color = existingColor || getRandomPastel();
+    // 1. check for duplicates
+    if (activeSpheres.find((s) => s.username === username)) return;
+
+    // 2. strictly prioritize the color from firebase
+    const color = existingColor ? existingColor : getRandomPastel();
+
     const sphereGroup = createSphereWithGlow(
       sphereGeometry,
       baseSphereSize,
       color,
     );
+
     const bone =
       availableBones[Math.floor(Math.random() * availableBones.length)];
     const offset = new THREE.Vector3(
@@ -110,6 +115,15 @@ export async function createHorse() {
       offset: offset,
       label: createLabel(username),
     });
+  };
+
+  // new method to update color in real-time
+  const updateUserColor = (username, newColor) => {
+    const sphere = activeSpheres.find((s) => s.username === username);
+    if (sphere) {
+      sphere.mesh.userData.color = newColor;
+      sphere.mesh.userData.inner.material.color.set(newColor);
+    }
   };
 
   // add leader
@@ -138,6 +152,7 @@ export async function createHorse() {
   return {
     horseGroup,
     addUserSphere,
+    updateUserColor, // exported for main.js
     activeSpheres,
     update: (delta, camera) => {
       mixer.update(delta);

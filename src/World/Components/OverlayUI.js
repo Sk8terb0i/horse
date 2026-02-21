@@ -60,10 +60,15 @@ export function createOverlayUI(scene, db, getUsername) {
     innerHorseDot.style.background = newColor;
     promptText.style.display = "none";
 
-    const username = getUsername();
+    // use the specific key from your UserUI.js
+    const username = localStorage.getItem("horse_herd_username");
     if (username) {
-      const userRef = doc(db, "users", username);
-      await updateDoc(userRef, { innerColor: newColor });
+      try {
+        const userRef = doc(db, "users", username);
+        await updateDoc(userRef, { innerColor: newColor });
+      } catch (err) {
+        console.error("error updating color in firebase:", err);
+      }
     }
   };
 
@@ -107,7 +112,10 @@ export function createOverlayUI(scene, db, getUsername) {
     setInitialColor: (color) => {
       if (color) {
         innerHorseDot.style.background = color;
-        promptText.style.display = "none";
+        // if the color is not the default white, hide the prompt
+        if (color !== "#ffffff" && color !== "rgb(255, 255, 255)") {
+          promptText.style.display = "none";
+        }
       }
     },
     setUsername: (name) => {
