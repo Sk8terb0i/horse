@@ -1,13 +1,11 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { Timer } from "three/src/core/Timer.js";
-import {
-  CSS2DRenderer,
-  CSS2DObject,
-} from "three/examples/jsm/renderers/CSS2DRenderer.js";
+import { CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import { createHorse } from "./World/Components/Horse.js";
 import { createUserUI } from "./World/Components/UserUI.js";
-import { ManifestoContent } from "./World/Components/Content.js";
+import { createConnections } from "./World/Components/Connections.js";
+import { createOverlayUI } from "./World/Components/OverlayUI.js";
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, onSnapshot } from "firebase/firestore";
 import gsap from "gsap";
@@ -58,7 +56,8 @@ async function init() {
   const timer = new Timer();
   const raycaster = new THREE.Raycaster();
   raycaster.params.Mesh.threshold = 0.06;
-  raycaster.params.Line.threshold = 0.02; // threshold for clicking thin dashed lines
+  // tight hitbox for thin dashed lines
+  raycaster.params.Line.threshold = 0.01;
   const mouse = new THREE.Vector2();
 
   let horseUpdater = null;
@@ -73,123 +72,9 @@ async function init() {
   const GLOBAL_LABEL_DIST = 1.6;
   const INDIVIDUAL_CULL_DIST = 0.8;
 
-  // --- connection lines setup ---
-  const lineGroup = new THREE.Group();
-  scene.add(lineGroup);
-
-  const lineMaterial = new THREE.LineDashedMaterial({
-    color: 0xffffff,
-    dashSize: 0.01,
-    gapSize: 0.01,
-    transparent: true,
-    opacity: 0,
-    depthWrite: false,
-  });
-
-  // single label for the lines
-  const lineLabelDiv = document.createElement("div");
-  lineLabelDiv.className = "sphere-label";
-  lineLabelDiv.innerText = "horse";
-  lineLabelDiv.style.opacity = "0";
-  const lineLabel = new CSS2DObject(lineLabelDiv);
-  scene.add(lineLabel);
-
-  const updateConnections = () => {
-    lineGroup.clear();
-    if (!horseDataRef) return;
-
-    const spheres = horseDataRef.activeSpheres;
-    const spherePositions = spheres.map((s) => {
-      const pos = new THREE.Vector3();
-      s.mesh.getWorldPosition(pos);
-      return pos;
-    });
-
-    for (let i = 0; i < spherePositions.length; i++) {
-      const posA = spherePositions[i];
-      const distances = [];
-      for (let j = 0; j < spherePositions.length; j++) {
-        if (i === j) continue;
-        distances.push({
-          pos: spherePositions[j],
-          dist: posA.distanceTo(spherePositions[j]),
-        });
-      }
-      distances.sort((a, b) => a.dist - b.dist);
-
-      for (let n = 0; n < Math.min(3, distances.length); n++) {
-        const geometry = new THREE.BufferGeometry().setFromPoints([
-          posA,
-          distances[n].pos,
-        ]);
-        const line = new THREE.Line(geometry, lineMaterial);
-        line.userData = { start: posA.clone(), end: distances[n].pos.clone() };
-        line.computeLineDistances();
-        lineGroup.add(line);
-      }
-    }
-  };
-
-  // --- ui setup ---
-  const manifestOverlay = document.createElement("div");
-  manifestOverlay.id = "loading-overlay";
-  manifestOverlay.innerHTML = ManifestoContent;
-  document.body.appendChild(manifestOverlay);
-
-  const icon = document.createElement("div");
-  icon.id = "manifesto-icon";
-  document.body.appendChild(icon);
-
-  const themeDot = document.createElement("div");
-  themeDot.id = "theme-cycle-dot";
-  document.body.appendChild(themeDot);
-
-  const setTheme = (themeName) => {
-    document.documentElement.setAttribute("data-theme", themeName);
-    const style = getComputedStyle(document.documentElement);
-    const bgColor = style.getPropertyValue("--bg-color").trim() || "#000000";
-    const newBg = new THREE.Color(bgColor);
-    gsap.to(scene.background, {
-      r: newBg.r,
-      g: newBg.g,
-      b: newBg.b,
-      duration: 1.2,
-      ease: "power2.inOut",
-    });
-  };
-
-  themeDot.onclick = () => {
-    const themes = ["herd", "dolphin", "void"];
-    const current =
-      document.documentElement.getAttribute("data-theme") || "herd";
-    const next = themes[(themes.indexOf(current) + 1) % themes.length];
-    setTheme(next);
-  };
-
-  icon.onclick = () => {
-    manifestOverlay.classList.add("active");
-  };
-
-  document.addEventListener("click", (e) => {
-    if (
-      e.target.id === "manifesto-overlay-bg" ||
-      e.target.id === "close-manifesto"
-    ) {
-      manifestOverlay.classList.remove("active");
-    }
-  });
-
-  const handleLineInteraction = (intersects) => {
-    const lineIntersect = intersects.find((hit) => hit.object.type === "Line");
-    if (lineIntersect) {
-      const line = lineIntersect.object;
-      const midPoint = new THREE.Vector3()
-        .addVectors(line.userData.start, line.userData.end)
-        .multiplyScalar(0.5);
-      lineLabel.position.copy(midPoint);
-      lineLabelDiv.style.opacity = "1";
-    }
-  };
+  // components
+  const conn = createConnections(scene);
+  createOverlayUI(scene);
 
   window.addEventListener("mousemove", (event) => {
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
@@ -207,14 +92,16 @@ async function init() {
           targets.push(s.mesh);
         }
       });
+
       // add lines to detection list if they are visible
-      if (lineMaterial.opacity > 0)
-        lineGroup.children.forEach((l) => targets.push(l));
+      if (conn.lineMaterial.opacity > 0) {
+        conn.lineGroup.children.forEach((l) => targets.push(l));
+      }
 
       const intersects = raycaster.intersectObjects(targets);
 
-      // handle line hover
-      handleLineInteraction(intersects);
+      // handle line interaction (returns true if hovering a line)
+      const isOverLine = conn.handleLineInteraction(intersects, mouse);
 
       // handle sphere hover
       const sphereHit = intersects.find((hit) => hit.object.type === "Mesh");
@@ -240,6 +127,10 @@ async function init() {
             duration: 0.3,
           });
           hoveredGroup = null;
+        }
+
+        // only reset cursor if not hovering a line
+        if (!isOverLine) {
           document.body.style.cursor = "default";
         }
       }
@@ -257,6 +148,7 @@ async function init() {
       event.target.id === "manifesto-icon"
     )
       return;
+
     const deltaX = Math.abs(event.clientX - mouseDownPos.x);
     const deltaY = Math.abs(event.clientY - mouseDownPos.y);
     if (deltaX > clickThreshold || deltaY > clickThreshold) return;
@@ -273,19 +165,20 @@ async function init() {
           targets.push(s.mesh);
         }
       });
-      if (lineMaterial.opacity > 0)
-        lineGroup.children.forEach((l) => targets.push(l));
+      if (conn.lineMaterial.opacity > 0) {
+        conn.lineGroup.children.forEach((l) => targets.push(l));
+      }
 
       const intersects = raycaster.intersectObjects(targets);
 
-      // handle line click
-      handleLineInteraction(intersects);
+      // handle line click for sticky label
+      conn.handleLineInteraction(intersects, mouse);
 
       const sphereHit = intersects.find((hit) => hit.object.type === "Mesh");
 
       if (sphereHit) {
         isPaused = true;
-        gsap.to(lineMaterial, { opacity: 0.4, duration: 1 });
+        gsap.to(conn.lineMaterial, { opacity: 0.4, duration: 1 });
 
         const targetObj = sphereHit.object;
         const targetPos = new THREE.Vector3();
@@ -324,11 +217,11 @@ async function init() {
           },
           0,
         );
-      } else {
-        // click background
+      } else if (!intersects.find((hit) => hit.object.type === "Line")) {
+        // click background (reset only if we didn't click a line)
         isPaused = false;
-        gsap.to(lineMaterial, { opacity: 0, duration: 0.5 });
-        lineLabelDiv.style.opacity = "0"; // hide connection label on reset
+        gsap.to(conn.lineMaterial, { opacity: 0, duration: 0.5 });
+        conn.lineLabelDiv.style.opacity = "0";
 
         const tl = gsap.timeline();
         tl.to(
@@ -348,15 +241,14 @@ async function init() {
   try {
     const horseData = await createHorse();
     horseDataRef = horseData;
-    const { horseGroup, update, addUserSphere } = horseData;
-    horseGroup.rotation.y = THREE.MathUtils.degToRad(-20);
-    scene.add(horseGroup);
-    horseUpdater = update;
+    horseData.horseGroup.rotation.y = THREE.MathUtils.degToRad(-20);
+    scene.add(horseData.horseGroup);
+    horseUpdater = horseData.update;
 
     createUserUI(db);
     onSnapshot(collection(db, "users"), (snap) => {
       snap.docChanges().forEach((c) => {
-        if (c.type === "added") addUserSphere(c.doc.data().username);
+        if (c.type === "added") horseData.addUserSphere(c.doc.data().username);
       });
     });
   } catch (err) {
@@ -372,8 +264,8 @@ async function init() {
     const camDistFromOrigin = camPos.length();
 
     if (horseDataRef) {
-      if (lineMaterial.opacity > 0) {
-        updateConnections();
+      if (conn.lineMaterial.opacity > 0) {
+        conn.updateConnections(horseDataRef);
       }
 
       const globalActive = camDistFromOrigin < GLOBAL_LABEL_DIST;
@@ -396,8 +288,8 @@ async function init() {
       timeScale = 0;
       if (camDistFromOrigin >= FULL_SPEED_DIST) {
         isPaused = false;
-        gsap.to(lineMaterial, { opacity: 0, duration: 0.5 });
-        lineLabelDiv.style.opacity = "0";
+        gsap.to(conn.lineMaterial, { opacity: 0, duration: 0.5 });
+        conn.lineLabelDiv.style.opacity = "0";
       }
     }
 
