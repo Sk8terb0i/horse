@@ -69,6 +69,60 @@ async function init() {
   const GLOBAL_LABEL_DIST = 1.6;
   const INDIVIDUAL_CULL_DIST = 0.8;
 
+  // --- connection lines setup ---
+  const lineGroup = new THREE.Group();
+  scene.add(lineGroup);
+
+  const lineMaterial = new THREE.LineDashedMaterial({
+    color: 0xffffff,
+    dashSize: 0.01,
+    gapSize: 0.01,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+  });
+
+  const updateConnections = () => {
+    lineGroup.clear();
+    if (!horseDataRef) return;
+
+    const spheres = horseDataRef.activeSpheres;
+    const spherePositions = spheres.map((s) => {
+      const pos = new THREE.Vector3();
+      s.mesh.getWorldPosition(pos);
+      return pos;
+    });
+
+    // connect each sphere to its 3 nearest neighbors
+    for (let i = 0; i < spherePositions.length; i++) {
+      const posA = spherePositions[i];
+      const distances = [];
+
+      for (let j = 0; j < spherePositions.length; j++) {
+        if (i === j) continue;
+        distances.push({
+          pos: spherePositions[j],
+          dist: posA.distanceTo(spherePositions[j]),
+        });
+      }
+
+      // sort by distance (asc)
+      distances.sort((a, b) => a.dist - b.dist);
+
+      // use top 3 nearest
+      for (let n = 0; n < Math.min(3, distances.length); n++) {
+        const geometry = new THREE.BufferGeometry().setFromPoints([
+          posA,
+          distances[n].pos,
+        ]);
+        const line = new THREE.Line(geometry, lineMaterial);
+        line.computeLineDistances();
+        lineGroup.add(line);
+      }
+    }
+  };
+
+  // --- ui setup ---
   const manifestOverlay = document.createElement("div");
   manifestOverlay.id = "loading-overlay";
   manifestOverlay.innerHTML = ManifestoContent;
@@ -123,13 +177,11 @@ async function init() {
     raycaster.setFromCamera(mouse, camera);
 
     if (horseDataRef) {
-      // we check for meshes inside the groups
       const meshes = [];
       horseDataRef.activeSpheres.forEach((s) => {
-        // if s.mesh is a Group, traverse it
         if (s.mesh.isGroup) {
           s.mesh.traverse((child) => {
-            if (child.isMesh) meshes.push(child);
+            if (child.isMesh && child.type !== "Sprite") meshes.push(child);
           });
         } else {
           meshes.push(s.mesh);
@@ -144,14 +196,13 @@ async function init() {
           if (hoveredGroup)
             gsap.to(hoveredGroup.userData.glow.material, {
               opacity: 0,
-              duration: 0.4,
+              duration: 0.3,
             });
           hoveredGroup = group;
           document.body.style.cursor = "pointer";
-          // fade in the soft sprite glow
           gsap.to(hoveredGroup.userData.glow.material, {
-            opacity: 0.8,
-            duration: 0.4,
+            opacity: 0.6,
+            duration: 0.3,
           });
         }
       } else {
@@ -188,7 +239,7 @@ async function init() {
       horseDataRef.activeSpheres.forEach((s) => {
         if (s.mesh.isGroup) {
           s.mesh.traverse((child) => {
-            if (child.isMesh) meshes.push(child);
+            if (child.isMesh && child.type !== "Sprite") meshes.push(child);
           });
         } else {
           meshes.push(s.mesh);
@@ -198,11 +249,12 @@ async function init() {
 
       if (intersects.length > 0) {
         isPaused = true;
+        // show connections
+        gsap.to(lineMaterial, { opacity: 0.4, duration: 1 });
+
         const targetObj = intersects[0].object;
         const targetPos = new THREE.Vector3();
         targetObj.getWorldPosition(targetPos);
-
-        // get scale from the group (parent)
         const zoomFactor = targetObj.parent.scale.x * 12;
 
         const tl = gsap.timeline();
@@ -239,6 +291,9 @@ async function init() {
         );
       } else {
         isPaused = false;
+        // hide connections
+        gsap.to(lineMaterial, { opacity: 0, duration: 0.5 });
+
         const tl = gsap.timeline();
         tl.to(
           controls.target,
@@ -281,6 +336,10 @@ async function init() {
     const camDistFromOrigin = camPos.length();
 
     if (horseDataRef) {
+      if (lineMaterial.opacity > 0) {
+        updateConnections();
+      }
+
       const globalActive = camDistFromOrigin < GLOBAL_LABEL_DIST;
       horseDataRef.activeSpheres.forEach((s) => {
         if (!s.label) return;
@@ -299,7 +358,10 @@ async function init() {
     );
     if (isPaused) {
       timeScale = 0;
-      if (camDistFromOrigin >= FULL_SPEED_DIST) isPaused = false;
+      if (camDistFromOrigin >= FULL_SPEED_DIST) {
+        isPaused = false;
+        gsap.to(lineMaterial, { opacity: 0, duration: 0.5 });
+      }
     }
 
     if (horseUpdater) horseUpdater(timer.getDelta() * timeScale, camera);
