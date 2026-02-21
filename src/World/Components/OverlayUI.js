@@ -28,11 +28,20 @@ export function createOverlayUI(scene, db, getUsername) {
 
   const innerHorseDot = document.createElement("div");
   innerHorseDot.id = "inner-horse-dot";
+  // changed right to 38px and ensured box-sizing is consistent
   innerHorseDot.style.cssText = `
-    position: fixed; top: 110px; right: 38px; 
-    width: 14px; height: 14px; border-radius: 50%; 
-    background: #fff; cursor: pointer; border: 1.5px solid #fff;
-    z-index: 5001; transition: all 0.3s ease;
+    position: fixed; 
+    top: 110px; 
+    right: 38px; 
+    width: 14px; 
+    height: 14px; 
+    border-radius: 50%; 
+    background: #fff; 
+    cursor: pointer; 
+    border: 1.5px solid #fff;
+    z-index: 5001; 
+    transition: all 0.3s ease;
+    box-sizing: border-box; 
   `;
   uiContainer.appendChild(innerHorseDot);
 
@@ -40,10 +49,17 @@ export function createOverlayUI(scene, db, getUsername) {
   promptText.id = "color-prompt";
   promptText.innerText = "choose your inner horse";
   promptText.style.cssText = `
-    position: fixed; top: 135px; right: 40px;
-    writing-mode: vertical-rl; text-orientation: mixed;
-    font-size: 10px; color: #fff; letter-spacing: 1px;
-    opacity: 0.5; pointer-events: none; text-transform: lowercase;
+    position: fixed; 
+    top: 135px; 
+    right: 40px;
+    writing-mode: vertical-rl; 
+    text-orientation: mixed;
+    font-size: 10px; 
+    color: #fff; 
+    letter-spacing: 1px;
+    opacity: 0.5; 
+    pointer-events: none; 
+    text-transform: lowercase;
     z-index: 5001;
   `;
   uiContainer.appendChild(promptText);

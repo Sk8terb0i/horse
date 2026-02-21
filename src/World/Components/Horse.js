@@ -87,10 +87,8 @@ export async function createHorse() {
   };
 
   const addUserSphere = (username = "horse", existingColor = null) => {
-    // 1. check for duplicates
     if (activeSpheres.find((s) => s.username === username)) return;
 
-    // 2. strictly prioritize the color from firebase
     const color = existingColor ? existingColor : getRandomPastel();
 
     const sphereGroup = createSphereWithGlow(
@@ -117,7 +115,6 @@ export async function createHorse() {
     });
   };
 
-  // new method to update color in real-time
   const updateUserColor = (username, newColor) => {
     const sphere = activeSpheres.find((s) => s.username === username);
     if (sphere) {
@@ -126,14 +123,27 @@ export async function createHorse() {
     }
   };
 
+  const getBigHorseThemeColor = () => {
+    const style = getComputedStyle(document.documentElement);
+    const colorStr =
+      style.getPropertyValue("--big-horse-color").trim() || "#ffeab5";
+    return new THREE.Color(colorStr);
+  };
+
   // add leader
   const chestBone =
     availableBones.find((b) => b.name === "DEF-chest_082") || availableBones[0];
+
+  // leader uses theme color for the core
+  const leaderColor = getBigHorseThemeColor();
   const leaderSphere = createSphereWithGlow(
     sphereGeometry,
     baseSphereSize * 4,
-    0xffffff,
+    leaderColor,
   );
+  // ensure leader core isn't white
+  leaderSphere.userData.core.material.color.copy(leaderColor);
+
   horseGroup.add(leaderSphere);
   activeSpheres.push({
     username: "big horse",
@@ -152,10 +162,18 @@ export async function createHorse() {
   return {
     horseGroup,
     addUserSphere,
-    updateUserColor, // exported for main.js
+    updateUserColor,
     activeSpheres,
     update: (delta, camera) => {
       mixer.update(delta);
+
+      const leader = activeSpheres.find((s) => s.username === "big horse");
+      if (leader) {
+        const themeColor = getBigHorseThemeColor();
+        leader.mesh.userData.core.material.color.copy(themeColor);
+        leader.mesh.userData.inner.material.color.copy(themeColor);
+      }
+
       const cameraRight = new THREE.Vector3(1, 0, 0).applyQuaternion(
         camera.quaternion,
       );

@@ -97,7 +97,7 @@ body {
   right: 30px;
   width: 30px;
   height: 30px;
-  background-color: white;
+  background-color: var(--big-horse-color);
   border-radius: 50%;
   cursor: pointer;
   z-index: 2000;
@@ -107,6 +107,11 @@ body {
 
 #manifesto-icon:hover {
   opacity: 1;
+}
+
+#loading-overlay.active ~ #logged-in-ui #manifesto-icon {
+  opacity: 0;
+  visibility: hidden;
 }
 
 /* style for the username display */
@@ -191,8 +196,8 @@ body {
 /* --- 5. Close Icon --- */
 .close-icon {
   position: fixed;
-  top: 40px;
-  right: 40px;
+  top: 30px;
+  right: 30px;
   width: 30px;
   height: 30px;
   cursor: pointer;
@@ -205,7 +210,8 @@ body {
 .close-icon::before, .close-icon::after {
   content: '';
   position: absolute;
-  top: 14px;
+  top: 15px;    /* centered vertically */
+  left: 0;      /* centered horizontally */
   width: 30px;
   height: 1px;
   background-color: white;
