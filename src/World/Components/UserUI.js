@@ -1,9 +1,8 @@
 import { doc, getDoc, setDoc } from "firebase/firestore";
 
-export function createUserUI(db) {
+export function createUserUI(db, overlay) {
   const container = document.getElementById("ui-container");
 
-  // Check if user is already remembered
   const savedUsername = localStorage.getItem("horse_herd_username");
   if (savedUsername) {
     showAscendedState();
@@ -49,10 +48,8 @@ export function createUserUI(db) {
     });
 
     submitBtn.addEventListener("click", async () => {
-      const username = document
-        .getElementById("usernameInput")
-        .value.trim()
-        .toLowerCase();
+      const usernameInput = document.getElementById("usernameInput");
+      const username = usernameInput.value.trim().toLowerCase();
       if (!username) return;
 
       try {
@@ -66,7 +63,8 @@ export function createUserUI(db) {
             msg.innerText = "username not found in herd.";
           }
         } else {
-          const name = document.getElementById("nameInput").value.trim();
+          const nameInput = document.getElementById("nameInput");
+          const name = nameInput.value.trim();
           if (!name) return;
           if (userSnap.exists()) {
             msg.innerText = "username already taken.";
@@ -88,12 +86,17 @@ export function createUserUI(db) {
 
   function loginUser(username) {
     localStorage.setItem("horse_herd_username", username);
+
+    // tell the overlay to show everything now
+    if (overlay) {
+      overlay.showMainUI();
+      overlay.setUsername(username);
+    }
+
     showAscendedState();
   }
 
   function showAscendedState() {
     container.style.display = "none";
-    const icon = document.getElementById("manifesto-icon");
-    if (icon) icon.classList.add("visible");
   }
 }

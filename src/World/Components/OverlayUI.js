@@ -4,22 +4,28 @@ import { ManifestoContent } from "./Content.js";
 import { doc, updateDoc } from "firebase/firestore";
 
 export function createOverlayUI(scene, db, getUsername) {
+  const uiContainer = document.createElement("div");
+  uiContainer.id = "logged-in-ui";
+  uiContainer.style.display = "none";
+  document.body.appendChild(uiContainer);
+
   const manifestOverlay = document.createElement("div");
   manifestOverlay.id = "loading-overlay";
   manifestOverlay.innerHTML = ManifestoContent;
   document.body.appendChild(manifestOverlay);
 
   const icon = document.createElement("div");
-  icon.id = "manifesto-icon";
-  // fix visibility
-  icon.classList.add("visible");
-  document.body.appendChild(icon);
+  icon.id = "manifesto-icon"; // css now handles visibility
+  uiContainer.appendChild(icon);
+
+  const usernameDisplay = document.createElement("div");
+  usernameDisplay.id = "user-display-name";
+  uiContainer.appendChild(usernameDisplay);
 
   const themeDot = document.createElement("div");
   themeDot.id = "theme-cycle-dot";
-  document.body.appendChild(themeDot);
+  uiContainer.appendChild(themeDot);
 
-  // inner horse color dot
   const innerHorseDot = document.createElement("div");
   innerHorseDot.id = "inner-horse-dot";
   innerHorseDot.style.cssText = `
@@ -28,7 +34,7 @@ export function createOverlayUI(scene, db, getUsername) {
     background: #fff; cursor: pointer; border: 1.5px solid #fff;
     z-index: 5001; transition: all 0.3s ease;
   `;
-  document.body.appendChild(innerHorseDot);
+  uiContainer.appendChild(innerHorseDot);
 
   const promptText = document.createElement("div");
   promptText.id = "color-prompt";
@@ -40,7 +46,7 @@ export function createOverlayUI(scene, db, getUsername) {
     opacity: 0.5; pointer-events: none; text-transform: lowercase;
     z-index: 5001;
   `;
-  document.body.appendChild(promptText);
+  uiContainer.appendChild(promptText);
 
   const colorInput = document.createElement("input");
   colorInput.type = "color";
@@ -95,10 +101,18 @@ export function createOverlayUI(scene, db, getUsername) {
   });
 
   return {
+    showMainUI: () => {
+      uiContainer.style.display = "block";
+    },
     setInitialColor: (color) => {
       if (color) {
         innerHorseDot.style.background = color;
         promptText.style.display = "none";
+      }
+    },
+    setUsername: (name) => {
+      if (name) {
+        usernameDisplay.innerText = name;
       }
     },
   };

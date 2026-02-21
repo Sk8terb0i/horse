@@ -101,14 +101,28 @@ body {
   border-radius: 50%;
   cursor: pointer;
   z-index: 2000;
+  opacity: 0.7; /* visible by default now */
   transition: opacity 0.5s ease;
-  opacity: 0;
-  pointer-events: none;
 }
 
-#manifesto-icon.visible {
-  opacity: 0.7;
-  pointer-events: auto;
+#manifesto-icon:hover {
+  opacity: 1;
+}
+
+/* style for the username display */
+#user-display-name {
+  position: fixed;
+  top: 38px;
+  right: 80px;
+  font-size: 11px;
+  color: var(--accent-white);
+  letter-spacing: 1.5px;
+  text-transform: lowercase;
+  z-index: 2001;
+  opacity: 0.6;
+  pointer-events: none;
+  font-family: serif;
+  font-style: italic;
 }
 
 /* --- 4. Overlays --- */
@@ -155,7 +169,6 @@ body {
   font-family: serif;
   font-size: 1.15rem;
   line-height: 2;
-  /* Unified color for all manifesto body text */
   color: var(--text-main);
   text-align: left;
 }
@@ -165,7 +178,6 @@ body {
   color: var(--text-main);
 }
 
-/* Section Headers - using theme accent color */
 .m-body strong {
   display: block;
   font-size: 0.9rem;
@@ -230,12 +242,6 @@ body {
   pointer-events: none;
   background: none !important;
   border: none !important;
-  padding-left: 5px; /* small visual gap */
+  padding-left: 5px; 
   transition: opacity 0.3s ease;
-}
-
-/* optional: highlight the big horse text with its theme color */
-.sphere-label:contains("big horse") {
-  color: var(--big-horse-color);
-  font-size: 14px;
 }

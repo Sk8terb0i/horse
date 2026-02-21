@@ -45,7 +45,7 @@ async function init() {
   lDom.style.position = "absolute";
   lDom.style.top = "0px";
   lDom.style.pointerEvents = "none";
-  lDom.style.zIndex = "1";
+  lDom.style.zIndex = "10";
   document.body.appendChild(lDom);
 
   const controls = new OrbitControls(camera, renderer.domElement);
@@ -65,8 +65,7 @@ async function init() {
   let isPaused = false;
   let mouseDownPos = { x: 0, y: 0 };
 
-  // check local storage for session persistence
-  let currentUsername = localStorage.getItem("horse_username") || null;
+  let currentUsername = localStorage.getItem("horse_herd_username") || null;
 
   const clickThreshold = 5;
   const FREEZE_DIST = 0.4;
@@ -76,9 +75,14 @@ async function init() {
 
   const conn = createConnections(scene);
   const overlay = createOverlayUI(scene, db, () => currentUsername);
-  const userUI = createUserUI(db);
+  const userUI = createUserUI(db, overlay);
 
-  // mouse interaction logic ...
+  // if already logged in, show the UI and the name
+  if (currentUsername) {
+    overlay.showMainUI();
+    overlay.setUsername(currentUsername);
+  }
+
   window.addEventListener("mousemove", (event) => {
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
@@ -223,9 +227,7 @@ async function init() {
         const data = c.doc.data();
         if (c.type === "added") {
           horseData.addUserSphere(data.username, data.innerColor);
-          // if this is the logged in user, show their UI elements
           if (data.username === currentUsername) {
-            overlay.showUI(!!data.innerColor);
             overlay.setInitialColor(data.innerColor);
           }
         }
@@ -241,18 +243,6 @@ async function init() {
         }
       });
     });
-
-    // intercept the submit to update currentUsername immediately
-    const originalSubmit = userUI.handleUserSubmit;
-    document
-      .querySelector("#ui-container button")
-      .addEventListener("click", () => {
-        const input = document.querySelector("#ui-container input");
-        if (input && input.value) {
-          currentUsername = input.value;
-          localStorage.setItem("horse_username", currentUsername);
-        }
-      });
   } catch (err) {
     console.error(err);
   }
