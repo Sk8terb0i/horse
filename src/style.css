@@ -1,29 +1,38 @@
 /* --- 1. Theme Definitions --- */
 :root, [data-theme="herd"] {
-  --big-horse-color: #ffeab5;   /* Warm Gold */
-  --user-horse-color: #baa4f8;  /* Soft Lavender */
-  --bg-color: #0b0807;
-  --text-main: #ccc;
-  --text-dim: #444;
-  --accent-white: #ffffff;
+  --big-horse-color: #9ece27;
+  --user-horse-color: #dedcff;
+  --bg-color: #0f0d0b;
+  --text-main: #ededee;
+  --text-dim: #d6d6d6;
+  --accent-white: #f13bff;
 }
 
 [data-theme="dolphin"] {
-  --big-horse-color: #00f2ff;   /* Clinical Cyan */
-  --user-horse-color: #0077ff;  /* Deep Sea Blue */
-  --bg-color: #00121a;
-  --text-main: #a0bacc;
-  --text-dim: #263942;
-  --accent-white: #e0faff;
+  --big-horse-color: #bc163c;
+  --user-horse-color: #485f91;
+  --bg-color: #070619;
+  --text-main: #aac5fc;
+  --text-dim: #879bc3;
+  --accent-white: #21dff0;
 }
 
 [data-theme="void"] {
-  --big-horse-color: #ff0055;   /* Neon Crimson */
-  --user-horse-color: #555;     /* Monochromatic Grey */
-  --bg-color: #0c0c0c;
-  --text-main: #eee;
-  --text-dim: #222;
-  --accent-white: #f7f7f7;
+  --big-horse-color: #ac6ef7;
+  --user-horse-color: #9cb157;
+  --bg-color: #0c0c0f;
+  --text-main: #414348;
+  --text-dim: #36383b;
+  --accent-white: #000000;
+}
+
+[data-theme="lone"] {
+  --big-horse-color: #ffffff;
+  --user-horse-color: #555555;
+  --bg-color: #000000;
+  --text-main: #ffffff;
+  --text-dim: #888888;
+  --accent-white: #ffffff;
 }
 
 /* --- 2. Apply Variables to Elements --- */
@@ -120,14 +129,12 @@ body {
   top: 38px;
   right: 80px;
   font-size: 11px;
-  color: var(--accent-white);
+  color: var(--text-main);
   letter-spacing: 1.5px;
   text-transform: lowercase;
   z-index: 2001;
-  opacity: 0.6;
   pointer-events: none;
   font-family: serif;
-  font-style: italic;
 }
 
 /* --- 4. Overlays --- */
@@ -227,8 +234,7 @@ body {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  border: 1.5px solid var(--accent-white);
-  background-color: var(--text-dim);
+  background-color: var(--accent-white);
   cursor: pointer;
   z-index: 5001;
   transition: all 0.3s ease;

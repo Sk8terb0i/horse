@@ -38,7 +38,6 @@ export function createOverlayUI(scene, db, getUsername) {
     border-radius: 50%; 
     background: #fff; 
     cursor: pointer; 
-    border: 1.5px solid #fff;
     z-index: 5001; 
     transition: all 0.3s ease;
     box-sizing: border-box; 
@@ -104,11 +103,18 @@ export function createOverlayUI(scene, db, getUsername) {
     }
   };
 
-  const setTheme = (themeName) => {
+  const setTheme = (themeName, save = true) => {
     document.documentElement.setAttribute("data-theme", themeName);
+
+    // persist the choice
+    if (save) {
+      localStorage.setItem("horse_herd_theme", themeName);
+    }
+
     const style = getComputedStyle(document.documentElement);
     const bgColor = style.getPropertyValue("--bg-color").trim() || "#000000";
     const newBg = new THREE.Color(bgColor);
+
     gsap.to(scene.background, {
       r: newBg.r,
       g: newBg.g,
@@ -118,10 +124,16 @@ export function createOverlayUI(scene, db, getUsername) {
     });
   };
 
+  // initialize theme: check storage first, otherwise default to "herd"
+  const savedTheme = localStorage.getItem("horse_herd_theme") || "herd";
+  // pass false to 'save' so we don't redundantely write to localStorage on load
+  setTheme(savedTheme, false);
+
   themeDot.onclick = () => {
-    const themes = ["herd", "dolphin", "void"];
+    // added "stark" to the array
+    const themes = ["herd", "dolphin", "void", "lone"];
     const current =
-      document.documentElement.getAttribute("data-theme") || "herd";
+      document.documentElement.getAttribute("data-theme") || "lone";
     const next = themes[(themes.indexOf(current) + 1) % themes.length];
     setTheme(next);
   };
