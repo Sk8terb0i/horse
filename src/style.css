@@ -8,7 +8,7 @@
   --accent-white: #f13bff;
 }
 
-[data-theme="dolphin"] {
+[data-theme="dolphin pov"] {
   --big-horse-color: #bc163c;
   --user-horse-color: #485f91;
   --bg-color: #070619;
@@ -36,36 +36,28 @@
 }
 
 /* --- 2. theme menu (the blooming effect) --- */
-#theme-menu-container {
-  align-items: flex-end; /* Ensures dots stay lined up on the right */
+#theme-display-label {
+  user-select: none;
+  /* subtle glow when theme is active */
+  text-shadow: 0 0 5px rgba(255, 255, 255, 0.1);
 }
 
-.theme-row:hover .theme-sub-dot {
-  transform: scale(1.4);
-  box-shadow: 0 0 8px white;
+#theme-cycle-dot:hover {
+  border-color: rgba(255, 255, 255, 0.8);
 }
 
-.theme-row:hover span {
-  opacity: 1 !important;
-  color: var(--accent-white);
+/* prevent accidental highlighting on the ui */
+#logged-in-ui, #theme-menu-container, #user-display-name, #manifesto-icon {
+  user-select: none;
+  -webkit-user-select: none; /* safari */
 }
 
-#theme-cycle-dot {
-  position: relative; 
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background-color: var(--accent-white);
-  cursor: pointer;
-  transition: all 0.3s ease;
-  border: 1.5px solid rgba(255,255,255,0.2);
+/* state for when the user is actively dragging */
+body.is-dragging {
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grabbing !important;
 }
-
-#theme-menu-container:hover #theme-cycle-dot {
-  opacity: 0.3;
-  transform: scale(0.9);
-}
-
 /* --- 3. apply variables to elements --- */
 body {
   margin: 0;
