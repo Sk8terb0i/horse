@@ -225,26 +225,26 @@ async function init() {
     onSnapshot(collection(db, "users"), (snap) => {
       snap.docChanges().forEach((c) => {
         const data = c.doc.data();
-        if (c.type === "added") {
-          // pass data.innerColor - if it exists in firebase, horse will use it
-          horseData.addUserSphere(data.username, data.innerColor);
+        const username = data.username;
+        const innerColor = data.innerColor;
 
-          // if this is the logged-in user, update their UI dots/prompts
-          if (data.username === currentUsername) {
-            if (data.innerColor) {
-              overlay.setInitialColor(data.innerColor);
-              // ensure the prompt "choose your inner horse" disappears
-              // if they already have a color saved
-              const prompt = document.getElementById("color-prompt");
-              if (prompt && data.innerColor !== "#ffffff") {
-                prompt.style.display = "none";
-              }
-            }
+        if (c.type === "added") {
+          // addUserSphere logic uses data.innerColor if it exists
+          horseData.addUserSphere(username, innerColor);
+
+          // sync the UI dot for the logged-in user
+          if (username === currentUsername && innerColor) {
+            overlay.setInitialColor(innerColor);
           }
         }
+
         if (c.type === "modified") {
-          if (data.username && data.innerColor) {
-            horseData.updateUserColor(data.username, data.innerColor);
+          if (username && innerColor) {
+            horseData.updateUserColor(username, innerColor);
+            // update the UI dot if the user changed their color in this session
+            if (username === currentUsername) {
+              overlay.setInitialColor(innerColor);
+            }
           }
         }
       });

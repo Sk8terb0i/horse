@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import gsap from "gsap";
 import { ManifestoContent } from "./Content.js";
-import { doc, updateDoc } from "firebase/firestore";
+import { doc, setDoc } from "firebase/firestore";
 
 export function createOverlayUI(scene, db, getUsername) {
   const uiContainer = document.createElement("div");
@@ -15,7 +15,7 @@ export function createOverlayUI(scene, db, getUsername) {
   document.body.appendChild(manifestOverlay);
 
   const icon = document.createElement("div");
-  icon.id = "manifesto-icon"; // css now handles visibility
+  icon.id = "manifesto-icon";
   uiContainer.appendChild(icon);
 
   const usernameDisplay = document.createElement("div");
@@ -55,19 +55,35 @@ export function createOverlayUI(scene, db, getUsername) {
 
   innerHorseDot.onclick = () => colorInput.click();
 
-  colorInput.oninput = async (e) => {
+  // updates the UI immediately for a responsive feel
+  colorInput.oninput = (e) => {
     const newColor = e.target.value;
     innerHorseDot.style.background = newColor;
     promptText.style.display = "none";
+  };
 
-    // use the specific key from your UserUI.js
+  // saves to firebase only when the user finishes picking
+  colorInput.onchange = async (e) => {
+    const newColor = e.target.value;
     const username = localStorage.getItem("horse_herd_username");
+
     if (username) {
       try {
         const userRef = doc(db, "users", username);
-        await updateDoc(userRef, { innerColor: newColor });
+        // merge: true handles both new users and old users missing the field
+        await setDoc(
+          userRef,
+          {
+            innerColor: newColor,
+          },
+          { merge: true },
+        );
+
+        console.log(
+          `herd synchronization: ${username} color set to ${newColor}`,
+        );
       } catch (err) {
-        console.error("error updating color in firebase:", err);
+        console.error("error syncing color to the marrow:", err);
       }
     }
   };
@@ -112,7 +128,7 @@ export function createOverlayUI(scene, db, getUsername) {
     setInitialColor: (color) => {
       if (color) {
         innerHorseDot.style.background = color;
-        // if the color is not the default white, hide the prompt
+        // hide prompt if color isn't basic white
         if (color !== "#ffffff" && color !== "rgb(255, 255, 255)") {
           promptText.style.display = "none";
         }

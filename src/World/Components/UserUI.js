@@ -1,4 +1,5 @@
 import { doc, getDoc, setDoc } from "firebase/firestore";
+import * as THREE from "three";
 
 export function createUserUI(db, overlay) {
   const container = document.getElementById("ui-container");
@@ -19,7 +20,7 @@ export function createUserUI(db, overlay) {
         <input type="text" id="usernameInput" placeholder="unique username" />
       </div>
       <button id="submitBtn">join horse</button>
-      <div id="toggle-ui">I'm part of the herd</div>
+      <div id="toggle-ui">i'm part of the herd</div>
       <p id="msg"></p>
     `;
     attachListeners(false);
@@ -32,7 +33,7 @@ export function createUserUI(db, overlay) {
         <input type="text" id="usernameInput" placeholder="your username" />
       </div>
       <button id="submitBtn">reunite</button>
-      <div id="toggle-ui">I need to join</div>
+      <div id="toggle-ui">i need to join</div>
       <p id="msg"></p>
     `;
     attachListeners(true);
@@ -50,6 +51,7 @@ export function createUserUI(db, overlay) {
     submitBtn.addEventListener("click", async () => {
       const usernameInput = document.getElementById("usernameInput");
       const username = usernameInput.value.trim().toLowerCase();
+
       if (!username) return;
 
       try {
@@ -66,22 +68,27 @@ export function createUserUI(db, overlay) {
           const nameInput = document.getElementById("nameInput");
           const name = nameInput.value.trim();
           if (!name) return;
+
           if (userSnap.exists()) {
             msg.innerText = "username already taken.";
           } else {
-            // add a default color here so it's never empty in firebase
-            const defaultColor = "#ffffff";
+            // 1. generate a valid hex string using three.js
+            const color = new THREE.Color().setHSL(Math.random(), 0.4, 0.7);
+            const hexColor = `#${color.getHexString()}`;
+
+            // 2. set the document with ALL fields
             await setDoc(userRef, {
               realName: name,
-              username,
-              innerColor: defaultColor, // save initial color
+              username: username,
+              innerColor: hexColor,
               createdAt: Date.now(),
             });
+
             loginUser(username);
           }
         }
       } catch (e) {
-        console.error(e);
+        console.error("firebase error:", e);
         msg.innerText = "database error.";
       }
     });
@@ -89,13 +96,12 @@ export function createUserUI(db, overlay) {
 
   function loginUser(username) {
     localStorage.setItem("horse_herd_username", username);
-
-    // tell the overlay to show everything now
     if (overlay) {
       overlay.showMainUI();
       overlay.setUsername(username);
+      // force reload to sync snapshot
+      window.location.reload();
     }
-
     showAscendedState();
   }
 
