@@ -20,11 +20,31 @@ export async function createHorse() {
   const availableBones = [];
   const activeSpheres = [];
   const baseSphereSize = 0.005;
-  const sphereGeometry = new THREE.SphereGeometry(1, 12, 12);
-  const sphereMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const sphereGeometry = new THREE.SphereGeometry(1, 16, 16);
+
+  // create a soft radial gradient texture for the glow
+  const createGlowTexture = () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 64;
+    canvas.height = 64;
+    const ctx = canvas.getContext("2d");
+    const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gradient.addColorStop(0, "rgba(255, 255, 255, 1)");
+    gradient.addColorStop(0.2, "rgba(255, 255, 255, 0.8)");
+    gradient.addColorStop(0.5, "rgba(255, 255, 255, 0.2)");
+    gradient.addColorStop(1, "rgba(255, 255, 255, 0)");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 64, 64);
+    const texture = new THREE.CanvasTexture(canvas);
+    return texture;
+  };
+
+  const glowTexture = createGlowTexture();
 
   model.traverse((child) => {
-    if (child.isMesh) child.visible = false;
+    if (child.isMesh) {
+      child.visible = false;
+    }
     if (child.isBone && !child.name.toLowerCase().includes("mane")) {
       availableBones.push(child);
     }
@@ -36,29 +56,51 @@ export async function createHorse() {
     div.innerText = text === "big horse" ? text : `the horse: ${text}`;
     const label = new CSS2DObject(div);
     label.center.set(0, 0.5);
-    // add to horseGroup instead of the sphere mesh to avoid rotation inheritance
     horseGroup.add(label);
     return label;
   };
 
+  const createSphereWithGlow = (geometry, scale) => {
+    const group = new THREE.Group();
+
+    // the core sphere (unlit)
+    const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const core = new THREE.Mesh(geometry, coreMat);
+
+    // the soft glow sprite
+    const glowMat = new THREE.SpriteMaterial({
+      map: glowTexture,
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+    });
+    const glow = new THREE.Sprite(glowMat);
+    glow.scale.setScalar(4.0);
+
+    group.add(core, glow);
+    group.scale.setScalar(scale);
+    group.userData = { core, glow };
+
+    return group;
+  };
+
   const chestBone =
     availableBones.find((b) => b.name === "DEF-chest_082") || availableBones[0];
-  const leaderSphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-  leaderSphere.scale.setScalar(baseSphereSize * 4);
-  leaderSphere.userData = { username: "big horse" };
-  horseGroup.add(leaderSphere);
-
+  const leaderSphereGroup = createSphereWithGlow(
+    sphereGeometry,
+    baseSphereSize * 4,
+  );
+  horseGroup.add(leaderSphereGroup);
   activeSpheres.push({
-    mesh: leaderSphere,
+    mesh: leaderSphereGroup,
     bone: chestBone,
     offset: new THREE.Vector3(),
     label: createLabel("big horse"),
   });
 
   const addUserSphere = (username = "horse") => {
-    const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-    sphere.scale.setScalar(baseSphereSize);
-    sphere.userData = { username: username };
+    const sphereGroup = createSphereWithGlow(sphereGeometry, baseSphereSize);
     const bone =
       availableBones[Math.floor(Math.random() * availableBones.length)];
     const offset = new THREE.Vector3(
@@ -66,9 +108,9 @@ export async function createHorse() {
       (Math.random() - 0.5) * 0.05,
       (Math.random() - 0.5) * 0.05,
     );
-    horseGroup.add(sphere);
+    horseGroup.add(sphereGroup);
     activeSpheres.push({
-      mesh: sphere,
+      mesh: sphereGroup,
       bone: bone,
       offset: offset,
       label: createLabel(username),
@@ -76,9 +118,11 @@ export async function createHorse() {
   };
 
   const mixer = new THREE.AnimationMixer(model);
-  mixer.clipAction(horseData.animations[1] || horseData.animations[0]).play();
+  const action = mixer.clipAction(
+    horseData.animations[1] || horseData.animations[0],
+  );
+  action.play();
 
-  // temp variables for math to avoid garbage collection
   const worldPos = new THREE.Vector3();
   const cameraRight = new THREE.Vector3();
 
@@ -90,7 +134,6 @@ export async function createHorse() {
     update: (delta, camera) => {
       mixer.update(delta);
 
-      // get the camera's "right" direction in world space
       if (camera) {
         cameraRight.set(1, 0, 0).applyQuaternion(camera.quaternion);
       }
@@ -99,7 +142,6 @@ export async function createHorse() {
         s.bone.getWorldPosition(worldPos);
         s.mesh.position.copy(worldPos).add(s.offset);
 
-        // update label position to be at the sphere + an offset to the right of the camera
         if (s.label && camera) {
           const gap = s.mesh.scale.x + 0.005;
           s.label.position

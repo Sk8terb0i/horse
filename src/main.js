@@ -38,11 +38,8 @@ async function init() {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   document.body.appendChild(renderer.domElement);
 
-  // fixed labelrenderer initialization
   const labelRenderer = new CSS2DRenderer();
   labelRenderer.setSize(window.innerWidth, window.innerHeight);
-
-  // we access .style on the domElement itself
   const lDom = labelRenderer.domElement;
   lDom.style.position = "absolute";
   lDom.style.top = "0px";
@@ -52,20 +49,26 @@ async function init() {
 
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
-  controls.minDistance = 0.05;
+  controls.minDistance = 0.01;
   controls.maxDistance = 10;
 
   const timer = new Timer();
+  const raycaster = new THREE.Raycaster();
+  raycaster.params.Mesh.threshold = 0.06;
+  const mouse = new THREE.Vector2();
+
   let horseUpdater = null;
   let horseDataRef = null;
+  let hoveredGroup = null;
+  let isPaused = false;
+  let mouseDownPos = { x: 0, y: 0 };
+  const clickThreshold = 5;
 
-  // --- interaction config ---
   const FREEZE_DIST = 0.4;
   const FULL_SPEED_DIST = 2.0;
   const GLOBAL_LABEL_DIST = 1.6;
   const INDIVIDUAL_CULL_DIST = 0.8;
 
-  // UI Elements
   const manifestOverlay = document.createElement("div");
   manifestOverlay.id = "loading-overlay";
   manifestOverlay.innerHTML = ManifestoContent;
@@ -78,9 +81,6 @@ async function init() {
   const themeDot = document.createElement("div");
   themeDot.id = "theme-cycle-dot";
   document.body.appendChild(themeDot);
-
-  let currentThemeIndex = 0;
-  const themes = ["herd", "dolphin", "void"];
 
   const setTheme = (themeName) => {
     document.documentElement.setAttribute("data-theme", themeName);
@@ -97,22 +97,15 @@ async function init() {
   };
 
   themeDot.onclick = () => {
-    currentThemeIndex = (currentThemeIndex + 1) % themes.length;
-    setTheme(themes[currentThemeIndex]);
-    gsap.fromTo(
-      themeDot,
-      { scale: 1.5 },
-      { scale: 1, duration: 0.4, ease: "back.out(2)" },
-    );
+    const themes = ["herd", "dolphin", "void"];
+    const current =
+      document.documentElement.getAttribute("data-theme") || "herd";
+    const next = themes[(themes.indexOf(current) + 1) % themes.length];
+    setTheme(next);
   };
 
   icon.onclick = () => {
     manifestOverlay.classList.add("active");
-    gsap.fromTo(
-      ".m-body p",
-      { opacity: 0, y: 10 },
-      { opacity: 1, y: 0, stagger: 0.1, duration: 1, ease: "power2.out" },
-    );
   };
 
   document.addEventListener("click", (e) => {
@@ -124,31 +117,155 @@ async function init() {
     }
   });
 
+  window.addEventListener("mousemove", (event) => {
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+
+    if (horseDataRef) {
+      // we check for meshes inside the groups
+      const meshes = [];
+      horseDataRef.activeSpheres.forEach((s) => {
+        // if s.mesh is a Group, traverse it
+        if (s.mesh.isGroup) {
+          s.mesh.traverse((child) => {
+            if (child.isMesh) meshes.push(child);
+          });
+        } else {
+          meshes.push(s.mesh);
+        }
+      });
+
+      const intersects = raycaster.intersectObjects(meshes);
+
+      if (intersects.length > 0) {
+        const group = intersects[0].object.parent;
+        if (hoveredGroup !== group && group.userData.glow) {
+          if (hoveredGroup)
+            gsap.to(hoveredGroup.userData.glow.material, {
+              opacity: 0,
+              duration: 0.4,
+            });
+          hoveredGroup = group;
+          document.body.style.cursor = "pointer";
+          // fade in the soft sprite glow
+          gsap.to(hoveredGroup.userData.glow.material, {
+            opacity: 0.8,
+            duration: 0.4,
+          });
+        }
+      } else {
+        if (hoveredGroup) {
+          gsap.to(hoveredGroup.userData.glow.material, {
+            opacity: 0,
+            duration: 0.3,
+          });
+          hoveredGroup = null;
+          document.body.style.cursor = "default";
+        }
+      }
+    }
+  });
+
+  window.addEventListener("mousedown", (e) => {
+    mouseDownPos = { x: e.clientX, y: e.clientY };
+  });
+
+  window.addEventListener("mouseup", (event) => {
+    if (
+      event.target.closest("#ui-container") ||
+      event.target.id === "theme-cycle-dot" ||
+      event.target.id === "manifesto-icon"
+    )
+      return;
+    const deltaX = Math.abs(event.clientX - mouseDownPos.x);
+    const deltaY = Math.abs(event.clientY - mouseDownPos.y);
+    if (deltaX > clickThreshold || deltaY > clickThreshold) return;
+
+    raycaster.setFromCamera(mouse, camera);
+    if (horseDataRef) {
+      const meshes = [];
+      horseDataRef.activeSpheres.forEach((s) => {
+        if (s.mesh.isGroup) {
+          s.mesh.traverse((child) => {
+            if (child.isMesh) meshes.push(child);
+          });
+        } else {
+          meshes.push(s.mesh);
+        }
+      });
+      const intersects = raycaster.intersectObjects(meshes);
+
+      if (intersects.length > 0) {
+        isPaused = true;
+        const targetObj = intersects[0].object;
+        const targetPos = new THREE.Vector3();
+        targetObj.getWorldPosition(targetPos);
+
+        // get scale from the group (parent)
+        const zoomFactor = targetObj.parent.scale.x * 12;
+
+        const tl = gsap.timeline();
+        tl.to(
+          controls.target,
+          {
+            x: targetPos.x,
+            y: targetPos.y,
+            z: targetPos.z,
+            duration: 1.2,
+            ease: "power3.inOut",
+          },
+          0,
+        );
+        const camDir = new THREE.Vector3()
+          .subVectors(camera.position, targetPos)
+          .normalize();
+        const finalCamPos = targetPos
+          .clone()
+          .add(camDir.multiplyScalar(zoomFactor));
+        tl.to(
+          camera.position,
+          {
+            x: finalCamPos.x,
+            y: finalCamPos.y,
+            z: finalCamPos.z,
+            duration: 1.2,
+            ease: "power3.inOut",
+            onUpdate: () => {
+              camera.lookAt(targetPos);
+            },
+          },
+          0,
+        );
+      } else {
+        isPaused = false;
+        const tl = gsap.timeline();
+        tl.to(
+          controls.target,
+          { x: 0, y: 0, z: 0, duration: 1.2, ease: "power3.inOut" },
+          0,
+        );
+        tl.to(
+          camera.position,
+          { x: 0, y: 0, z: 2.5, duration: 1.2, ease: "power3.inOut" },
+          0,
+        );
+      }
+    }
+  });
+
   try {
     const horseData = await createHorse();
     horseDataRef = horseData;
-    const { horseGroup, update, addUserSphere, activeSpheres } = horseData;
-
+    const { horseGroup, update, addUserSphere } = horseData;
     horseGroup.rotation.y = THREE.MathUtils.degToRad(-20);
     scene.add(horseGroup);
     horseUpdater = update;
 
-    activeSpheres.forEach((s) => {
-      s.mesh.material = new THREE.MeshBasicMaterial({ color: 0xffffff });
-    });
-
     createUserUI(db);
     onSnapshot(collection(db, "users"), (snap) => {
       snap.docChanges().forEach((c) => {
-        if (c.type === "added") {
-          addUserSphere(c.doc.data().username);
-          const last =
-            horseDataRef.activeSpheres[horseDataRef.activeSpheres.length - 1];
-          if (last)
-            last.mesh.material = new THREE.MeshBasicMaterial({
-              color: 0xffffff,
-            });
-        }
+        if (c.type === "added") addUserSphere(c.doc.data().username);
       });
     });
   } catch (err) {
@@ -161,28 +278,31 @@ async function init() {
     controls.update();
 
     const camPos = camera.position;
-    const camDistToOrigin = camPos.length();
+    const camDistFromOrigin = camPos.length();
 
     if (horseDataRef) {
-      const globalActive = camDistToOrigin < GLOBAL_LABEL_DIST;
+      const globalActive = camDistFromOrigin < GLOBAL_LABEL_DIST;
       horseDataRef.activeSpheres.forEach((s) => {
         if (!s.label) return;
-        const distToSphere = camPos.distanceTo(s.mesh.position);
+        const sphereWorldPos = new THREE.Vector3();
+        s.mesh.getWorldPosition(sphereWorldPos);
+        const distToSphere = camPos.distanceTo(sphereWorldPos);
         const isVisible = globalActive && distToSphere < INDIVIDUAL_CULL_DIST;
         s.label.element.style.opacity = isVisible ? "1" : "0";
       });
     }
 
-    const timeScale = THREE.MathUtils.clamp(
-      (camDistToOrigin - FREEZE_DIST) / (FULL_SPEED_DIST - FREEZE_DIST),
+    let timeScale = THREE.MathUtils.clamp(
+      (camDistFromOrigin - FREEZE_DIST) / (FULL_SPEED_DIST - FREEZE_DIST),
       0,
       1,
     );
-
-    if (horseUpdater) {
-      horseUpdater(timer.getDelta() * timeScale, camera); // pass camera here
+    if (isPaused) {
+      timeScale = 0;
+      if (camDistFromOrigin >= FULL_SPEED_DIST) isPaused = false;
     }
 
+    if (horseUpdater) horseUpdater(timer.getDelta() * timeScale, camera);
     renderer.render(scene, camera);
     labelRenderer.render(scene, camera);
   }
