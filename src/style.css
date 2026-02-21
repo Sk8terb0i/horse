@@ -230,11 +230,7 @@ body {
   pointer-events: none;
   background: none !important;
   border: none !important;
-  
-  /* we add a tiny bit of left padding for a visual breathing room gap */
-  padding-left: 25px; 
-  
-  /* smooth appearance when zooming in */
+  padding-left: 5px; /* small visual gap */
   transition: opacity 0.3s ease;
 }
 

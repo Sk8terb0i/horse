@@ -179,7 +179,9 @@ async function init() {
       1,
     );
 
-    if (horseUpdater) horseUpdater(timer.getDelta() * timeScale);
+    if (horseUpdater) {
+      horseUpdater(timer.getDelta() * timeScale, camera); // pass camera here
+    }
 
     renderer.render(scene, camera);
     labelRenderer.render(scene, camera);

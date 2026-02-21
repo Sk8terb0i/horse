@@ -30,27 +30,17 @@ export async function createHorse() {
     }
   });
 
-  const createLabel = (mesh, text) => {
+  const createLabel = (text) => {
     const div = document.createElement("div");
     div.className = "sphere-label";
     div.innerText = text === "big horse" ? text : `the horse: ${text}`;
-
     const label = new CSS2DObject(div);
-
-    // logic: anchor the LEFT edge of the label to the point
     label.center.set(0, 0.5);
-
-    // because the label is a child of the mesh, its position is relative
-    // to the mesh's scale. since our geometry radius is 1:
-    // 1.0 = exactly on the sphere's surface
-    // 1.1 = slightly outside the surface (regardless of if the sphere is big or small)
-    label.position.set(1.1, 0, 0);
-
-    mesh.add(label);
+    // add to horseGroup instead of the sphere mesh to avoid rotation inheritance
+    horseGroup.add(label);
     return label;
   };
 
-  // --- create big horse ---
   const chestBone =
     availableBones.find((b) => b.name === "DEF-chest_082") || availableBones[0];
   const leaderSphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
@@ -58,14 +48,11 @@ export async function createHorse() {
   leaderSphere.userData = { username: "big horse" };
   horseGroup.add(leaderSphere);
 
-  // now uses the normalized 1.1 offset relative to its larger scale
-  const leaderLabel = createLabel(leaderSphere, "big horse");
-
   activeSpheres.push({
     mesh: leaderSphere,
     bone: chestBone,
     offset: new THREE.Vector3(),
-    label: leaderLabel,
+    label: createLabel("big horse"),
   });
 
   const addUserSphere = (username = "horse") => {
@@ -80,29 +67,45 @@ export async function createHorse() {
       (Math.random() - 0.5) * 0.05,
     );
     horseGroup.add(sphere);
-    const label = createLabel(sphere, username);
     activeSpheres.push({
       mesh: sphere,
       bone: bone,
       offset: offset,
-      label: label,
+      label: createLabel(username),
     });
   };
 
   const mixer = new THREE.AnimationMixer(model);
   mixer.clipAction(horseData.animations[1] || horseData.animations[0]).play();
 
+  // temp variables for math to avoid garbage collection
   const worldPos = new THREE.Vector3();
+  const cameraRight = new THREE.Vector3();
+
   return {
     horseGroup,
     addUserSphere,
     activeSpheres,
     mixer,
-    update: (delta) => {
+    update: (delta, camera) => {
       mixer.update(delta);
+
+      // get the camera's "right" direction in world space
+      if (camera) {
+        cameraRight.set(1, 0, 0).applyQuaternion(camera.quaternion);
+      }
+
       activeSpheres.forEach((s) => {
         s.bone.getWorldPosition(worldPos);
         s.mesh.position.copy(worldPos).add(s.offset);
+
+        // update label position to be at the sphere + an offset to the right of the camera
+        if (s.label && camera) {
+          const gap = s.mesh.scale.x + 0.005;
+          s.label.position
+            .copy(s.mesh.position)
+            .addScaledVector(cameraRight, gap);
+        }
       });
     },
   };
