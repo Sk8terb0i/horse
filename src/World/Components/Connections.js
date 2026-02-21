@@ -5,10 +5,9 @@ export function createConnections(scene) {
   const lineGroup = new THREE.Group();
   scene.add(lineGroup);
 
-  const lineMaterial = new THREE.LineDashedMaterial({
-    color: 0xffffff,
-    dashSize: 0.01,
-    gapSize: 0.01,
+  // use linebasicmaterial to support vertex colors (dashed doesn't support gradients well)
+  const lineMaterial = new THREE.LineBasicMaterial({
+    vertexColors: true,
     transparent: true,
     opacity: 0,
     depthWrite: false,
@@ -20,8 +19,6 @@ export function createConnections(scene) {
   lineLabelDiv.style.opacity = "0";
   lineLabelDiv.style.position = "absolute";
   lineLabelDiv.style.pointerEvents = "none";
-  lineLabelDiv.style.whiteSpace = "nowrap";
-
   const lineLabel = new CSS2DObject(lineLabelDiv);
   scene.add(lineLabel);
 
@@ -30,47 +27,72 @@ export function createConnections(scene) {
     if (!horseDataRef) return;
 
     const spheres = horseDataRef.activeSpheres;
-    const spherePositions = spheres.map((s) => {
-      const pos = new THREE.Vector3();
-      s.mesh.getWorldPosition(pos);
-      return pos;
-    });
+    // ensure inner horses are visible when connections are active
+    spheres.forEach((s) => (s.mesh.userData.inner.visible = true));
 
-    for (let i = 0; i < spherePositions.length; i++) {
-      const posA = spherePositions[i];
-      const distances = [];
-      for (let j = 0; j < spherePositions.length; j++) {
-        if (i === j) continue;
-        distances.push({
-          pos: spherePositions[j],
-          dist: posA.distanceTo(spherePositions[j]),
-        });
-      }
-      distances.sort((a, b) => a.dist - b.dist);
+    for (let i = 0; i < spheres.length; i++) {
+      const sA = spheres[i];
+      const posA = new THREE.Vector3();
+      sA.mesh.getWorldPosition(posA);
+
+      const distances = spheres
+        .filter((_, idx) => idx !== i)
+        .map((sB) => {
+          const posB = new THREE.Vector3();
+          sB.mesh.getWorldPosition(posB);
+          return { sB, pos: posB, dist: posA.distanceTo(posB) };
+        })
+        .sort((a, b) => a.dist - b.dist);
 
       for (let n = 0; n < Math.min(3, distances.length); n++) {
+        const sB = distances[n].sB;
+        const posB = distances[n].pos;
+        const mid = new THREE.Vector3()
+          .addVectors(posA, posB)
+          .multiplyScalar(0.5);
+
         const geometry = new THREE.BufferGeometry().setFromPoints([
           posA,
-          distances[n].pos,
+          mid,
+          posB,
         ]);
+
+        // assign colors: half one color, half the other
+        const colorA = new THREE.Color(sA.mesh.userData.color);
+        const colorB = new THREE.Color(sB.mesh.userData.color);
+        const colors = new Float32Array([
+          colorA.r,
+          colorA.g,
+          colorA.b,
+          colorA.r,
+          colorA.g,
+          colorA.b, // mid takes colorA or B for sharp split, or blend for gradient
+          colorB.r,
+          colorB.g,
+          colorB.b,
+        ]);
+        geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+
         const line = new THREE.Line(geometry, lineMaterial);
-        line.userData = { start: posA.clone(), end: distances[n].pos.clone() };
-        line.computeLineDistances();
+        line.userData = { start: posA.clone(), end: posB.clone() };
         lineGroup.add(line);
       }
     }
   };
 
+  // hide inner horses when reset
+  const hideInnerHorses = (horseDataRef) => {
+    if (horseDataRef)
+      horseDataRef.activeSpheres.forEach(
+        (s) => (s.mesh.userData.inner.visible = false),
+      );
+  };
+
   const handleLineInteraction = (intersects, mousePos) => {
     const lineIntersect = intersects.find((hit) => hit.object.type === "Line");
-
     if (lineIntersect) {
       document.body.style.cursor = "pointer";
-
-      // position label relative to the hit point in 3d space
       lineLabel.position.copy(lineIntersect.point);
-
-      // apply a css offset to move it to the right of the cursor/press
       lineLabelDiv.style.transform = "translate(20px, -50%)";
       lineLabelDiv.style.opacity = "1";
       return true;
@@ -87,5 +109,6 @@ export function createConnections(scene) {
     lineLabelDiv,
     updateConnections,
     handleLineInteraction,
+    hideInnerHorses,
   };
 }

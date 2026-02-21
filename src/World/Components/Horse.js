@@ -22,7 +22,10 @@ export async function createHorse() {
   const baseSphereSize = 0.005;
   const sphereGeometry = new THREE.SphereGeometry(1, 16, 16);
 
-  // create a soft radial gradient texture for the glow
+  const getRandomPastel = () => {
+    return new THREE.Color().setHSL(Math.random(), 0.4, 0.7).getHex();
+  };
+
   const createGlowTexture = () => {
     const canvas = document.createElement("canvas");
     canvas.width = 64;
@@ -30,24 +33,18 @@ export async function createHorse() {
     const ctx = canvas.getContext("2d");
     const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
     gradient.addColorStop(0, "rgba(255, 255, 255, 1)");
-    gradient.addColorStop(0.2, "rgba(255, 255, 255, 0.8)");
-    gradient.addColorStop(0.5, "rgba(255, 255, 255, 0.2)");
     gradient.addColorStop(1, "rgba(255, 255, 255, 0)");
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, 64, 64);
-    const texture = new THREE.CanvasTexture(canvas);
-    return texture;
+    return new THREE.CanvasTexture(canvas);
   };
 
   const glowTexture = createGlowTexture();
 
   model.traverse((child) => {
-    if (child.isMesh) {
-      child.visible = false;
-    }
-    if (child.isBone && !child.name.toLowerCase().includes("mane")) {
+    if (child.isMesh) child.visible = false;
+    if (child.isBone && !child.name.toLowerCase().includes("mane"))
       availableBones.push(child);
-    }
   });
 
   const createLabel = (text) => {
@@ -60,17 +57,23 @@ export async function createHorse() {
     return label;
   };
 
-  const createSphereWithGlow = (geometry, scale) => {
+  const createSphereWithGlow = (geometry, scale, initialColor) => {
     const group = new THREE.Group();
-
-    // the core sphere (unlit)
     const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
     const core = new THREE.Mesh(geometry, coreMat);
 
-    // the soft glow sprite
+    // the inner horse sphere
+    const innerMat = new THREE.MeshBasicMaterial({
+      color: initialColor || 0xffffff,
+      depthTest: false, // ensures it shows on front
+    });
+    const inner = new THREE.Mesh(geometry, innerMat);
+    inner.scale.setScalar(0.6);
+    inner.renderOrder = 999;
+    inner.visible = false; // hidden until click/active lines
+
     const glowMat = new THREE.SpriteMaterial({
       map: glowTexture,
-      color: 0xffffff,
       transparent: true,
       opacity: 0,
       blending: THREE.AdditiveBlending,
@@ -78,29 +81,19 @@ export async function createHorse() {
     const glow = new THREE.Sprite(glowMat);
     glow.scale.setScalar(4.0);
 
-    group.add(core, glow);
+    group.add(core, inner, glow);
     group.scale.setScalar(scale);
-    group.userData = { core, glow };
-
+    group.userData = { core, inner, glow, color: initialColor || 0xffffff };
     return group;
   };
 
-  const chestBone =
-    availableBones.find((b) => b.name === "DEF-chest_082") || availableBones[0];
-  const leaderSphereGroup = createSphereWithGlow(
-    sphereGeometry,
-    baseSphereSize * 4,
-  );
-  horseGroup.add(leaderSphereGroup);
-  activeSpheres.push({
-    mesh: leaderSphereGroup,
-    bone: chestBone,
-    offset: new THREE.Vector3(),
-    label: createLabel("big horse"),
-  });
-
-  const addUserSphere = (username = "horse") => {
-    const sphereGroup = createSphereWithGlow(sphereGeometry, baseSphereSize);
+  const addUserSphere = (username = "horse", existingColor = null) => {
+    const color = existingColor || getRandomPastel();
+    const sphereGroup = createSphereWithGlow(
+      sphereGeometry,
+      baseSphereSize,
+      color,
+    );
     const bone =
       availableBones[Math.floor(Math.random() * availableBones.length)];
     const offset = new THREE.Vector3(
@@ -108,8 +101,10 @@ export async function createHorse() {
       (Math.random() - 0.5) * 0.05,
       (Math.random() - 0.5) * 0.05,
     );
+
     horseGroup.add(sphereGroup);
     activeSpheres.push({
+      username,
       mesh: sphereGroup,
       bone: bone,
       offset: offset,
@@ -117,32 +112,44 @@ export async function createHorse() {
     });
   };
 
+  // add leader
+  const chestBone =
+    availableBones.find((b) => b.name === "DEF-chest_082") || availableBones[0];
+  const leaderSphere = createSphereWithGlow(
+    sphereGeometry,
+    baseSphereSize * 4,
+    0xffffff,
+  );
+  horseGroup.add(leaderSphere);
+  activeSpheres.push({
+    username: "big horse",
+    mesh: leaderSphere,
+    bone: chestBone,
+    offset: new THREE.Vector3(),
+    label: createLabel("big horse"),
+  });
+
   const mixer = new THREE.AnimationMixer(model);
   const action = mixer.clipAction(
     horseData.animations[1] || horseData.animations[0],
   );
   action.play();
 
-  const worldPos = new THREE.Vector3();
-  const cameraRight = new THREE.Vector3();
-
   return {
     horseGroup,
     addUserSphere,
     activeSpheres,
-    mixer,
     update: (delta, camera) => {
       mixer.update(delta);
-
-      if (camera) {
-        cameraRight.set(1, 0, 0).applyQuaternion(camera.quaternion);
-      }
+      const cameraRight = new THREE.Vector3(1, 0, 0).applyQuaternion(
+        camera.quaternion,
+      );
+      const worldPos = new THREE.Vector3();
 
       activeSpheres.forEach((s) => {
         s.bone.getWorldPosition(worldPos);
         s.mesh.position.copy(worldPos).add(s.offset);
-
-        if (s.label && camera) {
+        if (s.label) {
           const gap = s.mesh.scale.x + 0.005;
           s.label.position
             .copy(s.mesh.position)
