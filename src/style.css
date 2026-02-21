@@ -1,4 +1,4 @@
-/* --- 1. Theme Definitions --- */
+/* --- 1. theme definitions --- */
 :root, [data-theme="herd"] {
   --big-horse-color: #9ece27;
   --user-horse-color: #dedcff;
@@ -35,7 +35,38 @@
   --accent-white: #ffffff;
 }
 
-/* --- 2. Apply Variables to Elements --- */
+/* --- 2. theme menu (the blooming effect) --- */
+#theme-menu-container {
+  align-items: flex-end; /* Ensures dots stay lined up on the right */
+}
+
+.theme-row:hover .theme-sub-dot {
+  transform: scale(1.4);
+  box-shadow: 0 0 8px white;
+}
+
+.theme-row:hover span {
+  opacity: 1 !important;
+  color: var(--accent-white);
+}
+
+#theme-cycle-dot {
+  position: relative; 
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background-color: var(--accent-white);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 1.5px solid rgba(255,255,255,0.2);
+}
+
+#theme-menu-container:hover #theme-cycle-dot {
+  opacity: 0.3;
+  transform: scale(0.9);
+}
+
+/* --- 3. apply variables to elements --- */
 body {
   margin: 0;
   padding: 0;
@@ -46,7 +77,7 @@ body {
   transition: background-color 1s ease;
 }
 
-/* --- 2. Join/Login UI --- */
+/* --- 4. join/login ui --- */
 #ui-container {
   position: absolute;
   bottom: 10%;
@@ -99,7 +130,7 @@ body {
   margin-top: 10px;
 }
 
-/* --- 3. Interaction Elements --- */
+/* --- 5. interaction elements --- */
 #manifesto-icon {
   position: fixed;
   top: 30px;
@@ -110,20 +141,17 @@ body {
   border-radius: 50%;
   cursor: pointer;
   z-index: 2000;
-  opacity: 0.7; /* visible by default now */
+  opacity: 0.7;
   transition: opacity 0.5s ease;
 }
 
-#manifesto-icon:hover {
-  opacity: 1;
-}
+#manifesto-icon:hover { opacity: 1; }
 
 #loading-overlay.active ~ #logged-in-ui #manifesto-icon {
   opacity: 0;
   visibility: hidden;
 }
 
-/* style for the username display */
 #user-display-name {
   position: fixed;
   top: 38px;
@@ -137,7 +165,7 @@ body {
   font-family: serif;
 }
 
-/* --- 4. Overlays --- */
+/* --- 6. overlays --- */
 #loading-overlay {
   position: fixed;
   top: 0;
@@ -185,10 +213,7 @@ body {
   text-align: left;
 }
 
-.m-body p {
-  margin-bottom: 40px;
-  color: var(--text-main);
-}
+.m-body p { margin-bottom: 40px; color: var(--text-main); }
 
 .m-body strong {
   display: block;
@@ -200,7 +225,7 @@ body {
   margin-bottom: 10px;
 }
 
-/* --- 5. Close Icon --- */
+/* --- 7. close icon --- */
 .close-icon {
   position: fixed;
   top: 30px;
@@ -217,33 +242,14 @@ body {
 .close-icon::before, .close-icon::after {
   content: '';
   position: absolute;
-  top: 15px;    /* centered vertically */
-  left: 0;      /* centered horizontally */
+  top: 15px;
+  left: 0;
   width: 30px;
   height: 1px;
   background-color: white;
 }
 .close-icon::before { transform: rotate(45deg); }
 .close-icon::after { transform: rotate(-45deg); }
-
-/* --- 6. Theme Cycle Dot --- */
-#theme-cycle-dot {
-  position: fixed;
-  bottom: 25px; 
-  right: 38px;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background-color: var(--accent-white);
-  cursor: pointer;
-  z-index: 5001;
-  transition: all 0.3s ease;
-}
-
-#theme-cycle-dot:hover {
-  background-color: var(--accent-white);
-  transform: scale(1.2);
-}
 
 .sphere-label {
   color: var(--accent-white);
