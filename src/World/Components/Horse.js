@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
+import { getNearestColorName } from "../Utils/ColorUtils.js";
 
 export async function createHorse() {
   const loader = new GLTFLoader();
@@ -38,7 +39,6 @@ export async function createHorse() {
     ctx.fillRect(0, 0, 64, 64);
     return new THREE.CanvasTexture(canvas);
   };
-
   const glowTexture = createGlowTexture();
 
   model.traverse((child) => {
@@ -47,10 +47,22 @@ export async function createHorse() {
       availableBones.push(child);
   });
 
-  const createLabel = (text) => {
+  const createLabel = (text, hexColor = null) => {
     const div = document.createElement("div");
     div.className = "sphere-label";
-    div.innerText = text === "big horse" ? text : `the horse: ${text}`;
+
+    const nameLine = document.createElement("div");
+    nameLine.innerText = text === "big horse" ? text : `the horse: ${text}`;
+    div.appendChild(nameLine);
+
+    if (text !== "big horse" && hexColor) {
+      const colorLine = document.createElement("div");
+      colorLine.className = "inner-horse-label";
+      colorLine.innerText = `inner horse: ${getNearestColorName(hexColor)}`;
+      colorLine.style.cssText = `font-size: 0.8em; opacity: 0.7; margin-top: 2px;`;
+      div.appendChild(colorLine);
+    }
+
     const label = new CSS2DObject(div);
     label.center.set(0, 0.5);
     horseGroup.add(label);
@@ -59,27 +71,29 @@ export async function createHorse() {
 
   const createSphereWithGlow = (geometry, scale, initialColor) => {
     const group = new THREE.Group();
-    const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-    const core = new THREE.Mesh(geometry, coreMat);
-
-    const innerMat = new THREE.MeshBasicMaterial({
-      color: initialColor || 0xffffff,
-      depthTest: false,
-    });
-    const inner = new THREE.Mesh(geometry, innerMat);
+    const core = new THREE.Mesh(
+      geometry,
+      new THREE.MeshBasicMaterial({ color: 0xffffff }),
+    );
+    const inner = new THREE.Mesh(
+      geometry,
+      new THREE.MeshBasicMaterial({
+        color: initialColor || 0xffffff,
+        depthTest: false,
+      }),
+    );
     inner.scale.setScalar(0.6);
     inner.renderOrder = 999;
     inner.visible = false;
-
-    const glowMat = new THREE.SpriteMaterial({
-      map: glowTexture,
-      transparent: true,
-      opacity: 0,
-      blending: THREE.AdditiveBlending,
-    });
-    const glow = new THREE.Sprite(glowMat);
+    const glow = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: glowTexture,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+      }),
+    );
     glow.scale.setScalar(4.0);
-
     group.add(core, inner, glow);
     group.scale.setScalar(scale);
     group.userData = { core, inner, glow, color: initialColor || 0xffffff };
@@ -88,15 +102,13 @@ export async function createHorse() {
 
   const addUserSphere = (username = "horse", existingColor = null) => {
     if (activeSpheres.find((s) => s.username === username)) return;
-
-    const color = existingColor ? existingColor : getRandomPastel();
-
+    const color =
+      existingColor || `#${new THREE.Color(getRandomPastel()).getHexString()}`;
     const sphereGroup = createSphereWithGlow(
       sphereGeometry,
       baseSphereSize,
       color,
     );
-
     const bone =
       availableBones[Math.floor(Math.random() * availableBones.length)];
     const offset = new THREE.Vector3(
@@ -104,14 +116,13 @@ export async function createHorse() {
       (Math.random() - 0.5) * 0.05,
       (Math.random() - 0.5) * 0.05,
     );
-
     horseGroup.add(sphereGroup);
     activeSpheres.push({
       username,
       mesh: sphereGroup,
-      bone: bone,
-      offset: offset,
-      label: createLabel(username),
+      bone,
+      offset,
+      label: createLabel(username, color),
     });
   };
 
@@ -120,30 +131,29 @@ export async function createHorse() {
     if (sphere) {
       sphere.mesh.userData.color = newColor;
       sphere.mesh.userData.inner.material.color.set(newColor);
+      const labels = sphere.label.element.querySelectorAll("div");
+      if (labels.length > 1) {
+        labels[1].innerText = `inner horse: ${getNearestColorName(newColor)}`;
+      }
     }
   };
 
   const getBigHorseThemeColor = () => {
     const style = getComputedStyle(document.documentElement);
-    const colorStr =
-      style.getPropertyValue("--big-horse-color").trim() || "#ffeab5";
-    return new THREE.Color(colorStr);
+    return new THREE.Color(
+      style.getPropertyValue("--big-horse-color").trim() || "#ffeab5",
+    );
   };
 
-  // add leader
   const chestBone =
     availableBones.find((b) => b.name === "DEF-chest_082") || availableBones[0];
-
-  // leader uses theme color for the core
   const leaderColor = getBigHorseThemeColor();
   const leaderSphere = createSphereWithGlow(
     sphereGeometry,
     baseSphereSize * 4,
     leaderColor,
   );
-  // ensure leader core isn't white
   leaderSphere.userData.core.material.color.copy(leaderColor);
-
   horseGroup.add(leaderSphere);
   activeSpheres.push({
     username: "big horse",
@@ -166,19 +176,16 @@ export async function createHorse() {
     activeSpheres,
     update: (delta, camera) => {
       mixer.update(delta);
-
       const leader = activeSpheres.find((s) => s.username === "big horse");
       if (leader) {
         const themeColor = getBigHorseThemeColor();
         leader.mesh.userData.core.material.color.copy(themeColor);
         leader.mesh.userData.inner.material.color.copy(themeColor);
       }
-
       const cameraRight = new THREE.Vector3(1, 0, 0).applyQuaternion(
         camera.quaternion,
       );
       const worldPos = new THREE.Vector3();
-
       activeSpheres.forEach((s) => {
         s.bone.getWorldPosition(worldPos);
         s.mesh.position.copy(worldPos).add(s.offset);
