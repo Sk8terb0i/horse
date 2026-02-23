@@ -59,7 +59,6 @@ export async function createHorse() {
       const colorLine = document.createElement("div");
       colorLine.className = "inner-horse-label";
       colorLine.innerText = `inner horse: ${getNearestColorName(hexColor)}`;
-      // apply the user's color to this specific line
       colorLine.style.cssText = `
         font-size: 0.8em; 
         opacity: 0.9; 
@@ -115,13 +114,30 @@ export async function createHorse() {
       baseSphereSize,
       color,
     );
+
     const bone =
       availableBones[Math.floor(Math.random() * availableBones.length)];
-    const offset = new THREE.Vector3(
-      (Math.random() - 0.5) * 0.05,
-      (Math.random() - 0.5) * 0.05,
-      (Math.random() - 0.5) * 0.05,
-    );
+
+    // collision logic: ensure a unique spot around the bone
+    let offset = new THREE.Vector3();
+    const minDistance = 0.04;
+    let attempts = 0;
+    let isTooClose = true;
+
+    while (isTooClose && attempts < 20) {
+      offset.set(
+        (Math.random() - 0.5) * 0.1,
+        (Math.random() - 0.5) * 0.1,
+        (Math.random() - 0.5) * 0.1,
+      );
+
+      const neighbors = activeSpheres.filter((s) => s.bone === bone);
+      isTooClose = neighbors.some(
+        (n) => n.offset.distanceTo(offset) < minDistance,
+      );
+      attempts++;
+    }
+
     horseGroup.add(sphereGroup);
     activeSpheres.push({
       username,
@@ -139,7 +155,6 @@ export async function createHorse() {
       sphere.mesh.userData.inner.material.color.set(newColor);
       const labels = sphere.label.element.querySelectorAll("div");
       if (labels.length > 1) {
-        // update text and text color simultaneously
         labels[1].innerText = `inner horse: ${getNearestColorName(newColor)}`;
         labels[1].style.color = newColor;
       }
@@ -163,11 +178,12 @@ export async function createHorse() {
   );
   leaderSphere.userData.core.material.color.copy(leaderColor);
   horseGroup.add(leaderSphere);
+
   activeSpheres.push({
     username: "big horse",
     mesh: leaderSphere,
     bone: chestBone,
-    offset: new THREE.Vector3(),
+    offset: new THREE.Vector3(0, 0, 0),
     label: createLabel("big horse"),
   });
 
