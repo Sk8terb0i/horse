@@ -11,6 +11,7 @@ export function createOverlayUI(scene, db, getUsername) {
   uiContainer.id = "logged-in-ui";
   uiContainer.style.display = "none";
   uiContainer.style.transition = "opacity 0.8s ease";
+  uiContainer.style.pointerEvents = "none"; // allow orbiting through the UI
   document.body.appendChild(uiContainer);
 
   const manifestOverlay = document.createElement("div");
@@ -74,6 +75,10 @@ export function createOverlayUI(scene, db, getUsername) {
     pointer-events: auto;
     text-transform: none; 
     margin: 0;
+    /* SAFARI MOBILE FIXES BELOW */
+    display: block;
+    white-space: nowrap;
+    -webkit-font-smoothing: antialiased;
   `;
   userContainer.appendChild(usernameDisplay);
 
@@ -118,10 +123,10 @@ export function createOverlayUI(scene, db, getUsername) {
     box-sizing: border-box; 
     opacity: 0;
     border: 1px solid rgba(255,255,255,0.2);
+    pointer-events: auto;
   `;
   uiContainer.appendChild(innerHorseDot);
 
-  // HOVER FOR INNER HORSE DOT
   innerHorseDot.onmouseenter = () => {
     innerHorseDot.style.transform = "scale(1.2)";
     if (picker.element.style.display !== "block") {
@@ -142,6 +147,7 @@ export function createOverlayUI(scene, db, getUsername) {
     top: 100px; 
     right: 40px; 
     writing-mode: vertical-rl; 
+    -webkit-writing-mode: vertical-rl;
     text-orientation: mixed; 
     font-size: 10px; 
     color: #fff; 
@@ -184,8 +190,9 @@ export function createOverlayUI(scene, db, getUsername) {
     selectedAudio.play().catch(() => {});
   };
 
-  document.addEventListener("mousedown", () => {
-    playRandomHoofbeat();
+  document.addEventListener("mousedown", () => playRandomHoofbeat());
+  document.addEventListener("touchstart", () => playRandomHoofbeat(), {
+    passive: true,
   });
 
   // 5. COLOR PICKER LOGIC
@@ -202,9 +209,7 @@ export function createOverlayUI(scene, db, getUsername) {
   const picker = createColorPicker(async (newColor) => {
     innerHorseDot.style.background = newColor;
     updateLabel(newColor);
-    const username =
-      localStorage.getItem("horse_herd_username") ||
-      sessionStorage.getItem("horse_herd_username");
+    const username = getUsername();
     if (username) {
       try {
         const userRef = doc(db, "users", username);
@@ -228,15 +233,14 @@ export function createOverlayUI(scene, db, getUsername) {
     }
   };
 
-  // 6. THEME DOT HOVERS RESTORED
   const applyThemeDotHovers = () => {
-    // looking for the theme dots specifically inside the theme menu
     const themeDots = themeMenu.querySelectorAll(
       'div[style*="border-radius: 50%"]',
     );
     themeDots.forEach((dot) => {
       dot.style.transition = "transform 0.3s ease, opacity 0.3s ease";
       dot.style.cursor = "pointer";
+      dot.style.pointerEvents = "auto";
       dot.onmouseenter = () => {
         dot.style.transform = "scale(1.2)";
         dot.style.opacity = "1";
@@ -248,12 +252,14 @@ export function createOverlayUI(scene, db, getUsername) {
     });
   };
 
-  // run once after setup
   setTimeout(applyThemeDotHovers, 100);
 
   return {
     showMainUI: () => {
       uiContainer.style.display = "block";
+      setTimeout(() => {
+        uiContainer.style.opacity = "1";
+      }, 10);
       soundsActive = true;
       innerHorseDot.style.opacity = "1";
     },

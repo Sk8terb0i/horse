@@ -8,19 +8,25 @@ export function createSphereInteractions(
   horseDataRefGetter,
 ) {
   const raycaster = new THREE.Raycaster();
-  raycaster.params.Mesh.threshold = 0.06;
-  raycaster.params.Line.threshold = 0.01;
+  // slightly more generous threshold for tiny spheres
+  raycaster.params.Mesh.threshold = 0.08;
+  raycaster.params.Line.threshold = 0.02;
   const mouse = new THREE.Vector2();
 
   let hoveredGroup = null;
   let isPaused = false;
   let mouseDownPos = { x: 0, y: 0 };
-  const clickThreshold = 5;
+  const clickThreshold = 20; // increased for mobile thumbs
 
-  window.addEventListener("mousemove", (event) => {
-    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+  const updateMouse = (e) => {
+    const x = e.clientX || (e.touches && e.touches[0].clientX);
+    const y = e.clientY || (e.touches && e.touches[0].clientY);
+    mouse.x = (x / window.innerWidth) * 2 - 1;
+    mouse.y = -(y / window.innerHeight) * 2 + 1;
+  };
 
+  window.addEventListener("pointermove", (event) => {
+    updateMouse(event);
     const horseData = horseDataRefGetter();
     if (!horseData) return;
 
@@ -68,27 +74,32 @@ export function createSphereInteractions(
     }
   });
 
-  window.addEventListener("mousedown", (e) => {
+  window.addEventListener("pointerdown", (e) => {
     mouseDownPos = { x: e.clientX, y: e.clientY };
   });
 
-  window.addEventListener("mouseup", (event) => {
+  window.addEventListener("pointerup", (event) => {
     if (
       event.target.closest("#ui-container") ||
-      event.target.id === "theme-cycle-dot" ||
-      event.target.id === "manifesto-icon" ||
-      event.target.id === "inner-horse-dot"
+      ["theme-cycle-dot", "manifesto-icon", "inner-horse-dot"].includes(
+        event.target.id,
+      )
     )
       return;
 
     const deltaX = Math.abs(event.clientX - mouseDownPos.x);
     const deltaY = Math.abs(event.clientY - mouseDownPos.y);
+
+    // if we dragged too much (scrolling/orbiting), don't trigger click
     if (deltaX > clickThreshold || deltaY > clickThreshold) return;
 
     const horseData = horseDataRefGetter();
     if (!horseData) return;
 
+    // sync coordinates one last time on the up event
+    updateMouse(event);
     raycaster.setFromCamera(mouse, camera);
+
     const targets = [];
     horseData.activeSpheres.forEach((s) => {
       if (s.mesh.visible) {
@@ -102,7 +113,6 @@ export function createSphereInteractions(
       conn.lineGroup.children.forEach((l) => targets.push(l));
 
     const intersects = raycaster.intersectObjects(targets);
-    conn.handleLineInteraction(intersects, mouse);
     const sphereHit = intersects.find((hit) => hit.object.type === "Mesh");
 
     if (sphereHit) {
@@ -111,6 +121,7 @@ export function createSphereInteractions(
       const targetObj = sphereHit.object;
       const targetPos = new THREE.Vector3();
       targetObj.getWorldPosition(targetPos);
+
       const zoomFactor = targetObj.parent.scale.x * 12;
 
       const tl = gsap.timeline();
@@ -145,23 +156,27 @@ export function createSphereInteractions(
         },
         0,
       );
-    } else if (!intersects.find((hit) => hit.object.type === "Line")) {
-      isPaused = false;
-      gsap.to(conn.lineMaterial, { opacity: 0, duration: 0.5 });
-      conn.lineLabelDiv.style.opacity = "0";
-      if (conn.hideInnerHorses) conn.hideInnerHorses(horseData);
+    } else {
+      // ONLY reset zoom if we didn't hit a line either
+      const lineHit = intersects.find((hit) => hit.object.type === "Line");
+      if (!lineHit) {
+        isPaused = false;
+        gsap.to(conn.lineMaterial, { opacity: 0, duration: 0.5 });
+        conn.lineLabelDiv.style.opacity = "0";
+        if (conn.hideInnerHorses) conn.hideInnerHorses(horseData);
 
-      const tl = gsap.timeline();
-      tl.to(
-        controls.target,
-        { x: 0, y: 0, z: 0, duration: 1.2, ease: "power3.inOut" },
-        0,
-      );
-      tl.to(
-        camera.position,
-        { x: 0, y: 0, z: 2.5, duration: 1.2, ease: "power3.inOut" },
-        0,
-      );
+        const tl = gsap.timeline();
+        tl.to(
+          controls.target,
+          { x: 0, y: 0, z: 0, duration: 1.2, ease: "power3.inOut" },
+          0,
+        );
+        tl.to(
+          camera.position,
+          { x: 0, y: 0, z: 2.5, duration: 1.2, ease: "power3.inOut" },
+          0,
+        );
+      }
     }
   });
 
