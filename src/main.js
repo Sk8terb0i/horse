@@ -6,6 +6,7 @@ import { createHorse } from "./World/Components/Horse.js";
 import { createUserUI } from "./World/Components/UserUI.js";
 import { createConnections } from "./World/Components/Connections.js";
 import { createOverlayUI } from "./World/Components/OverlayUI.js";
+import { createSphereInteractions } from "./World/Components/SphereInteractions.js";
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, onSnapshot } from "firebase/firestore";
 import gsap from "gsap";
@@ -20,6 +21,7 @@ const firebaseConfig = {
   appId: "1:834343341431:web:ecc15539578a25dda06572",
 };
 
+// INITIALIZE FIREBASE FIRST
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
@@ -36,7 +38,9 @@ async function init() {
   camera.position.set(0, 0, 2.5);
 
   let currentUsername = localStorage.getItem("horse_herd_username") || null;
+  let horseDataRef = null;
 
+  // db is now defined and ready for these components
   const conn = createConnections(scene);
   const overlay = createOverlayUI(scene, db, () => currentUsername);
 
@@ -59,6 +63,13 @@ async function init() {
   controls.minDistance = 0.01;
   controls.maxDistance = 10;
 
+  const interactions = createSphereInteractions(
+    camera,
+    controls,
+    conn,
+    () => horseDataRef,
+  );
+
   if (currentUsername) {
     overlay.showMainUI();
     overlay.setUsername(currentUsername);
@@ -66,157 +77,12 @@ async function init() {
   }
 
   const timer = new Timer();
-  const raycaster = new THREE.Raycaster();
-  raycaster.params.Mesh.threshold = 0.06;
-  raycaster.params.Line.threshold = 0.01;
-  const mouse = new THREE.Vector2();
-
   let horseUpdater = null;
-  let horseDataRef = null;
-  let hoveredGroup = null;
-  let isPaused = false;
-  let mouseDownPos = { x: 0, y: 0 };
 
-  const clickThreshold = 5;
   const FREEZE_DIST = 0.4;
   const FULL_SPEED_DIST = 2.0;
   const GLOBAL_LABEL_DIST = 1.6;
   const INDIVIDUAL_CULL_DIST = 0.8;
-
-  window.addEventListener("mousemove", (event) => {
-    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-    raycaster.setFromCamera(mouse, camera);
-    if (horseDataRef) {
-      const targets = [];
-      horseDataRef.activeSpheres.forEach((s) => {
-        // Only interact with visible meshes
-        if (s.mesh.visible) {
-          s.mesh.traverse((child) => {
-            if (child.isMesh && child.type !== "Sprite") targets.push(child);
-          });
-        }
-      });
-      if (conn.lineMaterial.opacity > 0)
-        conn.lineGroup.children.forEach((l) => targets.push(l));
-      const intersects = raycaster.intersectObjects(targets);
-      const isOverLine = conn.handleLineInteraction(intersects, mouse);
-      const sphereHit = intersects.find((hit) => hit.object.type === "Mesh");
-      if (sphereHit) {
-        const group = sphereHit.object.parent;
-        if (hoveredGroup !== group && group.userData.glow) {
-          if (hoveredGroup)
-            gsap.to(hoveredGroup.userData.glow.material, {
-              opacity: 0,
-              duration: 0.3,
-            });
-          hoveredGroup = group;
-          document.body.style.cursor = "pointer";
-          gsap.to(hoveredGroup.userData.glow.material, {
-            opacity: 0.6,
-            duration: 0.3,
-          });
-        }
-      } else {
-        if (hoveredGroup) {
-          gsap.to(hoveredGroup.userData.glow.material, {
-            opacity: 0,
-            duration: 0.3,
-          });
-          hoveredGroup = null;
-        }
-        if (!isOverLine) document.body.style.cursor = "default";
-      }
-    }
-  });
-
-  window.addEventListener("mousedown", (e) => {
-    mouseDownPos = { x: e.clientX, y: e.clientY };
-  });
-
-  window.addEventListener("mouseup", (event) => {
-    if (
-      event.target.closest("#ui-container") ||
-      event.target.id === "theme-cycle-dot" ||
-      event.target.id === "manifesto-icon" ||
-      event.target.id === "inner-horse-dot"
-    )
-      return;
-    const deltaX = Math.abs(event.clientX - mouseDownPos.x);
-    const deltaY = Math.abs(event.clientY - mouseDownPos.y);
-    if (deltaX > clickThreshold || deltaY > clickThreshold) return;
-
-    raycaster.setFromCamera(mouse, camera);
-    if (horseDataRef) {
-      const targets = [];
-      horseDataRef.activeSpheres.forEach((s) => {
-        if (s.mesh.visible) {
-          s.mesh.traverse((child) => {
-            if (child.isMesh && child.type !== "Sprite") targets.push(child);
-          });
-        }
-      });
-      if (conn.lineMaterial.opacity > 0)
-        conn.lineGroup.children.forEach((l) => targets.push(l));
-      const intersects = raycaster.intersectObjects(targets);
-      conn.handleLineInteraction(intersects, mouse);
-      const sphereHit = intersects.find((hit) => hit.object.type === "Mesh");
-      if (sphereHit) {
-        isPaused = true;
-        gsap.to(conn.lineMaterial, { opacity: 0.4, duration: 1 });
-        const targetObj = sphereHit.object;
-        const targetPos = new THREE.Vector3();
-        targetObj.getWorldPosition(targetPos);
-        const zoomFactor = targetObj.parent.scale.x * 12;
-        const tl = gsap.timeline();
-        tl.to(
-          controls.target,
-          {
-            x: targetPos.x,
-            y: targetPos.y,
-            z: targetPos.z,
-            duration: 1.2,
-            ease: "power3.inOut",
-          },
-          0,
-        );
-        const camDir = new THREE.Vector3()
-          .subVectors(camera.position, targetPos)
-          .normalize();
-        const finalCamPos = targetPos
-          .clone()
-          .add(camDir.multiplyScalar(zoomFactor));
-        tl.to(
-          camera.position,
-          {
-            x: finalCamPos.x,
-            y: finalCamPos.y,
-            z: finalCamPos.z,
-            duration: 1.2,
-            ease: "power3.inOut",
-            onUpdate: () => camera.lookAt(targetPos),
-          },
-          0,
-        );
-      } else if (!intersects.find((hit) => hit.object.type === "Line")) {
-        isPaused = false;
-        gsap.to(conn.lineMaterial, { opacity: 0, duration: 0.5 });
-        conn.lineLabelDiv.style.opacity = "0";
-        if (conn.hideInnerHorses) conn.hideInnerHorses(horseDataRef);
-        const tl = gsap.timeline();
-        tl.to(
-          controls.target,
-          { x: 0, y: 0, z: 0, duration: 1.2, ease: "power3.inOut" },
-          0,
-        );
-        tl.to(
-          camera.position,
-          { x: 0, y: 0, z: 2.5, duration: 1.2, ease: "power3.inOut" },
-          0,
-        );
-      }
-    }
-  });
 
   try {
     const horseData = await createHorse();
@@ -225,73 +91,59 @@ async function init() {
     scene.add(horseData.horseGroup);
     horseUpdater = horseData.update;
 
-    // Initialize UI after horse exists
     const userUI = createUserUI(db, overlay, horseData);
 
     let initialSync = true;
     const addedUsers = new Set();
-    const initialPause = 1500; // 1.5 seconds pause after YOU appear
-    const staggerDelay = 300; // 0.3 seconds between each subsequent herd member
+    const initialPause = 1500;
+    const staggerDelay = 300;
 
     onSnapshot(collection(db, "users"), (snap) => {
       if (!initialSync) {
         snap.docChanges().forEach((c) => {
           const data = c.doc.data();
-          if (c.type === "added" && !addedUsers.has(data.username)) {
+          if (c.type === "added" && !addedUsers.has(data.username))
             addUserToScene(data, userUI.isHerdVisible());
-          }
-          if (c.type === "modified") {
+          if (c.type === "modified")
             horseData.updateUserColor(
               data.username,
               data.innerColor,
               !!data.password,
             );
-          }
         });
         return;
       }
 
       const allDocs = snap.docs.map((doc) => doc.data());
       initialSync = false;
-
-      // 1. add YOU immediately
       const me = allDocs.find((u) => u.username === currentUsername);
-      if (me) {
-        addUserToScene(me, true);
-      }
+      if (me) addUserToScene(me, true);
 
-      // 2. filter the rest
       const others = allDocs.filter(
         (u) => u.username !== currentUsername && u.username !== "big horse",
       );
 
-      // 3. wait for the bigger pause, then add the rest one by one
       setTimeout(() => {
         others.forEach((userData, index) => {
-          setTimeout(() => {
-            addUserToScene(userData, userUI.isHerdVisible());
-          }, index * staggerDelay);
+          setTimeout(
+            () => addUserToScene(userData, userUI.isHerdVisible()),
+            index * staggerDelay,
+          );
         });
       }, initialPause);
     });
 
     function addUserToScene(data, isVisible) {
       if (addedUsers.has(data.username)) return;
-
       horseData.addUserSphere(data.username, data.innerColor, !!data.password);
       addedUsers.add(data.username);
-
       const sphere = horseData.activeSpheres.find(
         (s) => s.username === data.username,
       );
-      if (sphere && data.username !== "big horse") {
+      if (sphere && data.username !== "big horse")
         sphere.mesh.visible = isVisible;
-        // Horse.js update() handles the label visibility
-      }
-
-      if (data.username === currentUsername && data.innerColor) {
+      if (data.username === currentUsername && data.innerColor)
         overlay.setInitialColor(data.innerColor);
-      }
     }
   } catch (err) {
     console.error(err);
@@ -308,7 +160,7 @@ async function init() {
       if (conn.lineMaterial.opacity > 0) conn.updateConnections(horseDataRef);
       const globalActive = camDistFromOrigin < GLOBAL_LABEL_DIST;
       horseDataRef.activeSpheres.forEach((s) => {
-        if (!s.label || !s.mesh.visible) return; // Ignore hidden labels
+        if (!s.label || !s.mesh.visible) return;
         const sphereWorldPos = new THREE.Vector3();
         s.mesh.getWorldPosition(sphereWorldPos);
         const distToSphere = camPos.distanceTo(sphereWorldPos);
@@ -322,15 +174,17 @@ async function init() {
       0,
       1,
     );
-    if (isPaused) {
+
+    if (interactions.getIsPaused()) {
       timeScale = 0;
       if (camDistFromOrigin >= FULL_SPEED_DIST) {
-        isPaused = false;
+        interactions.setIsPaused(false);
         gsap.to(conn.lineMaterial, { opacity: 0, duration: 0.5 });
         conn.lineLabelDiv.style.opacity = "0";
         if (conn.hideInnerHorses) conn.hideInnerHorses(horseDataRef);
       }
     }
+
     if (horseUpdater) horseUpdater(timer.getDelta() * timeScale, camera);
     renderer.render(scene, camera);
     labelRenderer.render(scene, camera);
