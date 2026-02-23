@@ -35,13 +35,10 @@ async function init() {
   );
   camera.position.set(0, 0, 2.5);
 
-  // 1. set up variables needed for UI
   let currentUsername = localStorage.getItem("horse_herd_username") || null;
 
-  // 2. initialize core components (ONLY ONCE)
   const conn = createConnections(scene);
   const overlay = createOverlayUI(scene, db, () => currentUsername);
-  const userUI = createUserUI(db, overlay);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -62,11 +59,10 @@ async function init() {
   controls.minDistance = 0.01;
   controls.maxDistance = 10;
 
-  // 3. start audio
   if (currentUsername) {
     overlay.showMainUI();
     overlay.setUsername(currentUsername);
-    createAudioManager(); // initialize audio now because we are already in the herd
+    createAudioManager();
   }
 
   const timer = new Timer();
@@ -87,12 +83,6 @@ async function init() {
   const GLOBAL_LABEL_DIST = 1.6;
   const INDIVIDUAL_CULL_DIST = 0.8;
 
-  // if already logged in, show the UI and the name
-  if (currentUsername) {
-    overlay.showMainUI();
-    overlay.setUsername(currentUsername);
-  }
-
   window.addEventListener("mousemove", (event) => {
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
@@ -100,9 +90,12 @@ async function init() {
     if (horseDataRef) {
       const targets = [];
       horseDataRef.activeSpheres.forEach((s) => {
-        s.mesh.traverse((child) => {
-          if (child.isMesh && child.type !== "Sprite") targets.push(child);
-        });
+        // Only interact with visible meshes
+        if (s.mesh.visible) {
+          s.mesh.traverse((child) => {
+            if (child.isMesh && child.type !== "Sprite") targets.push(child);
+          });
+        }
       });
       if (conn.lineMaterial.opacity > 0)
         conn.lineGroup.children.forEach((l) => targets.push(l));
@@ -157,9 +150,11 @@ async function init() {
     if (horseDataRef) {
       const targets = [];
       horseDataRef.activeSpheres.forEach((s) => {
-        s.mesh.traverse((child) => {
-          if (child.isMesh && child.type !== "Sprite") targets.push(child);
-        });
+        if (s.mesh.visible) {
+          s.mesh.traverse((child) => {
+            if (child.isMesh && child.type !== "Sprite") targets.push(child);
+          });
+        }
       });
       if (conn.lineMaterial.opacity > 0)
         conn.lineGroup.children.forEach((l) => targets.push(l));
@@ -199,9 +194,7 @@ async function init() {
             z: finalCamPos.z,
             duration: 1.2,
             ease: "power3.inOut",
-            onUpdate: () => {
-              camera.lookAt(targetPos);
-            },
+            onUpdate: () => camera.lookAt(targetPos),
           },
           0,
         );
@@ -232,28 +225,39 @@ async function init() {
     scene.add(horseData.horseGroup);
     horseUpdater = horseData.update;
 
+    // Initialize UI after horse exists
+    const userUI = createUserUI(db, overlay, horseData);
+
     onSnapshot(collection(db, "users"), (snap) => {
       snap.docChanges().forEach((c) => {
         const data = c.doc.data();
         const username = data.username;
         const innerColor = data.innerColor;
-        const hasClaimed = !!data.password; // check if password field exists
+        const hasClaimed = !!data.password;
 
         if (c.type === "added") {
-          // pass hasClaimed to the horse component
           horseData.addUserSphere(username, innerColor, hasClaimed);
-          if (username === currentUsername && innerColor) {
-            overlay.setInitialColor(innerColor);
+
+          // Force visibility based on UI state
+          const sphere = horseData.activeSpheres.find(
+            (s) => s.username === username,
+          );
+          if (sphere && username !== "big horse") {
+            const isVisible = userUI.isHerdVisible();
+            sphere.mesh.visible = isVisible;
+            if (sphere.label)
+              sphere.label.element.style.display = isVisible ? "block" : "none";
           }
+
+          if (username === currentUsername && innerColor)
+            overlay.setInitialColor(innerColor);
         }
 
         if (c.type === "modified") {
           if (username && innerColor) {
-            // update the color and potentially the label if they just claimed it
             horseData.updateUserColor(username, innerColor, hasClaimed);
-            if (username === currentUsername) {
+            if (username === currentUsername)
               overlay.setInitialColor(innerColor);
-            }
           }
         }
       });
@@ -273,7 +277,7 @@ async function init() {
       if (conn.lineMaterial.opacity > 0) conn.updateConnections(horseDataRef);
       const globalActive = camDistFromOrigin < GLOBAL_LABEL_DIST;
       horseDataRef.activeSpheres.forEach((s) => {
-        if (!s.label) return;
+        if (!s.label || !s.mesh.visible) return; // Ignore hidden labels
         const sphereWorldPos = new THREE.Vector3();
         s.mesh.getWorldPosition(sphereWorldPos);
         const distToSphere = camPos.distanceTo(sphereWorldPos);

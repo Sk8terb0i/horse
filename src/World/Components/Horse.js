@@ -53,10 +53,8 @@ export async function createHorse() {
   const createLabel = (text, hexColor = null, hasClaimed = true) => {
     const div = document.createElement("div");
     div.className = "sphere-label";
-
     const nameLine = document.createElement("div");
 
-    // logic: mask name if not claimed
     let displayUsername = text;
     if (text !== "big horse" && !hasClaimed) {
       displayUsername = text.length > 3 ? text.slice(0, -3) + "***" : "***";
@@ -70,12 +68,7 @@ export async function createHorse() {
       const colorLine = document.createElement("div");
       colorLine.className = "inner-horse-label";
       colorLine.innerText = `inner horse: ${getNearestColorName(hexColor)}`;
-      colorLine.style.cssText = `
-        font-size: 0.8em; 
-        opacity: 0.9; 
-        margin-top: 2px; 
-        color: ${hexColor};
-      `;
+      colorLine.style.cssText = `font-size: 0.8em; opacity: 0.9; margin-top: 2px; color: ${hexColor};`;
       div.appendChild(colorLine);
     }
 
@@ -122,7 +115,6 @@ export async function createHorse() {
     hasClaimed = true,
   ) => {
     if (activeSpheres.find((s) => s.username === username)) return;
-
     const color =
       existingColor || `#${new THREE.Color(getRandomPastel()).getHexString()}`;
     const sphereGroup = createSphereWithGlow(
@@ -130,7 +122,6 @@ export async function createHorse() {
       baseSphereSize,
       color,
     );
-
     const emptyBones = availableBones.filter(
       (bone) =>
         bone !== chestBone &&
@@ -138,26 +129,21 @@ export async function createHorse() {
           (s) => s.bone === bone && s.username !== "big horse",
         ),
     );
-
-    let bone;
-    if (emptyBones.length > 0) {
-      bone = emptyBones[Math.floor(Math.random() * emptyBones.length)];
-    } else {
-      bone = availableBones[Math.floor(Math.random() * availableBones.length)];
-    }
+    let bone =
+      emptyBones.length > 0
+        ? emptyBones[Math.floor(Math.random() * emptyBones.length)]
+        : availableBones[Math.floor(Math.random() * availableBones.length)];
 
     let offset = new THREE.Vector3();
     const minDistance = 0.04;
     let attempts = 0;
     let isTooClose = true;
-
     while (isTooClose && attempts < 20) {
       offset.set(
         (Math.random() - 0.5) * 0.1,
         (Math.random() - 0.5) * 0.1,
         (Math.random() - 0.5) * 0.1,
       );
-
       const neighbors = activeSpheres.filter((s) => s.bone === bone);
       isTooClose = neighbors.some(
         (n) => n.offset.distanceTo(offset) < minDistance,
@@ -180,8 +166,6 @@ export async function createHorse() {
     if (sphere) {
       sphere.mesh.userData.color = newColor;
       sphere.mesh.userData.inner.material.color.set(newColor);
-
-      // recreate label to update the masked name if claimed status changed
       if (sphere.label) {
         horseGroup.remove(sphere.label);
         sphere.label = createLabel(username, newColor, hasClaimed);
@@ -236,14 +220,21 @@ export async function createHorse() {
         camera.quaternion,
       );
       const worldPos = new THREE.Vector3();
+
       activeSpheres.forEach((s) => {
         s.bone.getWorldPosition(worldPos);
         s.mesh.position.copy(worldPos).add(s.offset);
+
         if (s.label) {
-          const gap = s.mesh.scale.x + 0.005;
-          s.label.position
-            .copy(s.mesh.position)
-            .addScaledVector(cameraRight, gap);
+          // SYNC LABEL VISIBILITY WITH MESH VISIBILITY
+          s.label.visible = s.mesh.visible;
+
+          if (s.label.visible) {
+            const gap = s.mesh.scale.x + 0.005;
+            s.label.position
+              .copy(s.mesh.position)
+              .addScaledVector(cameraRight, gap);
+          }
         }
       });
     },

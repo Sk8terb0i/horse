@@ -9,17 +9,32 @@ async function hashPassword(password) {
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-export function createUserUI(db, overlay) {
+export function createUserUI(db, overlay, horseInstance) {
   const container = document.getElementById("ui-container");
   let rememberMeState = true;
+
+  // Track visibility state
+  let herdVisible = !!localStorage.getItem("horse_herd_username");
+
+  const toggleHerdVisibility = (visible) => {
+    herdVisible = visible;
+    if (horseInstance && horseInstance.activeSpheres) {
+      horseInstance.activeSpheres.forEach((s) => {
+        if (s.username !== "big horse") {
+          s.mesh.visible = visible;
+          if (s.label)
+            s.label.element.style.display = visible ? "block" : "none";
+        }
+      });
+    }
+  };
 
   const savedUsername = localStorage.getItem("horse_herd_username");
   if (savedUsername) {
     showAscendedState();
-    return;
+  } else {
+    renderJoinForm();
   }
-
-  renderJoinForm();
 
   function renderJoinForm() {
     container.innerHTML = `
@@ -184,11 +199,8 @@ export function createUserUI(db, overlay) {
   }
 
   function loginUser(username, shouldRemember) {
-    if (shouldRemember) {
-      localStorage.setItem("horse_herd_username", username);
-    } else {
-      sessionStorage.setItem("horse_herd_username", username);
-    }
+    if (shouldRemember) localStorage.setItem("horse_herd_username", username);
+    else sessionStorage.setItem("horse_herd_username", username);
 
     if (overlay) {
       overlay.showMainUI();
@@ -200,5 +212,9 @@ export function createUserUI(db, overlay) {
 
   function showAscendedState() {
     container.style.display = "none";
+    toggleHerdVisibility(true);
   }
+
+  // Return the state for main.js to use
+  return { isHerdVisible: () => herdVisible };
 }
