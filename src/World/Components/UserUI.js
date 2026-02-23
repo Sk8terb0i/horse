@@ -22,8 +22,8 @@ export function createUserUI(db, overlay, horseInstance) {
       horseInstance.activeSpheres.forEach((s) => {
         if (s.username !== "big horse") {
           s.mesh.visible = visible;
-          if (s.label)
-            s.label.element.style.display = visible ? "block" : "none";
+          // no need to manually toggle label.element.style.display
+          // because Horse.js update() now handles s.label.visible
         }
       });
     }

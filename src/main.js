@@ -228,40 +228,71 @@ async function init() {
     // Initialize UI after horse exists
     const userUI = createUserUI(db, overlay, horseData);
 
+    let initialSync = true;
+    const addedUsers = new Set();
+    const initialPause = 1500; // 1.5 seconds pause after YOU appear
+    const staggerDelay = 300; // 0.3 seconds between each subsequent herd member
+
     onSnapshot(collection(db, "users"), (snap) => {
-      snap.docChanges().forEach((c) => {
-        const data = c.doc.data();
-        const username = data.username;
-        const innerColor = data.innerColor;
-        const hasClaimed = !!data.password;
-
-        if (c.type === "added") {
-          horseData.addUserSphere(username, innerColor, hasClaimed);
-
-          // Force visibility based on UI state
-          const sphere = horseData.activeSpheres.find(
-            (s) => s.username === username,
-          );
-          if (sphere && username !== "big horse") {
-            const isVisible = userUI.isHerdVisible();
-            sphere.mesh.visible = isVisible;
-            if (sphere.label)
-              sphere.label.element.style.display = isVisible ? "block" : "none";
+      if (!initialSync) {
+        snap.docChanges().forEach((c) => {
+          const data = c.doc.data();
+          if (c.type === "added" && !addedUsers.has(data.username)) {
+            addUserToScene(data, userUI.isHerdVisible());
           }
-
-          if (username === currentUsername && innerColor)
-            overlay.setInitialColor(innerColor);
-        }
-
-        if (c.type === "modified") {
-          if (username && innerColor) {
-            horseData.updateUserColor(username, innerColor, hasClaimed);
-            if (username === currentUsername)
-              overlay.setInitialColor(innerColor);
+          if (c.type === "modified") {
+            horseData.updateUserColor(
+              data.username,
+              data.innerColor,
+              !!data.password,
+            );
           }
-        }
-      });
+        });
+        return;
+      }
+
+      const allDocs = snap.docs.map((doc) => doc.data());
+      initialSync = false;
+
+      // 1. add YOU immediately
+      const me = allDocs.find((u) => u.username === currentUsername);
+      if (me) {
+        addUserToScene(me, true);
+      }
+
+      // 2. filter the rest
+      const others = allDocs.filter(
+        (u) => u.username !== currentUsername && u.username !== "big horse",
+      );
+
+      // 3. wait for the bigger pause, then add the rest one by one
+      setTimeout(() => {
+        others.forEach((userData, index) => {
+          setTimeout(() => {
+            addUserToScene(userData, userUI.isHerdVisible());
+          }, index * staggerDelay);
+        });
+      }, initialPause);
     });
+
+    function addUserToScene(data, isVisible) {
+      if (addedUsers.has(data.username)) return;
+
+      horseData.addUserSphere(data.username, data.innerColor, !!data.password);
+      addedUsers.add(data.username);
+
+      const sphere = horseData.activeSpheres.find(
+        (s) => s.username === data.username,
+      );
+      if (sphere && data.username !== "big horse") {
+        sphere.mesh.visible = isVisible;
+        // Horse.js update() handles the label visibility
+      }
+
+      if (data.username === currentUsername && data.innerColor) {
+        overlay.setInitialColor(data.innerColor);
+      }
+    }
   } catch (err) {
     console.error(err);
   }
