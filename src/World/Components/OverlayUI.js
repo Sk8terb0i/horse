@@ -45,8 +45,11 @@ export function createOverlayUI(scene, db, getUsername) {
   });
 
   let lastSoundIndex = -1;
+  let soundsActive = false; // tracker for login status
 
   const playRandomHoofbeat = () => {
+    if (!soundsActive) return; // ignore if not logged in
+
     let randomIndex;
     do {
       randomIndex = Math.floor(Math.random() * hoofbeatAudios.length);
@@ -59,6 +62,7 @@ export function createOverlayUI(scene, db, getUsername) {
     selectedAudio.play().catch(() => {});
   };
 
+  // listener is always present, but playRandomHoofbeat checks soundsActive
   document.addEventListener("mousedown", () => {
     playRandomHoofbeat();
   });
@@ -212,7 +216,8 @@ export function createOverlayUI(scene, db, getUsername) {
   return {
     showMainUI: () => {
       uiContainer.style.display = "block";
-      // fix: ensure dot is visible for new users even if no color is set yet
+      soundsActive = true; // activate sounds now
+
       innerHorseDot.style.opacity = "1";
       if (
         !innerHorseDot.style.background ||

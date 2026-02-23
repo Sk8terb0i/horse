@@ -81,6 +81,8 @@ body {
   gap: 15px;
   z-index: 10;
   width: 320px;
+  /* add this to ensure the child elements have a consistent box model */
+  box-sizing: border-box; 
 }
 
 #ui-header {
@@ -89,6 +91,14 @@ body {
   color: #888;
   margin-bottom: 5px;
   text-align: center;
+  width: 100%;
+}
+
+#input-fields {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 #ui-container input {
@@ -97,21 +107,25 @@ body {
   border: none;
   border-bottom: 1px solid #333;
   color: white;
-  padding: 10px;
+  padding: 10px 0; /* padding 0 on sides to keep text centered on line */
   font-family: inherit;
   outline: none;
   text-align: center;
+  box-sizing: border-box;
 }
 
 #ui-container button {
   background: white;
   color: black;
   border: none;
-  padding: 10px 20px;
+  padding: 12px 30px; /* slightly taller for better mobile tap target */
   cursor: pointer;
   font-family: inherit;
   margin-top: 10px;
   text-transform: lowercase;
+  width: auto; /* allows padding to define width */
+  min-width: 160px; /* ensures it doesn't get too tiny */
+  display: block;
 }
 
 #toggle-ui {
@@ -120,6 +134,16 @@ body {
   cursor: pointer;
   text-decoration: underline;
   margin-top: 10px;
+  text-align: center;
+  width: 100%;
+}
+
+#msg {
+  font-size: 0.75rem;
+  color: #ff4d4d; /* subtle red for errors */
+  text-align: center;
+  min-height: 1em;
+  width: 100%;
 }
 
 /* --- 5. interaction elements --- */

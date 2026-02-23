@@ -35,13 +35,10 @@ async function init() {
   );
   camera.position.set(0, 0, 2.5);
 
-  // 1. initialize audio first
-  createAudioManager();
-
-  // 2. set up variables needed for UI
+  // 1. set up variables needed for UI
   let currentUsername = localStorage.getItem("horse_herd_username") || null;
 
-  // 3. initialize core components (ONLY ONCE)
+  // 2. initialize core components (ONLY ONCE)
   const conn = createConnections(scene);
   const overlay = createOverlayUI(scene, db, () => currentUsername);
   const userUI = createUserUI(db, overlay);
@@ -64,6 +61,13 @@ async function init() {
   controls.enableDamping = true;
   controls.minDistance = 0.01;
   controls.maxDistance = 10;
+
+  // 3. start audio
+  if (currentUsername) {
+    overlay.showMainUI();
+    overlay.setUsername(currentUsername);
+    createAudioManager(); // initialize audio now because we are already in the herd
+  }
 
   const timer = new Timer();
   const raycaster = new THREE.Raycaster();

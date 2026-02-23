@@ -14,7 +14,7 @@ export function createUserUI(db, overlay) {
 
   function renderJoinForm() {
     container.innerHTML = `
-      <div id="ui-header">unite with horse become a point of connection</div>
+      <div id="ui-header">unite with horse; become a point of connection</div>
       <div id="input-fields">
         <input type="text" id="nameInput" placeholder="your name" />
         <input type="text" id="usernameInput" placeholder="unique username" />
@@ -43,6 +43,16 @@ export function createUserUI(db, overlay) {
     const submitBtn = document.getElementById("submitBtn");
     const toggleBtn = document.getElementById("toggle-ui");
     const msg = document.getElementById("msg");
+    const inputs = container.querySelectorAll("input");
+
+    // allow enter key to submit
+    inputs.forEach((input) => {
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          submitBtn.click();
+        }
+      });
+    });
 
     toggleBtn.addEventListener("click", () => {
       isLogin ? renderJoinForm() : renderLoginForm();
@@ -72,11 +82,9 @@ export function createUserUI(db, overlay) {
           if (userSnap.exists()) {
             msg.innerText = "username already taken.";
           } else {
-            // 1. generate a valid hex string using three.js
             const color = new THREE.Color().setHSL(Math.random(), 0.4, 0.7);
             const hexColor = `#${color.getHexString()}`;
 
-            // 2. set the document with ALL fields
             await setDoc(userRef, {
               realName: name,
               username: username,
@@ -99,7 +107,6 @@ export function createUserUI(db, overlay) {
     if (overlay) {
       overlay.showMainUI();
       overlay.setUsername(username);
-      // force reload to sync snapshot
       window.location.reload();
     }
     showAscendedState();

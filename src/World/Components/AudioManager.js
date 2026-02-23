@@ -9,7 +9,7 @@ export function createAudioManager() {
 
   const hoofbeatAudios = hoofbeatPaths.map((path) => {
     const audio = new Audio(path);
-    audio.volume = 0.15;
+    audio.volume = 0.05;
     return audio;
   });
 
