@@ -13,7 +13,6 @@ export function createThemeUI(scene) {
     gap: 15px;
   `;
 
-  // The dynamic label (replaces the hint)
   const themeLabel = document.createElement("div");
   themeLabel.id = "theme-display-label";
   themeLabel.innerText = "drag around to change color";
@@ -42,17 +41,14 @@ export function createThemeUI(scene) {
     cursor: grab;
     border: 1.5px solid rgba(255,255,255,0.2);
     transition: transform 0.1s ease;
-    touch-action: none;
+    touch-action: none; 
   `;
   container.appendChild(themeDot);
 
   let isDragging = false;
-  let hasInteracted = false;
 
   const setTheme = (themeName) => {
     const current = document.documentElement.getAttribute("data-theme");
-
-    // Update label text immediately during drag
     themeLabel.innerText = themeName;
     themeLabel.style.opacity = "1";
 
@@ -74,21 +70,28 @@ export function createThemeUI(scene) {
     });
   };
 
-  themeDot.onmousedown = (e) => {
+  const startDrag = (e) => {
     isDragging = true;
     themeDot.style.cursor = "grabbing";
-    // add class to body to disable all text selection
     document.body.classList.add("is-dragging");
 
-    const onMouseMove = (moveEvent) => {
+    const onMove = (moveEvent) => {
       if (!isDragging) return;
 
-      const x = moveEvent.clientX / window.innerWidth;
-      const y = moveEvent.clientY / window.innerHeight;
+      // support both mouse and touch coordinates
+      const clientX = moveEvent.touches
+        ? moveEvent.touches[0].clientX
+        : moveEvent.clientX;
+      const clientY = moveEvent.touches
+        ? moveEvent.touches[0].clientY
+        : moveEvent.clientY;
 
-      // move the dot visually
-      const deltaX = moveEvent.clientX - (window.innerWidth - 45);
-      const deltaY = moveEvent.clientY - (window.innerHeight - 33);
+      const x = clientX / window.innerWidth;
+      const y = clientY / window.innerHeight;
+
+      // move the dot visually (adjusted for standard layout offsets)
+      const deltaX = clientX - (window.innerWidth - 45);
+      const deltaY = clientY - (window.innerHeight - 33);
       themeDot.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
 
       if (x < 0.5 && y < 0.5) setTheme("void");
@@ -97,10 +100,9 @@ export function createThemeUI(scene) {
       else if (x >= 0.5 && y >= 0.5) setTheme("herd");
     };
 
-    const onMouseUp = () => {
+    const endDrag = () => {
       isDragging = false;
       themeDot.style.cursor = "grab";
-      // remove class to restore normal behavior
       document.body.classList.remove("is-dragging");
 
       gsap.to(themeDot, {
@@ -110,15 +112,23 @@ export function createThemeUI(scene) {
         ease: "elastic.out(1, 0.6)",
       });
 
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
+      // cleanup all listeners
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", endDrag);
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("touchend", endDrag);
     };
 
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", endDrag);
+    window.addEventListener("touchmove", onMove, { passive: false });
+    window.addEventListener("touchend", endDrag);
   };
 
-  // Set initial state
+  // bind both events
+  themeDot.addEventListener("mousedown", startDrag);
+  themeDot.addEventListener("touchstart", startDrag, { passive: false });
+
   const savedTheme = localStorage.getItem("horse_herd_theme") || "herd";
   document.documentElement.setAttribute("data-theme", savedTheme);
   themeLabel.innerText = savedTheme;
