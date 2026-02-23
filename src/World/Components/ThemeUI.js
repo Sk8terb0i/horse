@@ -95,7 +95,7 @@ export function createThemeUI(scene) {
       themeDot.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
 
       if (x < 0.5 && y < 0.5) setTheme("void");
-      else if (x >= 0.5 && y < 0.5) setTheme("dolphin");
+      else if (x >= 0.5 && y < 0.5) setTheme("dolphin pov");
       else if (x < 0.5 && y >= 0.5) setTheme("lone");
       else if (x >= 0.5 && y >= 0.5) setTheme("herd");
     };

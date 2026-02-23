@@ -1,9 +1,6 @@
 import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import * as THREE from "three";
 
-/**
- * creates a secure sha-256 hash of a password string.
- */
 async function hashPassword(password) {
   const encoder = new TextEncoder();
   const data = encoder.encode(password);
@@ -14,6 +11,7 @@ async function hashPassword(password) {
 
 export function createUserUI(db, overlay) {
   const container = document.getElementById("ui-container");
+  let rememberMeState = true;
 
   const savedUsername = localStorage.getItem("horse_herd_username");
   if (savedUsername) {
@@ -31,6 +29,9 @@ export function createUserUI(db, overlay) {
         <input type="text" id="usernameInput" placeholder="unique username" />
         <input type="password" id="passwordInput" placeholder="choose a password" />
       </div>
+      <div id="remember-toggle" style="font-size: 10px; opacity: 0.4; cursor: pointer; margin-bottom: 10px;">
+        [ x ] remember my connection
+      </div>
       <button id="submitBtn">join horse</button>
       <div id="toggle-ui">i'm part of the herd</div>
       <p id="msg"></p>
@@ -45,6 +46,9 @@ export function createUserUI(db, overlay) {
         <input type="text" id="usernameInput" placeholder="your username" />
         <input type="password" id="passwordInput" placeholder="your password" />
       </div>
+      <div id="remember-toggle" style="font-size: 10px; opacity: 0.4; cursor: pointer; margin-bottom: 10px;">
+        [ x ] remember my connection
+      </div>
       <button id="submitBtn">reunite</button>
       <div id="toggle-ui">i need to join</div>
       <p id="msg"></p>
@@ -54,14 +58,11 @@ export function createUserUI(db, overlay) {
     const passwordInput = container.querySelector("#passwordInput");
     const uiHeader = container.querySelector("#ui-header");
 
-    // check for legacy (unclaimed) users on the fly
     usernameInput.addEventListener("blur", async () => {
       const username = usernameInput.value.trim().toLowerCase();
       if (!username) return;
-
       const userRef = doc(db, "users", username);
       const userSnap = await getDoc(userRef);
-
       if (userSnap.exists() && !userSnap.data().password) {
         uiHeader.innerText =
           "this soul is unclaimed. set a password to secure your place.";
@@ -76,10 +77,18 @@ export function createUserUI(db, overlay) {
   function attachListeners(isLogin) {
     const submitBtn = document.getElementById("submitBtn");
     const toggleBtn = document.getElementById("toggle-ui");
+    const rememberToggle = document.getElementById("remember-toggle");
     const msg = document.getElementById("msg");
     const inputs = container.querySelectorAll("input");
-
     const originalBtnText = submitBtn.innerText;
+
+    rememberToggle.onclick = () => {
+      rememberMeState = !rememberMeState;
+      rememberToggle.innerText = rememberMeState
+        ? "[ x ] remember my connection"
+        : "[   ] remember my connection";
+      rememberToggle.style.opacity = rememberMeState ? "0.4" : "0.2";
+    };
 
     const setButtonsLoading = (isLoading) => {
       if (isLoading) {
@@ -95,9 +104,7 @@ export function createUserUI(db, overlay) {
 
     inputs.forEach((input) => {
       input.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
-          submitBtn.click();
-        }
+        if (e.key === "Enter") submitBtn.click();
       });
     });
 
@@ -127,23 +134,17 @@ export function createUserUI(db, overlay) {
         if (isLogin) {
           if (userSnap.exists()) {
             const userData = userSnap.data();
-
-            // 1. legacy user: no password exists yet
             if (!userData.password) {
               await updateDoc(userRef, { password: enteredHash });
-              loginUser(username);
-            }
-            // 2. secure user: matches existing hash
-            else if (userData.password === enteredHash) {
-              loginUser(username);
-            }
-            // 3. migration case: matches plain-text password, needs upgrade to hash
-            else if (userData.password === password) {
-              await updateDoc(userRef, { password: enteredHash });
-              loginUser(username);
-            }
-            // 4. wrong password
-            else {
+              loginUser(username, rememberMeState);
+            } else if (
+              userData.password === enteredHash ||
+              userData.password === password
+            ) {
+              if (userData.password === password)
+                await updateDoc(userRef, { password: enteredHash });
+              loginUser(username, rememberMeState);
+            } else {
               msg.innerText = "the password does not match the marrow.";
               setButtonsLoading(false);
             }
@@ -152,44 +153,43 @@ export function createUserUI(db, overlay) {
             setButtonsLoading(false);
           }
         } else {
-          // registration logic
           const nameInput = document.getElementById("nameInput");
           const name = nameInput.value.trim();
-
           if (!name) {
             msg.innerText = "please provide your name.";
             setButtonsLoading(false);
             return;
           }
-
           if (userSnap.exists()) {
             msg.innerText = "username already taken.";
             setButtonsLoading(false);
           } else {
             const color = new THREE.Color().setHSL(Math.random(), 0.4, 0.7);
-            const hexColor = `#${color.getHexString()}`;
-
             await setDoc(userRef, {
               realName: name,
               username: username,
               password: enteredHash,
-              innerColor: hexColor,
+              innerColor: `#${color.getHexString()}`,
               createdAt: Date.now(),
             });
-
-            loginUser(username);
+            loginUser(username, rememberMeState);
           }
         }
       } catch (e) {
-        console.error("firebase error:", e);
+        console.error(e);
         msg.innerText = "database error.";
         setButtonsLoading(false);
       }
     });
   }
 
-  function loginUser(username) {
-    localStorage.setItem("horse_herd_username", username);
+  function loginUser(username, shouldRemember) {
+    if (shouldRemember) {
+      localStorage.setItem("horse_herd_username", username);
+    } else {
+      sessionStorage.setItem("horse_herd_username", username);
+    }
+
     if (overlay) {
       overlay.showMainUI();
       overlay.setUsername(username);
