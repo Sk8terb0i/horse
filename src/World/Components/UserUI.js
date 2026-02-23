@@ -45,7 +45,20 @@ export function createUserUI(db, overlay) {
     const msg = document.getElementById("msg");
     const inputs = container.querySelectorAll("input");
 
-    // allow enter key to submit
+    const originalBtnText = submitBtn.innerText;
+
+    const setButtonsLoading = (isLoading) => {
+      if (isLoading) {
+        submitBtn.innerText = "galloping..";
+        submitBtn.style.opacity = "0.5";
+        submitBtn.style.pointerEvents = "none";
+      } else {
+        submitBtn.innerText = originalBtnText;
+        submitBtn.style.opacity = "1";
+        submitBtn.style.pointerEvents = "auto";
+      }
+    };
+
     inputs.forEach((input) => {
       input.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
@@ -64,6 +77,15 @@ export function createUserUI(db, overlay) {
 
       if (!username) return;
 
+      // check for name field if joining
+      if (!isLogin) {
+        const nameInput = document.getElementById("nameInput");
+        if (!nameInput.value.trim()) return;
+      }
+
+      setButtonsLoading(true);
+      msg.innerText = "";
+
       try {
         const userRef = doc(db, "users", username);
         const userSnap = await getDoc(userRef);
@@ -73,14 +95,15 @@ export function createUserUI(db, overlay) {
             loginUser(username);
           } else {
             msg.innerText = "username not found in herd.";
+            setButtonsLoading(false);
           }
         } else {
           const nameInput = document.getElementById("nameInput");
           const name = nameInput.value.trim();
-          if (!name) return;
 
           if (userSnap.exists()) {
             msg.innerText = "username already taken.";
+            setButtonsLoading(false);
           } else {
             const color = new THREE.Color().setHSL(Math.random(), 0.4, 0.7);
             const hexColor = `#${color.getHexString()}`;
@@ -98,6 +121,7 @@ export function createUserUI(db, overlay) {
       } catch (e) {
         console.error("firebase error:", e);
         msg.innerText = "database error.";
+        setButtonsLoading(false);
       }
     });
   }

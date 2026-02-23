@@ -47,6 +47,9 @@ export async function createHorse() {
       availableBones.push(child);
   });
 
+  const chestBone =
+    availableBones.find((b) => b.name === "DEF-chest_082") || availableBones[0];
+
   const createLabel = (text, hexColor = null) => {
     const div = document.createElement("div");
     div.className = "sphere-label";
@@ -107,6 +110,7 @@ export async function createHorse() {
 
   const addUserSphere = (username = "horse", existingColor = null) => {
     if (activeSpheres.find((s) => s.username === username)) return;
+
     const color =
       existingColor || `#${new THREE.Color(getRandomPastel()).getHexString()}`;
     const sphereGroup = createSphereWithGlow(
@@ -115,10 +119,24 @@ export async function createHorse() {
       color,
     );
 
-    const bone =
-      availableBones[Math.floor(Math.random() * availableBones.length)];
+    // logic: find bones that have no user spheres yet (excluding big horse)
+    const emptyBones = availableBones.filter(
+      (bone) =>
+        bone !== chestBone &&
+        !activeSpheres.some(
+          (s) => s.bone === bone && s.username !== "big horse",
+        ),
+    );
 
-    // collision logic: ensure a unique spot around the bone
+    let bone;
+    if (emptyBones.length > 0) {
+      // prioritize empty non-chest bones
+      bone = emptyBones[Math.floor(Math.random() * emptyBones.length)];
+    } else {
+      // if all bones have at least one user, include the chest bone in the general pool
+      bone = availableBones[Math.floor(Math.random() * availableBones.length)];
+    }
+
     let offset = new THREE.Vector3();
     const minDistance = 0.04;
     let attempts = 0;
@@ -168,8 +186,6 @@ export async function createHorse() {
     );
   };
 
-  const chestBone =
-    availableBones.find((b) => b.name === "DEF-chest_082") || availableBones[0];
   const leaderColor = getBigHorseThemeColor();
   const leaderSphere = createSphereWithGlow(
     sphereGeometry,
