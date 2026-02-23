@@ -9,6 +9,7 @@ import { createOverlayUI } from "./World/Components/OverlayUI.js";
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, onSnapshot } from "firebase/firestore";
 import gsap from "gsap";
+import { createAudioManager } from "./World/Components/AudioManager.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAYbyrD9uPCWh7e1GUUjc1Hd0gK6GEeDMI",
@@ -33,6 +34,17 @@ async function init() {
     1000,
   );
   camera.position.set(0, 0, 2.5);
+
+  // 1. initialize audio first
+  createAudioManager();
+
+  // 2. set up variables needed for UI
+  let currentUsername = localStorage.getItem("horse_herd_username") || null;
+
+  // 3. initialize core components (ONLY ONCE)
+  const conn = createConnections(scene);
+  const overlay = createOverlayUI(scene, db, () => currentUsername);
+  const userUI = createUserUI(db, overlay);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -65,17 +77,11 @@ async function init() {
   let isPaused = false;
   let mouseDownPos = { x: 0, y: 0 };
 
-  let currentUsername = localStorage.getItem("horse_herd_username") || null;
-
   const clickThreshold = 5;
   const FREEZE_DIST = 0.4;
   const FULL_SPEED_DIST = 2.0;
   const GLOBAL_LABEL_DIST = 1.6;
   const INDIVIDUAL_CULL_DIST = 0.8;
-
-  const conn = createConnections(scene);
-  const overlay = createOverlayUI(scene, db, () => currentUsername);
-  const userUI = createUserUI(db, overlay);
 
   // if already logged in, show the UI and the name
   if (currentUsername) {
@@ -229,10 +235,7 @@ async function init() {
         const innerColor = data.innerColor;
 
         if (c.type === "added") {
-          // addUserSphere logic uses data.innerColor if it exists
           horseData.addUserSphere(username, innerColor);
-
-          // sync the UI dot for the logged-in user
           if (username === currentUsername && innerColor) {
             overlay.setInitialColor(innerColor);
           }
@@ -241,7 +244,6 @@ async function init() {
         if (c.type === "modified") {
           if (username && innerColor) {
             horseData.updateUserColor(username, innerColor);
-            // update the UI dot if the user changed their color in this session
             if (username === currentUsername) {
               overlay.setInitialColor(innerColor);
             }
