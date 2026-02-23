@@ -28,14 +28,48 @@ export function createOverlayUI(scene, db, getUsername) {
   const themeMenu = createThemeUI(scene);
   uiContainer.appendChild(themeMenu);
 
+  // apply hover animations to theme dots found within the theme menu
+  const applyThemeDotHovers = () => {
+    const themeDots = themeMenu.querySelectorAll(
+      'div[style*="border-radius: 50%"]',
+    );
+    themeDots.forEach((dot) => {
+      dot.style.transition = "transform 0.3s ease, opacity 0.3s ease";
+      dot.onmouseenter = () => {
+        dot.style.transform = "scale(1.2)";
+        dot.style.opacity = "1";
+      };
+      dot.onmouseleave = () => {
+        dot.style.transform = "scale(1)";
+        dot.style.opacity = "0.7";
+      };
+    });
+  };
+  // small delay to ensure createThemeUI has rendered its children
+  setTimeout(applyThemeDotHovers, 100);
+
   const innerHorseDot = document.createElement("div");
   innerHorseDot.id = "inner-horse-dot";
   innerHorseDot.style.cssText = `
     position: fixed; top: 110px; right: 38px; width: 14px; height: 14px; 
     border-radius: 50%; background: transparent; cursor: pointer; z-index: 5001; 
-    transition: all 0.3s ease, opacity 0.5s ease; box-sizing: border-box; opacity: 0;
+    transition: all 0.3s ease, opacity 0.5s ease, transform 0.3s ease; box-sizing: border-box; opacity: 0;
   `;
   uiContainer.appendChild(innerHorseDot);
+
+  // hover logic for inner horse dot
+  innerHorseDot.onmouseenter = () => {
+    innerHorseDot.style.transform = "scale(1.3)";
+    if (picker.element.style.display !== "block") {
+      promptText.style.opacity = "1";
+    }
+  };
+  innerHorseDot.onmouseleave = () => {
+    innerHorseDot.style.transform = "scale(1)";
+    if (picker.element.style.display !== "block") {
+      promptText.style.opacity = "0.5";
+    }
+  };
 
   const promptText = document.createElement("div");
   promptText.id = "color-prompt";
@@ -64,12 +98,21 @@ export function createOverlayUI(scene, db, getUsername) {
     return null;
   };
 
+  const updateLabel = (color) => {
+    const phrase = getReminderPhrase(color);
+    promptText.innerText = phrase ? phrase : getNearestColorName(color);
+    promptText.style.display = "block";
+
+    if (picker.element.style.display !== "block") {
+      setTimeout(() => {
+        promptText.style.opacity = "0.5";
+      }, 10);
+    }
+  };
+
   const picker = createColorPicker(async (newColor) => {
     innerHorseDot.style.background = newColor;
-    promptText.style.opacity = "0";
-    setTimeout(() => {
-      promptText.style.display = "none";
-    }, 500);
+    updateLabel(newColor);
 
     const username = localStorage.getItem("horse_herd_username");
     if (username) {
@@ -87,12 +130,21 @@ export function createOverlayUI(scene, db, getUsername) {
   innerHorseDot.onclick = (e) => {
     e.stopPropagation();
     const isVisible = picker.element.style.display === "block";
-    isVisible ? picker.hide() : picker.show();
+    if (isVisible) {
+      picker.hide();
+      promptText.style.opacity = "0.5";
+    } else {
+      picker.show();
+      promptText.style.opacity = "0";
+    }
   };
 
   document.addEventListener("mousedown", (e) => {
     if (!picker.element.contains(e.target) && e.target !== innerHorseDot) {
-      picker.hide();
+      if (picker.element.style.display === "block") {
+        picker.hide();
+        promptText.style.opacity = "0.5";
+      }
     }
   });
 
@@ -106,17 +158,7 @@ export function createOverlayUI(scene, db, getUsername) {
       innerHorseDot.style.opacity = "1";
       const actualColor = color || "#ffffff";
       innerHorseDot.style.background = actualColor;
-
-      const phrase = getReminderPhrase(actualColor);
-      if (phrase) {
-        promptText.innerText = phrase;
-        promptText.style.display = "block";
-        setTimeout(() => {
-          promptText.style.opacity = "0.5";
-        }, 10);
-      } else {
-        promptText.style.display = "none";
-      }
+      updateLabel(actualColor);
     },
     setUsername: (name) => {
       if (name) usernameDisplay.innerText = name;

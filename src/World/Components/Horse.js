@@ -59,7 +59,13 @@ export async function createHorse() {
       const colorLine = document.createElement("div");
       colorLine.className = "inner-horse-label";
       colorLine.innerText = `inner horse: ${getNearestColorName(hexColor)}`;
-      colorLine.style.cssText = `font-size: 0.8em; opacity: 0.7; margin-top: 2px;`;
+      // apply the user's color to this specific line
+      colorLine.style.cssText = `
+        font-size: 0.8em; 
+        opacity: 0.9; 
+        margin-top: 2px; 
+        color: ${hexColor};
+      `;
       div.appendChild(colorLine);
     }
 
@@ -133,7 +139,9 @@ export async function createHorse() {
       sphere.mesh.userData.inner.material.color.set(newColor);
       const labels = sphere.label.element.querySelectorAll("div");
       if (labels.length > 1) {
+        // update text and text color simultaneously
         labels[1].innerText = `inner horse: ${getNearestColorName(newColor)}`;
+        labels[1].style.color = newColor;
       }
     }
   };
