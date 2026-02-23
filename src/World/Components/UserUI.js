@@ -1,5 +1,16 @@
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import * as THREE from "three";
+
+/**
+ * creates a secure sha-256 hash of a password string.
+ */
+async function hashPassword(password) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
 
 export function createUserUI(db, overlay) {
   const container = document.getElementById("ui-container");
@@ -18,6 +29,7 @@ export function createUserUI(db, overlay) {
       <div id="input-fields">
         <input type="text" id="nameInput" placeholder="your name" />
         <input type="text" id="usernameInput" placeholder="unique username" />
+        <input type="password" id="passwordInput" placeholder="choose a password" />
       </div>
       <button id="submitBtn">join horse</button>
       <div id="toggle-ui">i'm part of the herd</div>
@@ -31,11 +43,33 @@ export function createUserUI(db, overlay) {
       <div id="ui-header">welcome back to the marrow</div>
       <div id="input-fields">
         <input type="text" id="usernameInput" placeholder="your username" />
+        <input type="password" id="passwordInput" placeholder="your password" />
       </div>
       <button id="submitBtn">reunite</button>
       <div id="toggle-ui">i need to join</div>
       <p id="msg"></p>
     `;
+
+    const usernameInput = container.querySelector("#usernameInput");
+    const passwordInput = container.querySelector("#passwordInput");
+    const uiHeader = container.querySelector("#ui-header");
+
+    // check for legacy (unclaimed) users on the fly
+    usernameInput.addEventListener("blur", async () => {
+      const username = usernameInput.value.trim().toLowerCase();
+      if (!username) return;
+
+      const userRef = doc(db, "users", username);
+      const userSnap = await getDoc(userRef);
+
+      if (userSnap.exists() && !userSnap.data().password) {
+        uiHeader.innerText =
+          "this soul is unclaimed. set a password to secure your place.";
+        passwordInput.placeholder = "set your new password";
+        uiHeader.style.color = "var(--big-horse-color)";
+      }
+    });
+
     attachListeners(true);
   }
 
@@ -73,33 +107,60 @@ export function createUserUI(db, overlay) {
 
     submitBtn.addEventListener("click", async () => {
       const usernameInput = document.getElementById("usernameInput");
+      const passwordInput = document.getElementById("passwordInput");
       const username = usernameInput.value.trim().toLowerCase();
+      const password = passwordInput.value.trim();
 
-      if (!username) return;
-
-      // check for name field if joining
-      if (!isLogin) {
-        const nameInput = document.getElementById("nameInput");
-        if (!nameInput.value.trim()) return;
+      if (!username || !password) {
+        msg.innerText = "the horse requires both name and password.";
+        return;
       }
 
       setButtonsLoading(true);
       msg.innerText = "";
 
       try {
+        const enteredHash = await hashPassword(password);
         const userRef = doc(db, "users", username);
         const userSnap = await getDoc(userRef);
 
         if (isLogin) {
           if (userSnap.exists()) {
-            loginUser(username);
+            const userData = userSnap.data();
+
+            // 1. legacy user: no password exists yet
+            if (!userData.password) {
+              await updateDoc(userRef, { password: enteredHash });
+              loginUser(username);
+            }
+            // 2. secure user: matches existing hash
+            else if (userData.password === enteredHash) {
+              loginUser(username);
+            }
+            // 3. migration case: matches plain-text password, needs upgrade to hash
+            else if (userData.password === password) {
+              await updateDoc(userRef, { password: enteredHash });
+              loginUser(username);
+            }
+            // 4. wrong password
+            else {
+              msg.innerText = "the password does not match the marrow.";
+              setButtonsLoading(false);
+            }
           } else {
             msg.innerText = "username not found in herd.";
             setButtonsLoading(false);
           }
         } else {
+          // registration logic
           const nameInput = document.getElementById("nameInput");
           const name = nameInput.value.trim();
+
+          if (!name) {
+            msg.innerText = "please provide your name.";
+            setButtonsLoading(false);
+            return;
+          }
 
           if (userSnap.exists()) {
             msg.innerText = "username already taken.";
@@ -111,6 +172,7 @@ export function createUserUI(db, overlay) {
             await setDoc(userRef, {
               realName: name,
               username: username,
+              password: enteredHash,
               innerColor: hexColor,
               createdAt: Date.now(),
             });

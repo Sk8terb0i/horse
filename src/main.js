@@ -237,9 +237,11 @@ async function init() {
         const data = c.doc.data();
         const username = data.username;
         const innerColor = data.innerColor;
+        const hasClaimed = !!data.password; // check if password field exists
 
         if (c.type === "added") {
-          horseData.addUserSphere(username, innerColor);
+          // pass hasClaimed to the horse component
+          horseData.addUserSphere(username, innerColor, hasClaimed);
           if (username === currentUsername && innerColor) {
             overlay.setInitialColor(innerColor);
           }
@@ -247,7 +249,8 @@ async function init() {
 
         if (c.type === "modified") {
           if (username && innerColor) {
-            horseData.updateUserColor(username, innerColor);
+            // update the color and potentially the label if they just claimed it
+            horseData.updateUserColor(username, innerColor, hasClaimed);
             if (username === currentUsername) {
               overlay.setInitialColor(innerColor);
             }

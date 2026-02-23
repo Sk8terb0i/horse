@@ -50,12 +50,20 @@ export async function createHorse() {
   const chestBone =
     availableBones.find((b) => b.name === "DEF-chest_082") || availableBones[0];
 
-  const createLabel = (text, hexColor = null) => {
+  const createLabel = (text, hexColor = null, hasClaimed = true) => {
     const div = document.createElement("div");
     div.className = "sphere-label";
 
     const nameLine = document.createElement("div");
-    nameLine.innerText = text === "big horse" ? text : `the horse: ${text}`;
+
+    // logic: mask name if not claimed
+    let displayUsername = text;
+    if (text !== "big horse" && !hasClaimed) {
+      displayUsername = text.length > 3 ? text.slice(0, -3) + "***" : "***";
+    }
+
+    nameLine.innerText =
+      text === "big horse" ? text : `the horse: ${displayUsername}`;
     div.appendChild(nameLine);
 
     if (text !== "big horse" && hexColor) {
@@ -108,7 +116,11 @@ export async function createHorse() {
     return group;
   };
 
-  const addUserSphere = (username = "horse", existingColor = null) => {
+  const addUserSphere = (
+    username = "horse",
+    existingColor = null,
+    hasClaimed = true,
+  ) => {
     if (activeSpheres.find((s) => s.username === username)) return;
 
     const color =
@@ -119,7 +131,6 @@ export async function createHorse() {
       color,
     );
 
-    // logic: find bones that have no user spheres yet (excluding big horse)
     const emptyBones = availableBones.filter(
       (bone) =>
         bone !== chestBone &&
@@ -130,10 +141,8 @@ export async function createHorse() {
 
     let bone;
     if (emptyBones.length > 0) {
-      // prioritize empty non-chest bones
       bone = emptyBones[Math.floor(Math.random() * emptyBones.length)];
     } else {
-      // if all bones have at least one user, include the chest bone in the general pool
       bone = availableBones[Math.floor(Math.random() * availableBones.length)];
     }
 
@@ -162,19 +171,20 @@ export async function createHorse() {
       mesh: sphereGroup,
       bone,
       offset,
-      label: createLabel(username, color),
+      label: createLabel(username, color, hasClaimed),
     });
   };
 
-  const updateUserColor = (username, newColor) => {
+  const updateUserColor = (username, newColor, hasClaimed = true) => {
     const sphere = activeSpheres.find((s) => s.username === username);
     if (sphere) {
       sphere.mesh.userData.color = newColor;
       sphere.mesh.userData.inner.material.color.set(newColor);
-      const labels = sphere.label.element.querySelectorAll("div");
-      if (labels.length > 1) {
-        labels[1].innerText = `inner horse: ${getNearestColorName(newColor)}`;
-        labels[1].style.color = newColor;
+
+      // recreate label to update the masked name if claimed status changed
+      if (sphere.label) {
+        horseGroup.remove(sphere.label);
+        sphere.label = createLabel(username, newColor, hasClaimed);
       }
     }
   };
