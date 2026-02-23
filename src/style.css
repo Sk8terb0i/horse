@@ -157,6 +157,23 @@ body {
   font-family: serif;
 }
 
+#manifesto-icon {
+  z-index: 2000; /* lower than overlay */
+}
+
+#user-display-name {
+  z-index: 2001; /* lower than overlay */
+}
+
+#inner-horse-dot {
+  z-index: 2002; /* lower than overlay */
+}
+
+/* theme menu needs to be lower than 4000 too */
+#theme-menu-container {
+  z-index: 2003 !important;
+}
+
 /* --- 6. overlays --- */
 #loading-overlay {
   position: fixed;
@@ -171,6 +188,9 @@ body {
   transition: opacity 0.5s ease;
   overflow-y: auto;
   display: flex;
+
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
 }
 
 #loading-overlay.active {
@@ -253,4 +273,31 @@ body {
 .inner-horse-label {
   font-style: italic;
   margin-top: 2px;
+}
+
+/* --- 8. responsive fixes --- */
+@media (max-width: 768px) {
+  .manifesto-inner {
+    width: 85%;
+    padding: 60px 0; /* reduced top/bottom padding */
+  }
+
+  .m-body {
+    font-size: 1rem; /* slightly smaller text */
+    line-height: 1.8; /* tighter spacing */
+  }
+
+  .m-body p {
+    margin-bottom: 25px; /* less gap between paragraphs */
+  }
+
+  #user-display-name {
+    display: none; /* hide name on mobile to clear space */
+  }
+}
+
+/* ensure the close icon is always visible when manifesto is active */
+#loading-overlay.active .close-icon {
+  display: block;
+  opacity: 0.8;
 }

@@ -10,6 +10,7 @@ export function createOverlayUI(scene, db, getUsername) {
   const uiContainer = document.createElement("div");
   uiContainer.id = "logged-in-ui";
   uiContainer.style.display = "none";
+  uiContainer.style.transition = "opacity 0.8s ease";
   document.body.appendChild(uiContainer);
 
   const manifestOverlay = document.createElement("div");
@@ -28,13 +29,49 @@ export function createOverlayUI(scene, db, getUsername) {
   const themeMenu = createThemeUI(scene);
   uiContainer.appendChild(themeMenu);
 
-  // apply hover animations to theme dots found within the theme menu
+  // setup multiple sounds
+  const hoofbeatPaths = [
+    "/assets/hoofbeat1.wav",
+    "/assets/hoofbeat2.wav",
+    "/assets/hoofbeat3.wav",
+    "/assets/hoofbeat4.wav",
+    "/assets/hoofbeat5.wav",
+  ];
+
+  const hoofbeatAudios = hoofbeatPaths.map((path) => {
+    const audio = new Audio(path);
+    audio.volume = 0.15;
+    return audio;
+  });
+
+  let lastSoundIndex = -1;
+
+  const playRandomHoofbeat = () => {
+    let randomIndex;
+    // ensure the same sound doesn't play twice in a row
+    do {
+      randomIndex = Math.floor(Math.random() * hoofbeatAudios.length);
+    } while (randomIndex === lastSoundIndex);
+
+    lastSoundIndex = randomIndex;
+    const selectedAudio = hoofbeatAudios[randomIndex];
+
+    selectedAudio.currentTime = 0;
+    selectedAudio.play().catch(() => {});
+  };
+
+  // decentralized listener: triggers on ANY click in the document
+  document.addEventListener("mousedown", () => {
+    playRandomHoofbeat();
+  });
+
   const applyThemeDotHovers = () => {
     const themeDots = themeMenu.querySelectorAll(
       'div[style*="border-radius: 50%"]',
     );
     themeDots.forEach((dot) => {
       dot.style.transition = "transform 0.3s ease, opacity 0.3s ease";
+      dot.style.cursor = "pointer";
       dot.onmouseenter = () => {
         dot.style.transform = "scale(1.2)";
         dot.style.opacity = "1";
@@ -45,7 +82,6 @@ export function createOverlayUI(scene, db, getUsername) {
       };
     });
   };
-  // small delay to ensure createThemeUI has rendered its children
   setTimeout(applyThemeDotHovers, 100);
 
   const innerHorseDot = document.createElement("div");
@@ -57,7 +93,6 @@ export function createOverlayUI(scene, db, getUsername) {
   `;
   uiContainer.appendChild(innerHorseDot);
 
-  // hover logic for inner horse dot
   innerHorseDot.onmouseenter = () => {
     innerHorseDot.style.transform = "scale(1.3)";
     if (picker.element.style.display !== "block") {
@@ -148,7 +183,33 @@ export function createOverlayUI(scene, db, getUsername) {
     }
   });
 
-  icon.onclick = () => manifestOverlay.classList.add("active");
+  const closeManifesto = () => {
+    manifestOverlay.classList.remove("active");
+    uiContainer.style.opacity = "1";
+  };
+
+  icon.onclick = (e) => {
+    e.stopPropagation();
+    manifestOverlay.classList.add("active");
+    uiContainer.style.opacity = "0";
+  };
+
+  manifestOverlay.onclick = (e) => {
+    if (
+      e.target === manifestOverlay ||
+      e.target.classList.contains("manifesto-layout")
+    ) {
+      closeManifesto();
+    }
+  };
+
+  const closeBtn = manifestOverlay.querySelector(".close-icon");
+  if (closeBtn) {
+    closeBtn.onclick = (e) => {
+      e.stopPropagation();
+      closeManifesto();
+    };
+  }
 
   return {
     showMainUI: () => {
