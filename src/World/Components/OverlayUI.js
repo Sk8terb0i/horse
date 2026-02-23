@@ -48,7 +48,6 @@ export function createOverlayUI(scene, db, getUsername) {
 
   const playRandomHoofbeat = () => {
     let randomIndex;
-    // ensure the same sound doesn't play twice in a row
     do {
       randomIndex = Math.floor(Math.random() * hoofbeatAudios.length);
     } while (randomIndex === lastSoundIndex);
@@ -60,7 +59,6 @@ export function createOverlayUI(scene, db, getUsername) {
     selectedAudio.play().catch(() => {});
   };
 
-  // decentralized listener: triggers on ANY click in the document
   document.addEventListener("mousedown", () => {
     playRandomHoofbeat();
   });
@@ -214,6 +212,15 @@ export function createOverlayUI(scene, db, getUsername) {
   return {
     showMainUI: () => {
       uiContainer.style.display = "block";
+      // fix: ensure dot is visible for new users even if no color is set yet
+      innerHorseDot.style.opacity = "1";
+      if (
+        !innerHorseDot.style.background ||
+        innerHorseDot.style.background === "transparent"
+      ) {
+        innerHorseDot.style.background = "#ffffff";
+        updateLabel("#ffffff");
+      }
     },
     setInitialColor: (color) => {
       innerHorseDot.style.opacity = "1";

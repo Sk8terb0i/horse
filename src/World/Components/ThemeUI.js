@@ -129,7 +129,7 @@ export function createThemeUI(scene) {
   themeDot.addEventListener("mousedown", startDrag);
   themeDot.addEventListener("touchstart", startDrag, { passive: false });
 
-  const savedTheme = localStorage.getItem("horse_herd_theme") || "herd";
+  const savedTheme = localStorage.getItem("horse_herd_theme") || "lone";
   document.documentElement.setAttribute("data-theme", savedTheme);
   themeLabel.innerText = savedTheme;
 
