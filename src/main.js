@@ -12,6 +12,12 @@ import { getFirestore, collection, onSnapshot } from "firebase/firestore";
 import gsap from "gsap";
 import { createAudioManager } from "./World/Components/AudioManager.js";
 
+// Glue Factory Imports
+import {
+  initGlueFactory,
+  unmountGlueFactory,
+} from "./World/Components/GlueFactory/GlueFactory.js";
+
 const firebaseConfig = {
   apiKey: "AIzaSyAYbyrD9uPCWh7e1GUUjc1Hd0gK6GEeDMI",
   authDomain: "horse-connection.firebaseapp.com",
@@ -21,7 +27,7 @@ const firebaseConfig = {
   appId: "1:834343341431:web:ecc15539578a25dda06572",
 };
 
-// INITIALIZE FIREBASE FIRST
+// INITIALIZE FIREBASE
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
@@ -40,7 +46,7 @@ async function init() {
   let currentUsername = localStorage.getItem("horse_herd_username") || null;
   let horseDataRef = null;
 
-  // db is now defined and ready for these components
+  // Setup 3D Components
   const conn = createConnections(scene);
   const overlay = createOverlayUI(scene, db, () => currentUsername);
 
@@ -70,6 +76,78 @@ async function init() {
     () => horseDataRef,
   );
 
+  // --- GLUE FACTORY & SHELF DOM SETUP ---
+  const ritualRoot = document.createElement("div");
+  ritualRoot.id = "glue-factory-root";
+  document.body.appendChild(ritualRoot);
+
+  // The Display Shelf
+  const shelfContainer = document.createElement("div");
+  shelfContainer.id = "sanctuary-shelf";
+  shelfContainer.style.cssText =
+    "position:fixed; bottom:0; left:0; width:100%; height:160px; background:#c0c0c0; border-top:2px outset #fff; display:flex; gap:20px; padding:15px; overflow-x:auto; overflow-y:hidden; z-index:50; box-shadow: 0 -4px 10px rgba(0,0,0,0.5);";
+  document.body.appendChild(shelfContainer);
+
+  // The Reconstructed Horse Modal
+  const memoryModal = document.createElement("div");
+  memoryModal.id = "memory-modal";
+  memoryModal.style.cssText =
+    "position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.7); z-index:1000; display:none; justify-content:center; align-items:center;";
+  document.body.appendChild(memoryModal);
+
+  function updateShelfUI(usersData) {
+    shelfContainer.innerHTML = "";
+    usersData.forEach((user) => {
+      if (user.manifestations) {
+        Object.entries(user.manifestations).forEach(([horseName, data]) => {
+          if (data.isBottled && data.finalImage) {
+            const bottleDiv = document.createElement("div");
+            bottleDiv.style.cssText =
+              "display:flex; flex-direction:column; align-items:center; cursor:pointer; min-width:100px; transition: transform 0.2s;";
+            bottleDiv.onmouseenter = () =>
+              (bottleDiv.style.transform = "translateY(-5px)");
+            bottleDiv.onmouseleave = () =>
+              (bottleDiv.style.transform = "translateY(0)");
+
+            bottleDiv.innerHTML = `
+              <img src="${data.finalImage}" style="height:100px; object-fit:contain; filter: drop-shadow(3px 3px 2px rgba(0,0,0,0.5));">
+              <span style="font-family:'MS Sans Serif', Arial, sans-serif; font-weight:bold; font-size:11px; color:#000; margin-top:8px; background:#fff; padding:2px 6px; border:2px inset #fff;">${horseName.toUpperCase()}</span>
+            `;
+            bottleDiv.onclick = () => showMemory(horseName, data.config);
+            shelfContainer.appendChild(bottleDiv);
+          }
+        });
+      }
+    });
+  }
+
+  function showMemory(name, config) {
+    // Reconstruct the horse dynamically from the saved config
+    const partsHtml = config
+      .map((p) => {
+        return `<img src="./src/World/Components/GlueFactory/${p.file}" 
+                   style="position:absolute; left:${p.x}; top:${p.y}; 
+                          transform:translate(-50%, -50%) scale(${p.scale}) rotate(${p.rotate}deg); 
+                          z-index:${p.zIndex}; pointer-events:none;">`;
+      })
+      .join("");
+
+    memoryModal.innerHTML = `
+      <div style="background:#c0c0c0; border:2px outset #fff; padding:3px; display:flex; flex-direction:column; box-shadow: 5px 5px 15px rgba(0,0,0,0.8);">
+         <div style="background: linear-gradient(90deg, #000080, #1084d0); color: white; padding: 4px 6px; font-weight: bold; font-family:'MS Sans Serif', Arial; font-size: 12px; display: flex; justify-content: space-between; align-items: center;">
+           <span>Memory of ${name}</span>
+           <button id="close-memory" style="font-weight:bold; cursor:pointer; background:#c0c0c0; border:2px outset #fff; padding: 0 4px;">X</button>
+         </div>
+         <div style="width: 50vw; height: 50vh; min-width:300px; min-height:300px; position:relative; background:url('./src/World/Components/GlueFactory/bg_dressup_room.jpg') center/cover; overflow:hidden; border:2px inset #fff; margin-top:3px;">
+            ${partsHtml}
+         </div>
+      </div>
+    `;
+    memoryModal.style.display = "flex";
+    document.getElementById("close-memory").onclick = () =>
+      (memoryModal.style.display = "none");
+  }
+
   if (currentUsername) {
     overlay.showMainUI();
     overlay.setUsername(currentUsername);
@@ -84,6 +162,42 @@ async function init() {
   const GLOBAL_LABEL_DIST = 1.6;
   const INDIVIDUAL_CULL_DIST = 0.8;
 
+  // --- ROUTING LOGIC ---
+  function handleNavigation() {
+    const hash = window.location.hash;
+    const isRitual = hash === "#/ritual";
+
+    if (isRitual) {
+      // Hide 3D World & Shelf
+      renderer.domElement.style.display = "none";
+      lDom.style.display = "none";
+      shelfContainer.style.display = "none";
+      const ui = document.getElementById("logged-in-ui");
+      if (ui) ui.style.display = "none";
+
+      // Show 2D World
+      ritualRoot.style.display = "block";
+      initGlueFactory(ritualRoot, db, currentUsername);
+    } else {
+      // Show 3D World & Shelf
+      renderer.domElement.style.display = "block";
+      lDom.style.display = "block";
+      shelfContainer.style.display = "flex";
+      if (currentUsername) {
+        const ui = document.getElementById("logged-in-ui");
+        if (ui) ui.style.display = "block";
+      }
+
+      // Hide 2D World
+      ritualRoot.style.display = "none";
+      unmountGlueFactory();
+    }
+  }
+
+  window.addEventListener("hashchange", handleNavigation);
+  handleNavigation();
+
+  // --- FIREBASE & HORSE LOADING ---
   try {
     const horseData = await createHorse();
     horseDataRef = horseData;
@@ -99,6 +213,11 @@ async function init() {
     const staggerDelay = 300;
 
     onSnapshot(collection(db, "users"), (snap) => {
+      const allDocs = snap.docs.map((doc) => doc.data());
+
+      // Update the Bottle Shelf with every database change
+      updateShelfUI(allDocs);
+
       if (!initialSync) {
         snap.docChanges().forEach((c) => {
           const data = c.doc.data();
@@ -114,7 +233,6 @@ async function init() {
         return;
       }
 
-      const allDocs = snap.docs.map((doc) => doc.data());
       initialSync = false;
       const me = allDocs.find((u) => u.username === currentUsername);
       if (me) addUserToScene(me, true);
@@ -149,8 +267,13 @@ async function init() {
     console.error(err);
   }
 
+  // --- ANIMATION LOOP ---
   function animate(ts) {
     requestAnimationFrame(animate);
+
+    // Skip heavy 3D updates if we are in the ritual
+    if (window.location.hash === "#/ritual") return;
+
     timer.update(ts);
     controls.update();
     const camPos = camera.position;
