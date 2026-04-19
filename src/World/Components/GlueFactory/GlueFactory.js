@@ -58,19 +58,20 @@ const BOTTLE_CATALOG = {
 
 Object.keys(rawImages).forEach((path) => {
   const file = path.replace("./", "");
-  if (file.startsWith("torso_")) PART_CATALOG.torso.push(file);
-  else if (file.startsWith("head_")) PART_CATALOG.head.push(file);
-  else if (file.startsWith("outfit_")) PART_CATALOG.outfit.push(file);
+  // Store the 'path' instead of just the 'file' name
+  if (file.startsWith("torso_")) PART_CATALOG.torso.push(path);
+  else if (file.startsWith("head_")) PART_CATALOG.head.push(path);
+  else if (file.startsWith("outfit_")) PART_CATALOG.outfit.push(path);
   else if (file.startsWith("leg_f_")) {
-    PART_CATALOG.leg_f_front.push(file);
-    PART_CATALOG.leg_f_back.push(file);
+    PART_CATALOG.leg_f_front.push(path);
+    PART_CATALOG.leg_f_back.push(path);
   } else if (file.startsWith("leg_b_")) {
-    PART_CATALOG.leg_b_front.push(file);
-    PART_CATALOG.leg_b_back.push(file);
-  } else if (file.startsWith("bottle_")) BOTTLE_CATALOG.bottle.push(file);
-  else if (file.startsWith("label_")) BOTTLE_CATALOG.label.push(file);
-  else if (file.startsWith("decoration_")) BOTTLE_CATALOG.decoration.push(file);
-  else if (file.startsWith("letter_")) BOTTLE_CATALOG.letter.push(file);
+    PART_CATALOG.leg_b_front.push(path);
+    PART_CATALOG.leg_b_back.push(path);
+  } else if (file.startsWith("bottle_")) BOTTLE_CATALOG.bottle.push(path);
+  else if (file.startsWith("label_")) BOTTLE_CATALOG.label.push(path);
+  else if (file.startsWith("decoration_")) BOTTLE_CATALOG.decoration.push(path);
+  else if (file.startsWith("letter_")) BOTTLE_CATALOG.letter.push(path);
 });
 
 function showDialog(container, message) {
@@ -305,7 +306,7 @@ function renderBottlePhase(container, horseID, db, username, manifestations) {
     img.style.zIndex = CATEGORY_Z_INDEX[cat] || 10;
     img.style.left = x;
     img.style.top = y;
-    img.src = `./src/World/Components/GlueFactory/${file}`;
+    img.src = rawImages[file];
     img.crossOrigin = "anonymous";
     img.ondragstart = (e) => e.preventDefault();
     img.onload = () => {
@@ -652,7 +653,7 @@ function renderDressUpPhase(
       }
       applyTransform(img);
     };
-    img.src = `./src/World/Components/GlueFactory/${data.file}`;
+    img.src = rawImages[p.file];
     viewport.appendChild(img);
   };
 

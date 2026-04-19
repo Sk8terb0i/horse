@@ -46,7 +46,7 @@ async function init() {
   let currentUsername = localStorage.getItem("horse_herd_username") || null;
   let horseDataRef = null;
 
-  // NEW: Track if at least one glue bottle exists globally
+  // Track if at least one glue bottle exists globally to gate the connection lines
   let globalGlueCreated = false;
 
   // Setup 3D Components
@@ -87,10 +87,28 @@ async function init() {
   // Persistence: Check if shelf was previously expanded
   let isShelfExpanded = localStorage.getItem("shelf_expanded") === "true";
 
+  // MOBILE RESPONSIVENESS: Shrink shelf elements to prevent UI icon overlap
+  const mobileStyle = document.createElement("style");
+  mobileStyle.innerHTML = `
+    @media (max-width: 600px) {
+      #sanctuary-shelf-wrapper { top: 10px !important; width: 95% !important; }
+      #sanctuary-shelf { height: 80px !important; gap: 10px !important; padding: 5px !important; }
+      #sanctuary-shelf div { width: 50px !important; }
+      #sanctuary-shelf img { max-height: 40px !important; }
+      #sanctuary-shelf span { font-size: 8px !important; }
+      #sanctuary-shelf-header { font-size: 10px !important; padding: 2px 10px !important; }
+    }
+  `;
+  document.head.appendChild(mobileStyle);
+
   const shelfWrapper = document.createElement("div");
   shelfWrapper.id = "sanctuary-shelf-wrapper";
-  shelfWrapper.style.cssText =
-    "position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:50; display:flex; flex-direction:column; align-items:center; width:90%; max-width:800px;";
+  // Only display if logged in
+  shelfWrapper.style.cssText = `
+    position:fixed; top:20px; left:50%; transform:translateX(-50%); 
+    z-index:50; display: ${currentUsername ? "flex" : "none"}; 
+    flex-direction:column; align-items:center; width:90%; max-width:800px;
+  `;
 
   const shelfHeader = document.createElement("div");
   shelfHeader.id = "sanctuary-shelf-header";
@@ -98,7 +116,7 @@ async function init() {
   shelfHeader.style.cssText =
     "background:#c0c0c0; border:2px outset #fff; padding:4px 15px; cursor:pointer; font-family:'MS Sans Serif', Arial; font-weight:bold; font-size:12px; margin-bottom:-2px; z-index:51; box-shadow: 2px 2px 5px rgba(0,0,0,0.3); user-select:none;";
 
-  // Interaction Animations
+  // Interaction Animations for Header
   shelfHeader.onmouseenter = () =>
     (shelfHeader.style.backgroundColor = "#e0e0e0");
   shelfHeader.onmouseleave = () => {
@@ -107,21 +125,27 @@ async function init() {
   };
   shelfHeader.onmousedown = () => {
     shelfHeader.style.border = "2px inset #fff";
-    shelfHeader.style.padding = "5px 14px 3px 16px"; // Visual shift
+    shelfHeader.style.padding = "5px 14px 3px 16px";
   };
   shelfHeader.onmouseup = () => {
     shelfHeader.style.border = "2px outset #fff";
     shelfHeader.style.padding = "4px 15px";
   };
+
   const shelfContainer = document.createElement("div");
   shelfContainer.id = "sanctuary-shelf";
   shelfContainer.style.cssText =
     "width:100%; height:110px; background:#c0c0c0; border:2px outset #fff; display:flex; align-items:center; gap:20px; padding:10px 15px; overflow-x:auto; overflow-y:hidden; box-shadow: 4px 4px 15px rgba(0,0,0,0.5); box-sizing:border-box;";
 
   const applyShelfState = (expanded, animate = false) => {
+    if (!currentUsername) {
+      shelfWrapper.style.display = "none";
+      return;
+    }
+    shelfWrapper.style.display = "flex";
     shelfContainer.style.display = expanded ? "flex" : "none";
 
-    // FIXED: Only allow opacity > 0 if the shelf is expanded AND at least one glue exists
+    // Only allow line opacity if shelf is expanded AND at least one glue exists globally
     const targetOpacity = expanded && globalGlueCreated ? 0.5 : 0;
     const targetLabelOpacity = expanded && globalGlueCreated ? "1" : "0";
 
@@ -156,7 +180,7 @@ async function init() {
     let hasBottles = false;
     const allBottles = [];
 
-    // 1. Collect all bottled manifestations from all users
+    // 1. Gather all bottled glue from all users
     usersData.forEach((user) => {
       if (user.manifestations) {
         Object.entries(user.manifestations).forEach(([horseID, data]) => {
@@ -167,20 +191,19 @@ async function init() {
       }
     });
 
-    // 2. Sort: Oldest first, so newest is added last (appearing on the right)
+    // 2. Sort by ID (timestamp) so newest is at the end (appearing on the right)
     allBottles.sort((a, b) => {
       const timeA = parseInt(a.horseID.replace("horse_", "")) || 0;
       const timeB = parseInt(b.horseID.replace("horse_", "")) || 0;
       return timeA - timeB;
     });
 
-    // 3. Render the sorted bottles
+    // 3. Render Sorted Bottles
     allBottles.forEach(({ horseID, data }) => {
       hasBottles = true;
       const bottleDiv = document.createElement("div");
       bottleDiv.style.cssText =
         "display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; width:80px; flex-shrink:0; transition: transform 0.2s;";
-
       bottleDiv.onmouseenter = () =>
         (bottleDiv.style.transform = "translateY(-4px)");
       bottleDiv.onmouseleave = () =>
@@ -232,7 +255,7 @@ async function init() {
         const safeRotate = p.rotate !== undefined ? p.rotate : 0;
         const safeZ = p.zIndex !== undefined ? p.zIndex : 10;
 
-        return `<img src="./src/World/Components/GlueFactory/${p.file}" 
+        return `<img src="${p.file}" 
                    style="position:absolute; 
                           left:${formatCoord(p.x)}; 
                           top:${formatCoord(p.y)}; 
@@ -293,7 +316,8 @@ async function init() {
     } else {
       renderer.domElement.style.display = "block";
       lDom.style.display = "block";
-      shelfWrapper.style.display = "flex";
+      // Only show shelf if logged in
+      shelfWrapper.style.display = currentUsername ? "flex" : "none";
       if (currentUsername) {
         const ui = document.getElementById("logged-in-ui");
         if (ui) ui.style.display = "block";
@@ -328,17 +352,16 @@ async function init() {
   onSnapshot(collection(db, "users"), (snap) => {
     const allDocs = snap.docs.map((doc) => doc.data());
 
-    // NEW: Scan for ANY bottled manifestations across ALL users
-    const anyGlue = allDocs.some(
+    // NEW: Check if ANY glue bottle exists globally to toggle connection line visibility
+    globalGlueCreated = allDocs.some(
       (u) =>
         u.manifestations &&
         Object.values(u.manifestations).some((m) => m.isBottled),
     );
-    globalGlueCreated = anyGlue;
 
     updateShelfUI(allDocs);
 
-    // Re-apply shelf state now that we know if glue exists (updates connection visibility)
+    // Refresh state to handle line visibility now that we know if glue exists
     applyShelfState(isShelfExpanded, false);
 
     if (!initialSync) {
