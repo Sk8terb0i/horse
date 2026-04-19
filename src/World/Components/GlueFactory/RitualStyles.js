@@ -66,6 +66,7 @@ export const RitualStyles = `
     justify-content: space-between;
   }
 
+  /* BUTTON INTERACTIONS */
   .btn-95 {
     padding: 6px;
     border: 2px outset #fff;
@@ -74,8 +75,17 @@ export const RitualStyles = `
     font-size: 11px;
     color: #000;
     font-family: "MS Sans Serif", Arial, sans-serif;
+    user-select: none;
   }
-  .btn-95:active { border: 2px inset #fff; }
+
+  .btn-95:hover {
+    background-color: #e0e0e0;
+  }
+
+  .btn-95:active {
+    border: 2px inset #fff;
+    padding: 7px 5px 5px 7px; /* Visual 'depress' shift */
+  }
 
   .catalog-category h4 {
     margin: 10px 0 4px 0;
@@ -94,9 +104,8 @@ export const RitualStyles = `
     cursor: grab;
   }
 
-  /* FIXED MODAL POSITIONING: Now centers inside the Game Wrapper */
   .modal-overlay {
-    position: absolute; /* Changed from fixed */
+    position: absolute;
     top: 0; left: 0; width: 100%; height: 100%;
     background: rgba(0,0,0,0.5);
     z-index: 20000;
@@ -127,11 +136,24 @@ export const RitualStyles = `
   .active-part { outline: 2px dashed #ff0000; }
   .floating-tools { position: absolute; display: none; z-index: 10000; transform: translate(-50%, -50%); pointer-events: none; }
   
+  /* TOOL HANDLE INTERACTIONS */
   .tool-handle {
     position: absolute; width: 30px; height: 30px;
     background: #c0c0c0; border: 2px outset #fff;
     display: flex; justify-content: center; align-items: center;
     font-size: 16px; pointer-events: auto; transform: translate(-50%, -50%);
+    cursor: pointer;
+  }
+
+  .tool-handle:hover {
+    background: #000080;
+    color: white;
+  }
+
+  .tool-handle:active {
+    background: #ffffff;
+    color: black;
+    border: 2px inset #fff;
   }
 
   .group-stack {

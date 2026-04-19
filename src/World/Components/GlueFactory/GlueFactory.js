@@ -1,5 +1,5 @@
 import { RitualStyles } from "./RitualStyles.js";
-import { doc, updateDoc, getDoc, setDoc } from "firebase/firestore";
+import { doc, updateDoc, getDoc } from "firebase/firestore";
 
 const CATEGORY_Z_INDEX = {
   leg_b_back: 1,
@@ -9,7 +9,6 @@ const CATEGORY_Z_INDEX = {
   leg_b_front: 5,
   leg_f_front: 6,
   outfit: 10,
-  // Bottle Phase Z-Indexes
   bottle: 1,
   label: 5,
   letter: 8,
@@ -34,12 +33,12 @@ const RECLAMATION_PHRASES = [
 ];
 
 // --- DYNAMIC ASSET DISCOVERY ---
-// FIXED: Updated glob syntax to remove deprecation warning
 const rawImages = import.meta.glob("./*.png", {
   eager: true,
   query: "?url",
   import: "default",
 });
+
 const PART_CATALOG = {
   torso: [],
   head: [],
@@ -89,6 +88,31 @@ function showDialog(container, message) {
   overlay.querySelector(".dialog-close").onclick = () => overlay.remove();
 }
 
+function injectXPTaskbar(container) {
+  if (document.getElementById("xp-taskbar")) return;
+  const taskbar = document.createElement("div");
+  taskbar.id = "xp-taskbar";
+  taskbar.style.cssText = `
+    position: fixed; bottom: 0; left: 0; width: 100%; height: 30px;
+    background: linear-gradient(to bottom, #245edb 0%, #3f8cf3 9%, #245edb 18%, #245edb 92%, #333 100%);
+    z-index: 9999; display: flex; align-items: center; box-shadow: inset 0 1px #77a5f8;
+  `;
+
+  const startBtn = document.createElement("div");
+  startBtn.style.cssText = `
+    height: 100%; padding: 0 15px; display: flex; align-items: center;
+    background: linear-gradient(to bottom, #388e3c 0%, #4caf50 10%, #388e3c 90%, #1b5e20 100%);
+    border-radius: 0 10px 10px 0; cursor: pointer; color: white;
+    font-family: 'Tahoma', sans-serif; font-weight: bold; font-style: italic;
+    font-size: 14px; text-shadow: 1px 1px 1px #222; box-shadow: 2px 0 5px rgba(0,0,0,0.3);
+  `;
+  startBtn.innerText = "Home";
+  startBtn.onclick = () => (window.location.hash = "#");
+
+  taskbar.appendChild(startBtn);
+  container.appendChild(taskbar);
+}
+
 export async function initGlueFactory(container, db, username) {
   if (!document.getElementById("ritual-css")) {
     const styleSheet = document.createElement("style");
@@ -115,18 +139,19 @@ export async function initGlueFactory(container, db, username) {
           container.innerHTML = `
                 <div class="game-wrapper" style="display:flex; flex-direction:column; align-items:center; justify-content:center; background-image: url('./src/World/Components/GlueFactory/bg_bottle_shelf.jpg'); background-size: cover; background-position: center;">
                     <div style="background: rgba(192, 192, 192, 0.9); padding: 20px; border: 2px outset #fff; text-align: center;">
-                      <h1 style="color:#000; font-family:'MS Sans Serif'; font-size: 16px;">${activeHorseName} is preserved.</h1>
-                      <button id="btn-return-sanctuary" class="btn-95" style="margin-top: 15px; font-weight: bold;">Return to Sanctuary</button>
+                      <h1 style="color:#000; font-family:'MS Sans Serif'; font-size: 16px;">${horse.name || activeHorseName} is preserved.</h1>
+                      <button id="btn-return-sanctuary" class="btn-95" style="margin-top: 15px; font-weight: bold;">Return to the herd</button>
                     </div>
                 </div>`;
-
+          injectXPTaskbar(container);
           document.getElementById("btn-return-sanctuary").onclick =
             async () => {
               await updateDoc(doc(db, "users", username), {
                 activeHorseName: "",
               });
-              location.reload();
+              window.location.hash = "#";
             };
+          return;
         } else if (horse.isBoiled) {
           renderBottlePhase(
             container,
@@ -135,6 +160,7 @@ export async function initGlueFactory(container, db, username) {
             username,
             manifestations,
           );
+          return;
         } else {
           renderDressUpPhase(
             container,
@@ -143,14 +169,15 @@ export async function initGlueFactory(container, db, username) {
             manifestations,
             activeHorseName,
           );
+          return;
         }
-        return;
       }
     }
   } catch (err) {
     console.error(err);
   }
 
+  container.innerHTML = "";
   renderDressUpPhase(container, db, username, manifestations, "");
 }
 
@@ -178,13 +205,14 @@ async function isPixelTransparent(img, clientX, clientY) {
 }
 
 // --- BOTTLE DECORATION PHASE ---
-
-function renderBottlePhase(container, horseName, db, username, manifestations) {
+function renderBottlePhase(container, horseID, db, username, manifestations) {
   let currentBottle = null;
+  const horseData = manifestations[horseID] || {};
+  const horseDisplayName = horseData.name || horseID;
 
   function updateSidebar() {
     const sidebar = container.querySelector(".catalog-sidebar");
-    let html = `<div class="catalog-category"><h4>Essence: ${horseName}</h4></div>`;
+    let html = `<div class="catalog-category"><h4>Essence: ${horseDisplayName}</h4></div>`;
     if (!currentBottle) {
       html += `<div class="catalog-category"><h4>1. Choose Vessel</h4><div style="display:flex; flex-wrap:wrap;">
         ${BOTTLE_CATALOG.bottle.map((f) => `<img src="./src/World/Components/GlueFactory/${f}" class="catalog-item" draggable="true" data-file="${f}" data-category="bottle">`).join("")}
@@ -206,7 +234,7 @@ function renderBottlePhase(container, horseName, db, username, manifestations) {
         <div class="win95-title"><span>reclaim_the_glue.exe</span></div>
         <div class="catalog-sidebar"></div>
         <div style="padding: 4px; background: #c0c0c0; border-top: 2px outset #fff;">
-          <button id="btn-save-bottle" class="btn-95" style="width:100%; font-weight:bold;">Seal & Save ${horseName}</button>
+          <button id="btn-save-bottle" class="btn-95" style="width:100%; font-weight:bold;">Seal & Save ${horseDisplayName}</button>
         </div>
       </div>
       <div class="viewport-area" id="game-viewport" style="background-image: url('./src/World/Components/GlueFactory/bg_bottle_shelf.jpg'); cursor: default;">
@@ -221,6 +249,8 @@ function renderBottlePhase(container, horseName, db, username, manifestations) {
         </div>
       </div>
     </div>`;
+
+  injectXPTaskbar(container);
 
   const viewport = document.getElementById("game-viewport"),
     floatingTools = document.getElementById("floating-tools");
@@ -309,6 +339,7 @@ function renderBottlePhase(container, horseName, db, username, manifestations) {
         parseInt(selectedEl.style.zIndex) - 1,
       );
   };
+
   document.getElementById("handle-scale").onmousedown = (e) => {
     if (!selectedEl) return;
     e.stopPropagation();
@@ -439,7 +470,6 @@ function renderBottlePhase(container, horseName, db, username, manifestations) {
     const canvas = document.createElement("canvas");
     const cropW = Math.max(1, maxX - minX + pad * 2);
     const cropH = Math.max(1, maxY - minY + pad * 2);
-    // FIXED: Reduced scale to 1x for Firebase string length safety (1MB limit)
     const exportScale = 1.0;
     canvas.width = cropW * exportScale;
     canvas.height = cropH * exportScale;
@@ -449,13 +479,10 @@ function renderBottlePhase(container, horseName, db, username, manifestations) {
       const r = s.getBoundingClientRect();
       const centerX = r.left - vp.left + r.width / 2;
       const centerY = r.top - vp.top + r.height / 2;
-
-      // FIXED: Strict parseFloat to prevent NaN entity error
       const scale = parseFloat(s.dataset.scale) || 0.7;
       const rotation = (parseFloat(s.dataset.rotate) || 0) * (Math.PI / 180);
       const dw = s.naturalWidth * scale * exportScale;
       const dh = s.naturalHeight * scale * exportScale;
-
       ctx.save();
       ctx.translate(
         (centerX - (minX - pad)) * exportScale,
@@ -468,14 +495,12 @@ function renderBottlePhase(container, horseName, db, username, manifestations) {
 
     try {
       const imgData = canvas.toDataURL("image/png", 0.8);
-
       await updateDoc(doc(db, "users", username), {
-        [`manifestations.${horseName}.isBottled`]: true,
-        [`manifestations.${horseName}.finalImage`]: imgData,
+        [`manifestations.${horseID}.isBottled`]: true,
+        [`manifestations.${horseID}.finalImage`]: imgData,
         activeHorseName: "",
       });
 
-      // Feedback Dialog
       const successOverlay = document.createElement("div");
       successOverlay.className = "modal-overlay";
       successOverlay.innerHTML = `
@@ -487,10 +512,8 @@ function renderBottlePhase(container, horseName, db, username, manifestations) {
           </div>
         </div>`;
       container.appendChild(successOverlay);
-
-      // Reload only after the user acknowledges the message
       successOverlay.querySelector(".success-close").onclick = () => {
-        location.reload();
+        window.location.hash = "#";
       };
     } catch (e) {
       console.error(e);
@@ -503,7 +526,6 @@ function renderBottlePhase(container, horseName, db, username, manifestations) {
 }
 
 // --- ASSEMBLY PHASE ---
-
 function renderDressUpPhase(
   container,
   db,
@@ -512,14 +534,18 @@ function renderDressUpPhase(
   activeName,
 ) {
   let catalogHTML = "";
+  let stagedKey = ""; // Use the ID consistently
+
   const mList = Object.keys(manifestations).filter(
     (n) => !manifestations[n].isBottled,
   );
   if (mList.length > 0) {
     catalogHTML += `<div class="catalog-category"><h4>Honored Manifestations</h4>`;
-    mList.forEach((n) => {
-      const b = manifestations[n].isBoiled;
-      catalogHTML += `<div class="manifestation-name-box" draggable="${!b}" data-name="${n}" style="${b ? "background:#808080; color:#fff; opacity:0.6;" : "background:#fff; color:#000;"}">${n} ${b ? "(Boiled)" : ""}</div>`;
+    mList.forEach((id) => {
+      const horse = manifestations[id];
+      const displayName = horse.name || id;
+      const b = horse.isBoiled;
+      catalogHTML += `<div class="manifestation-name-box" draggable="${!b}" data-id="${id}" style="${b ? "background:#808080; color:#fff; opacity:0.6;" : "background:#fff; color:#000;"}">${displayName} ${b ? "(Boiled)" : ""}</div>`;
     });
     catalogHTML += `</div><hr style="border:0; border-top:1px solid #808080; margin:5px 0;">`;
   }
@@ -554,11 +580,13 @@ function renderDressUpPhase(
       <div id="naming-modal" class="modal-overlay" style="display:none;">
         <div class="win95-dialog"><div class="win95-title"><span>Registry</span></div><div style="padding:15px;">
           <p style="font-size:12px; color:#000;">Name this connection:</p>
-          <input type="text" id="horse-name-input" class="win95-input" value="${activeName || "Frank"}">
+          <input type="text" id="horse-name-input" class="win95-input" value="" placeholder="Enter name...">
           <div style="display:flex; justify-content:flex-end; gap:5px;"><button id="modal-cancel" class="btn-95">Return</button><button id="modal-confirm" class="btn-95" style="font-weight:bold;">Confirm</button></div>
         </div></div>
       </div>
     </div>`;
+
+  injectXPTaskbar(container);
 
   const viewport = document.getElementById("game-viewport"),
     floatingTools = document.getElementById("floating-tools"),
@@ -583,8 +611,8 @@ function renderDressUpPhase(
   const applyTransform = (el) => {
     el.style.transform = `translate(-50%, -50%) scale(${el.dataset.scale}) rotate(${el.dataset.rotate}deg)`;
     const s = parseFloat(el.dataset.scale || "0.7");
-    floatingTools.style.width = el.offsetWidth * s + "px";
-    floatingTools.style.height = el.offsetHeight * s + "px";
+    floatingTools.style.width = Math.max(80, el.offsetWidth * s) + "px";
+    floatingTools.style.height = Math.max(80, el.offsetHeight * s) + "px";
     floatingTools.style.left = el.style.left;
     floatingTools.style.top = el.style.top;
     floatingTools.style.display = "block";
@@ -596,7 +624,6 @@ function renderDressUpPhase(
     img.className = "sprite-part draggable";
     img.dataset.file = data.file;
     img.dataset.category = data.category;
-    // FIXED: Ensure numbers aren't strings or NaN before assigning to dataset
     const s = parseFloat(data.scale);
     const r = parseFloat(data.rotate);
     const z = parseInt(data.zIndex);
@@ -613,6 +640,7 @@ function renderDressUpPhase(
         if (selectedEl) selectedEl.classList.remove("active-part");
         selectedEl = img;
         selectedEl.classList.add("active-part");
+        stagedKey = "";
       }
       applyTransform(img);
     };
@@ -624,7 +652,7 @@ function renderDressUpPhase(
     if (box.getAttribute("draggable") === "true")
       box.ondragstart = (e) => {
         e.dataTransfer.setData("source", "saved");
-        e.dataTransfer.setData("horseName", box.dataset.name);
+        e.dataTransfer.setData("id", box.dataset.id);
       };
   });
 
@@ -641,9 +669,12 @@ function renderDressUpPhase(
     e.preventDefault();
     const vp = viewport.getBoundingClientRect();
     if (e.dataTransfer.getData("source") === "saved") {
-      const n = e.dataTransfer.getData("horseName");
-      if (manifestations[n])
-        manifestations[n].config.forEach((p) => spawnPart(p, false));
+      const id = e.dataTransfer.getData("id");
+      if (manifestations[id]) {
+        stagedKey = id;
+        viewport.querySelectorAll(".draggable").forEach((el) => el.remove());
+        manifestations[id].config.forEach((p) => spawnPart(p, false));
+      }
     } else {
       spawnPart(
         {
@@ -670,6 +701,7 @@ function renderDressUpPhase(
         parseInt(selectedEl.style.zIndex) - 1,
       );
   };
+
   document.getElementById("handle-scale").onmousedown = (e) => {
     if (!selectedEl) return;
     e.stopPropagation();
@@ -773,18 +805,9 @@ function renderDressUpPhase(
     activeEl = null;
   };
 
-  document.getElementById("btn-begin-boil").onclick = () => {
-    if (viewport.querySelectorAll(".draggable").length === 0)
-      return showDialog(container, "The vessel is empty.");
-    modal.style.display = "flex";
-  };
-  document.getElementById("modal-cancel").onclick = () =>
-    (modal.style.display = "none");
-  document.getElementById("modal-confirm").onclick = async () => {
-    const n = document.getElementById("horse-name-input").value || "Frank";
+  async function handleBoilSubmission(uniqueID, displayName) {
     const data = Array.from(viewport.querySelectorAll(".draggable"))
       .map((el) => {
-        // FIXED: Pre-parsing for strict NaN safety during horse save
         const s = parseFloat(el.dataset.scale);
         const r = parseFloat(el.dataset.rotate);
         const z = parseInt(el.style.zIndex);
@@ -801,16 +824,45 @@ function renderDressUpPhase(
       .filter((p) => p.file);
 
     await updateDoc(doc(db, "users", username), {
-      [`manifestations.${n}`]: { config: data, isBoiled: false },
-      activeHorseName: n,
+      [`manifestations.${uniqueID}`]: {
+        name: displayName,
+        config: data,
+        isBoiled: false,
+      },
+      activeHorseName: uniqueID,
     });
-    renderBoilingPhase(container, n, data, db, username);
+    // Passing both the internal ID and the display Name
+    renderBoilingPhase(container, uniqueID, displayName, data, db, username);
+  }
+
+  document.getElementById("btn-begin-boil").onclick = () => {
+    if (viewport.querySelectorAll(".draggable").length === 0)
+      return showDialog(container, "The vessel is empty.");
+    if (stagedKey && manifestations[stagedKey]) {
+      handleBoilSubmission(
+        stagedKey,
+        manifestations[stagedKey].name || "Unnamed",
+      );
+    } else {
+      const input = document.getElementById("horse-name-input");
+      input.value = "";
+      modal.style.display = "flex";
+    }
+  };
+
+  document.getElementById("modal-cancel").onclick = () =>
+    (modal.style.display = "none");
+  document.getElementById("modal-confirm").onclick = async () => {
+    const n = document.getElementById("horse-name-input").value || "Unnamed";
+    const newID = "horse_" + Date.now();
+    modal.style.display = "none";
+    handleBoilSubmission(newID, n);
   };
 }
 
 // --- BOILING PHASE ---
-
-function renderBoilingPhase(container, name, config, db, username) {
+// FIXED: Added horseID to the parameter definition to match the 6-argument call
+function renderBoilingPhase(container, horseID, name, config, db, username) {
   const partsToBoil = config
     .filter((p) => p.file && !p.file.startsWith("torso_"))
     .map((p, i) => ({
@@ -850,29 +902,29 @@ function renderBoilingPhase(container, name, config, db, username) {
       </div>
     </div>`;
 
+  injectXPTaskbar(container);
+
   const viewport = document.getElementById("boil-viewport"),
     pContainer = document.getElementById("particle-container"),
     ladle = document.getElementById("boil-ladle"),
     progressFill = document.getElementById("boil-progress-fill");
+
   const subLayer = document.getElementById("sub-layer"),
     floatLayer = document.getElementById("float-layer");
+
   let mouseX = 0,
     mouseY = 0,
     lastX = 0,
     lastY = 0,
     velocity = 0;
-
-  let cumulativeStirTime = 0;
-  let lastFrameTime = Date.now();
+  let cumulativeStirTime = 0,
+    lastFrameTime = Date.now();
 
   viewport.onmousemove = (e) => {
     const r = viewport.getBoundingClientRect();
     mouseX = e.clientX - r.left;
     mouseY = e.clientY - r.top;
-
-    // FIX: Accumulate velocity to fix the bug where high polling-rate gaming mice read as 0 velocity
     velocity += Math.hypot(mouseX - lastX, mouseY - lastY);
-
     lastX = mouseX;
     lastY = mouseY;
     ladle.style.left = mouseX + "px";
@@ -887,11 +939,8 @@ function renderBoilingPhase(container, name, config, db, username) {
       img.className = "boil-part-sprite bobbing";
       img.style.setProperty("--s", p.scale);
       img.style.setProperty("--r", p.rotate + "deg");
-
-      // FIX: Ensure the parts themselves do not hijack the mouse while trying to stir
       img.style.pointerEvents = "none";
       img.draggable = false;
-
       img.onerror = () => {
         img.style.display = "none";
       };
@@ -932,24 +981,19 @@ function renderBoilingPhase(container, name, config, db, username) {
       for (let j = i + 1; j < partsToBoil.length; j++) {
         const p2 = partsToBoil[j];
         if (p2.dead) continue;
-
         let dx = p1.posX - p2.posX;
         let dy = p1.posY - p2.posY;
         let dist = Math.hypot(dx, dy);
-
-        // FIX: The NaN Crash. Prevent divide-by-zero if parts flawlessly overlap.
         if (dist === 0) {
           dx = Math.random() - 0.5 || 0.1;
           dy = Math.random() - 0.5 || 0.1;
           dist = Math.hypot(dx, dy);
         }
-
         const minDist = 8;
         if (dist < minDist) {
           const force = (minDist - dist) * 0.02;
           const nx = dx / dist;
           const ny = dy / dist;
-
           p1.velX += nx * force;
           p1.velY += ny * force;
           p2.velX -= nx * force;
@@ -960,7 +1004,6 @@ function renderBoilingPhase(container, name, config, db, username) {
 
     if (isStirring) {
       cumulativeStirTime += dt;
-
       if (Math.random() > 0.75) spawnParticle("bubble", mouseX, mouseY);
       if (Math.random() > 0.985) {
         const span = document.createElement("span");
@@ -974,21 +1017,16 @@ function renderBoilingPhase(container, name, config, db, username) {
         pContainer.appendChild(span);
         setTimeout(() => span.remove(), 5000);
       }
-
       partsToBoil.forEach((p) => {
         if (p.dead) return;
         const dx = viewport.clientWidth * (p.posX / 100) - mouseX;
         const dy = viewport.clientHeight * (p.posY / 100) - mouseY;
         let dist = Math.hypot(dx, dy);
-
-        // FIX: NaN crash protection for distance from mouse
         if (dist === 0) dist = 0.1;
-
         if (dist < 180) {
           const force = (180 - dist) / 180;
           p.velX += (dx / dist) * force * 0.5;
           p.velY += (dy / dist) * force * 0.5;
-
           p.simmer += velocity * 0.25;
           if (p.simmer > p.resistance) p.essence -= velocity * 0.00008 + 0.001;
         } else if (cumulativeStirTime > 20000) {
@@ -1006,7 +1044,6 @@ function renderBoilingPhase(container, name, config, db, username) {
         p.posY += p.velY;
         p.velX *= 0.92;
         p.velY *= 0.92;
-
         if (p.posX < 25) {
           p.posX = 25;
           p.velX *= -0.5;
@@ -1023,14 +1060,12 @@ function renderBoilingPhase(container, name, config, db, username) {
           p.posY = 70;
           p.velY *= -0.5;
         }
-
         p.elSub.style.left = p.elFloat.style.left = p.posX + "%";
         p.elSub.style.top = p.elFloat.style.top = p.posY + "%";
         p.elSub.style.opacity = p.elFloat.style.opacity = Math.max(
           0,
           p.essence,
         );
-
         if (p.essence <= 0) {
           p.dead = true;
           p.elSub.remove();
@@ -1046,20 +1081,24 @@ function renderBoilingPhase(container, name, config, db, username) {
       ) + "%";
     velocity *= 0.85;
 
-    if (partsToBoil.every((p) => p.dead))
+    if (partsToBoil.every((p) => p.dead)) {
+      // FIXED: Correct ID passing
       setTimeout(
-        () => transitionToBottlePhase(container, name, db, username),
+        () => transitionToBottlePhase(container, horseID, db, username),
         1500,
       );
-    else requestAnimationFrame(gameLoop);
+    } else {
+      requestAnimationFrame(gameLoop);
+    }
   }
   requestAnimationFrame(gameLoop);
 }
 
-async function transitionToBottlePhase(container, name, db, username) {
+async function transitionToBottlePhase(container, horseID, db, username) {
   try {
+    // CORRECTED: Hit original ID key, not the display name
     await updateDoc(doc(db, "users", username), {
-      [`manifestations.${name}.isBoiled`]: true,
+      [`manifestations.${horseID}.isBoiled`]: true,
     });
   } catch (err) {
     console.error(err);
@@ -1071,10 +1110,13 @@ async function transitionToBottlePhase(container, name, db, username) {
         <button class="btn-95" onclick="location.reload()" style="margin-top: 15px; font-weight: bold; padding: 5px 15px;">NEXT: DECORATE THE VESSEL</button>
       </div>
     </div>`;
+  injectXPTaskbar(container);
 }
 
 export function unmountGlueFactory() {
   const container = document.getElementById("glue-factory-root");
   if (container) container.innerHTML = "";
+  const taskbar = document.getElementById("xp-taskbar");
+  if (taskbar) taskbar.remove();
   window.onresize = null;
 }

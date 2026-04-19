@@ -46,6 +46,9 @@ async function init() {
   let currentUsername = localStorage.getItem("horse_herd_username") || null;
   let horseDataRef = null;
 
+  // NEW: Track if at least one glue bottle exists globally
+  let globalGlueCreated = false;
+
   // Setup 3D Components
   const conn = createConnections(scene);
   const overlay = createOverlayUI(scene, db, () => currentUsername);
@@ -81,7 +84,9 @@ async function init() {
   ritualRoot.id = "glue-factory-root";
   document.body.appendChild(ritualRoot);
 
-  // The Collapsible Display Shelf Wrapper
+  // Persistence: Check if shelf was previously expanded
+  let isShelfExpanded = localStorage.getItem("shelf_expanded") === "true";
+
   const shelfWrapper = document.createElement("div");
   shelfWrapper.id = "sanctuary-shelf-wrapper";
   shelfWrapper.style.cssText =
@@ -89,7 +94,7 @@ async function init() {
 
   const shelfHeader = document.createElement("div");
   shelfHeader.id = "sanctuary-shelf-header";
-  shelfHeader.innerText = "[-] Reclaiming glue by seizing the factories";
+  shelfHeader.innerText = "Reclaiming glue by seizing the factories";
   shelfHeader.style.cssText =
     "background:#c0c0c0; border:2px outset #fff; padding:4px 15px; cursor:pointer; font-family:'MS Sans Serif', Arial; font-weight:bold; font-size:12px; margin-bottom:-2px; z-index:51; box-shadow: 2px 2px 5px rgba(0,0,0,0.3);";
 
@@ -98,22 +103,33 @@ async function init() {
   shelfContainer.style.cssText =
     "width:100%; height:110px; background:#c0c0c0; border:2px outset #fff; display:flex; align-items:center; gap:20px; padding:10px 15px; overflow-x:auto; overflow-y:hidden; box-shadow: 4px 4px 15px rgba(0,0,0,0.5); box-sizing:border-box;";
 
-  shelfHeader.onclick = () => {
-    const isOpen = shelfContainer.style.display !== "none";
-    if (isOpen) {
-      shelfContainer.style.display = "none";
-      shelfHeader.innerText = "[+] The Sanctuary Shelf";
+  const applyShelfState = (expanded, animate = false) => {
+    shelfContainer.style.display = expanded ? "flex" : "none";
+
+    // FIXED: Only allow opacity > 0 if the shelf is expanded AND at least one glue exists
+    const targetOpacity = expanded && globalGlueCreated ? 0.5 : 0;
+    const targetLabelOpacity = expanded && globalGlueCreated ? "1" : "0";
+
+    if (animate) {
+      gsap.to(conn.lineMaterial, { opacity: targetOpacity, duration: 0.5 });
     } else {
-      shelfContainer.style.display = "flex";
-      shelfHeader.innerText = "[-] The Sanctuary Shelf";
+      conn.lineMaterial.opacity = targetOpacity;
     }
+    conn.lineLabelDiv.style.opacity = targetLabelOpacity;
   };
+
+  shelfHeader.onclick = () => {
+    isShelfExpanded = !isShelfExpanded;
+    localStorage.setItem("shelf_expanded", isShelfExpanded);
+    applyShelfState(isShelfExpanded, true);
+  };
+
+  applyShelfState(isShelfExpanded, false);
 
   shelfWrapper.appendChild(shelfHeader);
   shelfWrapper.appendChild(shelfContainer);
   document.body.appendChild(shelfWrapper);
 
-  // The Reconstructed Horse Modal Base
   const memoryModal = document.createElement("div");
   memoryModal.id = "memory-modal";
   memoryModal.style.cssText =
@@ -126,7 +142,7 @@ async function init() {
 
     usersData.forEach((user) => {
       if (user.manifestations) {
-        Object.entries(user.manifestations).forEach(([horseName, data]) => {
+        Object.entries(user.manifestations).forEach(([horseID, data]) => {
           if (data.isBottled && data.finalImage) {
             hasBottles = true;
             const bottleDiv = document.createElement("div");
@@ -137,15 +153,18 @@ async function init() {
             bottleDiv.onmouseleave = () =>
               (bottleDiv.style.transform = "translateY(0)");
 
+            // Get the display name from data.name, fallback to ID if it doesn't exist
+            const displayName = data.name || horseID;
+
             bottleDiv.innerHTML = `
               <div style="width: 80px; height: 60px; display: flex; justify-content: center; align-items: center; margin-bottom: 5px;">
                  <img src="${data.finalImage}" style="max-width: 100%; max-height: 100%; object-fit: contain; filter: drop-shadow(2px 2px 2px rgba(0,0,0,0.4));">
               </div>
               <div style="width: 100%; display: flex; justify-content: center;">
-                 <span style="font-family:'MS Sans Serif', Arial, sans-serif; font-weight:bold; font-size:10px; color:#000; background:#fff; padding:2px 4px; border:2px inset #fff; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; box-sizing:border-box;">${horseName.toUpperCase()}</span>
+                 <span style="font-family:'MS Sans Serif', Arial, sans-serif; font-weight:bold; font-size:10px; color:#000; background:#fff; padding:2px 4px; border:2px inset #fff; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; box-sizing:border-box;">${displayName.toUpperCase()}</span>
               </div>
             `;
-            bottleDiv.onclick = () => showMemory(horseName, data.config);
+            bottleDiv.onclick = () => showMemory(displayName, data.config);
             shelfContainer.appendChild(bottleDiv);
           }
         });
@@ -153,26 +172,45 @@ async function init() {
     });
 
     if (!hasBottles) {
-      shelfContainer.innerHTML = `<span style="font-family:'MS Sans Serif', Arial; font-size:12px; color:#808080; margin: auto;">Nothing holds us together.</span>`;
+      const emptyMsg = document.createElement("span");
+      emptyMsg.innerHTML =
+        "Nothing holds us together. <br> <span style='color:#0000ee; text-decoration:underline; font-size:10px;'>[ Start the Reclamation ]</span>";
+      emptyMsg.style.cssText =
+        "font-family:'MS Sans Serif', Arial; font-size:12px; color:#000; margin: auto; cursor:pointer; text-align:center;";
+      emptyMsg.onclick = () => (window.location.hash = "#/ritual");
+      shelfContainer.appendChild(emptyMsg);
+    } else {
+      const createBtn = document.createElement("button");
+      createBtn.innerText = "+";
+      createBtn.className = "btn-95";
+      createBtn.style.cssText =
+        "margin-left: auto; font-size: 18px; font-weight: bold; width: 28px; height: 28px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; padding: 0; line-height: 0;";
+      createBtn.onclick = () => (window.location.hash = "#/ritual");
+      shelfContainer.appendChild(createBtn);
     }
   }
 
-  // --- MEMORY MODAL RENDERER ---
   function showMemory(name, config) {
+    const formatCoord = (val) => {
+      const s = String(val);
+      return s.includes("%") || s.includes("px") ? s : s + "%";
+    };
+
     const partsHtml = config
       .map((p) => {
         const isBack = p.category && p.category.includes("_back");
-
-        // Safety fallbacks to prevent CSS from crashing if older database entries have missing scales
         const safeScale = p.scale !== undefined ? p.scale : 0.7;
         const safeRotate = p.rotate !== undefined ? p.rotate : 0;
         const safeZ = p.zIndex !== undefined ? p.zIndex : 10;
 
         return `<img src="./src/World/Components/GlueFactory/${p.file}" 
-                   class="sprite-part"
-                   style="position:absolute; left:${p.x}; top:${p.y}; 
+                   style="position:absolute; 
+                          left:${formatCoord(p.x)}; 
+                          top:${formatCoord(p.y)}; 
                           transform:translate(-50%, -50%) scale(${safeScale}) rotate(${safeRotate}deg); 
-                          z-index:${safeZ}; pointer-events:none;
+                          z-index:${safeZ}; 
+                          pointer-events:none;
+                          display: block;
                           ${isBack ? "filter: brightness(0.7);" : ""}">`;
       })
       .join("");
@@ -183,14 +221,13 @@ async function init() {
            <span>Memory of ${name}</span>
            <button id="close-memory" style="font-weight:bold; cursor:pointer; background:#c0c0c0; border:2px outset #fff; padding: 0 4px; color: #000;">X</button>
          </div>
-         <div style="width: 100%; aspect-ratio: 1800 / 1126; position: relative; background-image: url('./src/World/Components/GlueFactory/bg_dressup_room.jpg'); background-size: cover; background-position: center; border:2px inset #fff; margin-top:3px; overflow: hidden;">
+         <div style="width: 100%; aspect-ratio: 1800 / 1126; position: relative; background-image: url('./src/World/Components/GlueFactory/bg_dressup_room.jpg'); background-size: cover; background-position: center; border:2px inset #fff; margin-top:3px; overflow: hidden; background-repeat: no-repeat;">
             ${partsHtml}
          </div>
       </div>
     `;
 
     memoryModal.style.display = "flex";
-
     document.getElementById("close-memory").onclick = () => {
       memoryModal.style.display = "none";
       memoryModal.innerHTML = "";
@@ -211,7 +248,6 @@ async function init() {
   const GLOBAL_LABEL_DIST = 1.6;
   const INDIVIDUAL_CULL_DIST = 0.8;
 
-  // --- ROUTING LOGIC ---
   function handleNavigation() {
     const hash = window.location.hash;
     const isRitual = hash === "#/ritual";
@@ -242,7 +278,6 @@ async function init() {
   window.addEventListener("hashchange", handleNavigation);
   handleNavigation();
 
-  // --- FIREBASE & HORSE LOADING ---
   let userUI = null;
 
   try {
@@ -251,7 +286,6 @@ async function init() {
     horseData.horseGroup.rotation.y = THREE.MathUtils.degToRad(-20);
     scene.add(horseData.horseGroup);
     horseUpdater = horseData.update;
-
     userUI = createUserUI(db, overlay, horseData);
   } catch (err) {
     console.warn("3D Horse Failed to Load:", err);
@@ -265,13 +299,23 @@ async function init() {
   onSnapshot(collection(db, "users"), (snap) => {
     const allDocs = snap.docs.map((doc) => doc.data());
 
+    // NEW: Scan for ANY bottled manifestations across ALL users
+    const anyGlue = allDocs.some(
+      (u) =>
+        u.manifestations &&
+        Object.values(u.manifestations).some((m) => m.isBottled),
+    );
+    globalGlueCreated = anyGlue;
+
     updateShelfUI(allDocs);
+
+    // Re-apply shelf state now that we know if glue exists (updates connection visibility)
+    applyShelfState(isShelfExpanded, false);
 
     if (!initialSync) {
       snap.docChanges().forEach((c) => {
         const data = c.doc.data();
         const isVisible = userUI ? userUI.isHerdVisible() : true;
-
         if (c.type === "added" && !addedUsers.has(data.username))
           addUserToScene(data, isVisible);
         if (c.type === "modified" && horseDataRef)
@@ -287,7 +331,6 @@ async function init() {
     initialSync = false;
     const me = allDocs.find((u) => u.username === currentUsername);
     if (me) addUserToScene(me, true);
-
     const others = allDocs.filter(
       (u) => u.username !== currentUsername && u.username !== "big horse",
     );
@@ -306,7 +349,6 @@ async function init() {
   function addUserToScene(data, isVisible) {
     if (addedUsers.has(data.username)) return;
     addedUsers.add(data.username);
-
     if (horseDataRef) {
       horseDataRef.addUserSphere(
         data.username,
@@ -319,15 +361,12 @@ async function init() {
       if (sphere && data.username !== "big horse")
         sphere.mesh.visible = isVisible;
     }
-
     if (data.username === currentUsername && data.innerColor)
       overlay.setInitialColor(data.innerColor);
   }
 
-  // --- ANIMATION LOOP ---
   function animate(ts) {
     requestAnimationFrame(animate);
-
     if (window.location.hash === "#/ritual") return;
 
     timer.update(ts);
@@ -337,6 +376,7 @@ async function init() {
 
     if (horseDataRef) {
       if (conn.lineMaterial.opacity > 0) conn.updateConnections(horseDataRef);
+
       const globalActive = camDistFromOrigin < GLOBAL_LABEL_DIST;
       horseDataRef.activeSpheres.forEach((s) => {
         if (!s.label || !s.mesh.visible) return;
@@ -358,8 +398,6 @@ async function init() {
       timeScale = 0;
       if (camDistFromOrigin >= FULL_SPEED_DIST) {
         interactions.setIsPaused(false);
-        gsap.to(conn.lineMaterial, { opacity: 0, duration: 0.5 });
-        conn.lineLabelDiv.style.opacity = "0";
         if (conn.hideInnerHorses) conn.hideInnerHorses(horseDataRef);
       }
     }
