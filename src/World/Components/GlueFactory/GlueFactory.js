@@ -105,8 +105,16 @@ function injectXPTaskbar(container) {
     border-radius: 0 10px 10px 0; cursor: pointer; color: white;
     font-family: 'Tahoma', sans-serif; font-weight: bold; font-style: italic;
     font-size: 14px; text-shadow: 1px 1px 1px #222; box-shadow: 2px 0 5px rgba(0,0,0,0.3);
+    user-select: none; transition: filter 0.1s;
   `;
   startBtn.innerText = "Home";
+
+  // XP Button Hover & Click effects
+  startBtn.onmouseenter = () => (startBtn.style.filter = "brightness(1.2)");
+  startBtn.onmouseleave = () => (startBtn.style.filter = "brightness(1.0)");
+  startBtn.onmousedown = () => (startBtn.style.filter = "brightness(0.7)");
+  startBtn.onmouseup = () => (startBtn.style.filter = "brightness(1.2)");
+
   startBtn.onclick = () => (window.location.hash = "#");
 
   taskbar.appendChild(startBtn);

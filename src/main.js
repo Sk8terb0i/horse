@@ -96,8 +96,23 @@ async function init() {
   shelfHeader.id = "sanctuary-shelf-header";
   shelfHeader.innerText = "Reclaiming glue by seizing the factories";
   shelfHeader.style.cssText =
-    "background:#c0c0c0; border:2px outset #fff; padding:4px 15px; cursor:pointer; font-family:'MS Sans Serif', Arial; font-weight:bold; font-size:12px; margin-bottom:-2px; z-index:51; box-shadow: 2px 2px 5px rgba(0,0,0,0.3);";
+    "background:#c0c0c0; border:2px outset #fff; padding:4px 15px; cursor:pointer; font-family:'MS Sans Serif', Arial; font-weight:bold; font-size:12px; margin-bottom:-2px; z-index:51; box-shadow: 2px 2px 5px rgba(0,0,0,0.3); user-select:none;";
 
+  // Interaction Animations
+  shelfHeader.onmouseenter = () =>
+    (shelfHeader.style.backgroundColor = "#e0e0e0");
+  shelfHeader.onmouseleave = () => {
+    shelfHeader.style.backgroundColor = "#c0c0c0";
+    shelfHeader.style.border = "2px outset #fff";
+  };
+  shelfHeader.onmousedown = () => {
+    shelfHeader.style.border = "2px inset #fff";
+    shelfHeader.style.padding = "5px 14px 3px 16px"; // Visual shift
+  };
+  shelfHeader.onmouseup = () => {
+    shelfHeader.style.border = "2px outset #fff";
+    shelfHeader.style.padding = "4px 15px";
+  };
   const shelfContainer = document.createElement("div");
   shelfContainer.id = "sanctuary-shelf";
   shelfContainer.style.cssText =
@@ -139,36 +154,50 @@ async function init() {
   function updateShelfUI(usersData) {
     shelfContainer.innerHTML = "";
     let hasBottles = false;
+    const allBottles = [];
 
+    // 1. Collect all bottled manifestations from all users
     usersData.forEach((user) => {
       if (user.manifestations) {
         Object.entries(user.manifestations).forEach(([horseID, data]) => {
           if (data.isBottled && data.finalImage) {
-            hasBottles = true;
-            const bottleDiv = document.createElement("div");
-            bottleDiv.style.cssText =
-              "display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; width:80px; flex-shrink:0; transition: transform 0.2s;";
-            bottleDiv.onmouseenter = () =>
-              (bottleDiv.style.transform = "translateY(-4px)");
-            bottleDiv.onmouseleave = () =>
-              (bottleDiv.style.transform = "translateY(0)");
-
-            // Get the display name from data.name, fallback to ID if it doesn't exist
-            const displayName = data.name || horseID;
-
-            bottleDiv.innerHTML = `
-              <div style="width: 80px; height: 60px; display: flex; justify-content: center; align-items: center; margin-bottom: 5px;">
-                 <img src="${data.finalImage}" style="max-width: 100%; max-height: 100%; object-fit: contain; filter: drop-shadow(2px 2px 2px rgba(0,0,0,0.4));">
-              </div>
-              <div style="width: 100%; display: flex; justify-content: center;">
-                 <span style="font-family:'MS Sans Serif', Arial, sans-serif; font-weight:bold; font-size:10px; color:#000; background:#fff; padding:2px 4px; border:2px inset #fff; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; box-sizing:border-box;">${displayName.toUpperCase()}</span>
-              </div>
-            `;
-            bottleDiv.onclick = () => showMemory(displayName, data.config);
-            shelfContainer.appendChild(bottleDiv);
+            allBottles.push({ horseID, data });
           }
         });
       }
+    });
+
+    // 2. Sort: Oldest first, so newest is added last (appearing on the right)
+    allBottles.sort((a, b) => {
+      const timeA = parseInt(a.horseID.replace("horse_", "")) || 0;
+      const timeB = parseInt(b.horseID.replace("horse_", "")) || 0;
+      return timeA - timeB;
+    });
+
+    // 3. Render the sorted bottles
+    allBottles.forEach(({ horseID, data }) => {
+      hasBottles = true;
+      const bottleDiv = document.createElement("div");
+      bottleDiv.style.cssText =
+        "display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; width:80px; flex-shrink:0; transition: transform 0.2s;";
+
+      bottleDiv.onmouseenter = () =>
+        (bottleDiv.style.transform = "translateY(-4px)");
+      bottleDiv.onmouseleave = () =>
+        (bottleDiv.style.transform = "translateY(0)");
+
+      const displayName = data.name || horseID;
+
+      bottleDiv.innerHTML = `
+        <div style="width: 80px; height: 60px; display: flex; justify-content: center; align-items: center; margin-bottom: 5px;">
+           <img src="${data.finalImage}" style="max-width: 100%; max-height: 100%; object-fit: contain; filter: drop-shadow(2px 2px 2px rgba(0,0,0,0.4));">
+        </div>
+        <div style="width: 100%; display: flex; justify-content: center;">
+           <span style="font-family:'MS Sans Serif', Arial, sans-serif; font-weight:bold; font-size:10px; color:#000; background:#fff; padding:2px 4px; border:2px inset #fff; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; box-sizing:border-box;">${displayName.toUpperCase()}</span>
+        </div>
+      `;
+      bottleDiv.onclick = () => showMemory(displayName, data.config);
+      shelfContainer.appendChild(bottleDiv);
     });
 
     if (!hasBottles) {
@@ -184,7 +213,7 @@ async function init() {
       createBtn.innerText = "+";
       createBtn.className = "btn-95";
       createBtn.style.cssText =
-        "margin-left: auto; font-size: 18px; font-weight: bold; width: 28px; height: 28px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; padding: 0; line-height: 0;";
+        "margin-left: auto; font-size: 18px; font-weight: bold; width: 28px; height: 28px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; padding: 0; line-height: 0; cursor: pointer;";
       createBtn.onclick = () => (window.location.hash = "#/ritual");
       shelfContainer.appendChild(createBtn);
     }
