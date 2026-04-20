@@ -33,7 +33,7 @@ export function createUserUI(db, overlay, horseInstance) {
   if (savedUsername) {
     showAscendedState();
   } else {
-    renderJoinForm();
+    renderLoginForm();
   }
 
   function renderJoinForm() {

@@ -149,6 +149,9 @@ async function init() {
     const targetOpacity = expanded && globalGlueCreated ? 0.5 : 0;
     const targetLabelOpacity = expanded && globalGlueCreated ? "1" : "0";
 
+    // Kill any active tweens to prevent lines from getting stuck
+    gsap.killTweensOf(conn.lineMaterial);
+
     if (animate) {
       gsap.to(conn.lineMaterial, { opacity: targetOpacity, duration: 0.5 });
     } else {
@@ -174,6 +177,15 @@ async function init() {
   memoryModal.style.cssText =
     "position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.85); z-index:1000; display:none; justify-content:center; align-items:center;";
   document.body.appendChild(memoryModal);
+
+  // --- PREVENT CLICK-THROUGH BUG ---
+  // Stops clicks on the UI from accidentally triggering 3D spheres behind them
+  [ritualRoot, shelfWrapper, memoryModal].forEach((uiElement) => {
+    uiElement.addEventListener("pointerdown", (e) => e.stopPropagation());
+    uiElement.addEventListener("click", (e) => e.stopPropagation());
+    uiElement.addEventListener("dblclick", (e) => e.stopPropagation());
+  });
+  // ---------------------------------
 
   function updateShelfUI(usersData) {
     shelfContainer.innerHTML = "";
@@ -243,6 +255,7 @@ async function init() {
   }
 
   function showMemory(name, config) {
+    const ASSET_PATH = import.meta.env.BASE_URL + "GlueFactoryAssets/";
     const formatCoord = (val) => {
       const s = String(val);
       return s.includes("%") || s.includes("px") ? s : s + "%";
@@ -255,8 +268,7 @@ async function init() {
         const safeRotate = p.rotate !== undefined ? p.rotate : 0;
         const safeZ = p.zIndex !== undefined ? p.zIndex : 10;
 
-        // FIXED: Pointing to the public folder
-        return `<img src="/GlueFactoryAssets/${p.file}" 
+        return `<img src="${ASSET_PATH}${p.file}" 
                    style="position:absolute; 
                           left:${formatCoord(p.x)}; 
                           top:${formatCoord(p.y)}; 
@@ -274,7 +286,7 @@ async function init() {
            <span>Memory of ${name}</span>
            <button id="close-memory" style="font-weight:bold; cursor:pointer; background:#c0c0c0; border:2px outset #fff; padding: 0 4px; color: #000;">X</button>
          </div>
-         <div style="width: 100%; aspect-ratio: 1800 / 1126; position: relative; background-image: url('/GlueFactoryAssets/bg_dressup_room.jpg'); background-size: cover; background-position: center; border:2px inset #fff; margin-top:3px; overflow: hidden; background-repeat: no-repeat;">
+         <div style="width: 100%; aspect-ratio: 1800 / 1126; position: relative; background-image: url('${ASSET_PATH}bg_dressup_room.jpg'); background-size: cover; background-position: center; border:2px inset #fff; margin-top:3px; overflow: hidden; background-repeat: no-repeat;">
             ${partsHtml}
          </div>
       </div>
@@ -317,11 +329,14 @@ async function init() {
     } else {
       renderer.domElement.style.display = "block";
       lDom.style.display = "block";
-      // Only show shelf if logged in
-      shelfWrapper.style.display = currentUsername ? "flex" : "none";
+
       if (currentUsername) {
+        shelfWrapper.style.display = "flex";
+        applyShelfState(isShelfExpanded, false); // Force lines to re-sync
         const ui = document.getElementById("logged-in-ui");
         if (ui) ui.style.display = "block";
+      } else {
+        shelfWrapper.style.display = "none";
       }
 
       ritualRoot.style.display = "none";
@@ -428,7 +443,13 @@ async function init() {
     const camDistFromOrigin = camPos.length();
 
     if (horseDataRef) {
-      if (conn.lineMaterial.opacity > 0) conn.updateConnections(horseDataRef);
+      // Update if opacity > 0 OR if it logically should be showing (bypasses float errors)
+      if (
+        conn.lineMaterial.opacity > 0 ||
+        (isShelfExpanded && globalGlueCreated)
+      ) {
+        conn.updateConnections(horseDataRef);
+      }
 
       const globalActive = camDistFromOrigin < GLOBAL_LABEL_DIST;
       horseDataRef.activeSpheres.forEach((s) => {

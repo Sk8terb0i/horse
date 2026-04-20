@@ -161,12 +161,15 @@ export function createOverlayUI(scene, db, getUsername) {
   uiContainer.appendChild(promptText);
 
   // 4. AUDIO SETUP
+  // FIXED: Bulletproof paths for GitHub Pages using Vite's BASE_URL
+  const ASSET_PATH = import.meta.env.BASE_URL + "assets/";
+
   const hoofbeatPaths = [
-    "/assets/hoofbeat1.wav",
-    "/assets/hoofbeat2.wav",
-    "/assets/hoofbeat3.wav",
-    "/assets/hoofbeat4.wav",
-    "/assets/hoofbeat5.wav",
+    ASSET_PATH + "hoofbeat1.wav",
+    ASSET_PATH + "hoofbeat2.wav",
+    ASSET_PATH + "hoofbeat3.wav",
+    ASSET_PATH + "hoofbeat4.wav",
+    ASSET_PATH + "hoofbeat5.wav",
   ];
 
   const hoofbeatAudios = hoofbeatPaths.map((path) => {
