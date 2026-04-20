@@ -31,6 +31,166 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+// --- GLUE SHELF COMPONENT ---
+function initGlueShelf(currentUsername, showMemory, onToggle) {
+  const ASSET_PATH = import.meta.env.BASE_URL + "assets/";
+
+  const savedFolderPos = JSON.parse(
+    localStorage.getItem("glue_folder_pos"),
+  ) || { top: 200, left: 100 };
+  const savedWindowPos = JSON.parse(
+    localStorage.getItem("glue_window_pos"),
+  ) || { top: 200, left: 200 };
+  let isShelfExpanded = localStorage.getItem("shelf_expanded") === "true";
+
+  // 1. THE FOLDER ICON
+  const folderIcon = document.createElement("div");
+  folderIcon.id = "glue-folder-standalone";
+  folderIcon.style.cssText = `position:fixed; top:${savedFolderPos.top}px; left:${savedFolderPos.left}px; z-index:5000; cursor:pointer; display:${currentUsername ? "block" : "none"};`;
+  folderIcon.innerHTML = `
+    <div style="display:flex; flex-direction:column; align-items:center; transition:transform 0.2s;">
+      <img src="${ASSET_PATH}folder.png" style="width:70px; height:auto; filter:sepia(1) saturate(10) hue-rotate(245deg) brightness(0.9) drop-shadow(2px 4px 6px rgba(0,0,0,0.3)); pointer-events:none;">
+      <span style="font-family:serif; font-size:14px; color:white; text-shadow:1px 1px 3px black; pointer-events:none;">Glue</span>
+    </div>
+  `;
+
+  // 2. THE VISTA WINDOW
+  const vistaWindow = document.createElement("div");
+  vistaWindow.className = "vista-window shelf-window";
+  vistaWindow.style.cssText = `
+    display:${isShelfExpanded ? "flex" : "none"}; position:fixed; 
+    top:${savedWindowPos.top}px; left:${savedWindowPos.left}px; 
+    width:320px; height:400px; z-index:5001; flex-direction:column;
+  `;
+  vistaWindow.innerHTML = `
+    <div class="vista-title-bar" id="shelf-drag-handle" style="cursor:move; user-select:none;">
+      <div class="vista-title">Glue Shelf</div>
+      <img src="${ASSET_PATH}aero_close.png" id="shelf-close-btn" style="height:22px; cursor:pointer;">
+    </div>
+    <div class="vista-content-area" id="shelf-items-container" style="display:grid; grid-template-columns:repeat(2,1fr); gap:15px; padding:20px; overflow-y:auto; flex-grow:1;">
+    </div>
+  `;
+
+  document.body.appendChild(folderIcon);
+  document.body.appendChild(vistaWindow);
+
+  // --- REUSABLE DRAG FUNCTION ---
+  const makeDraggable = (el, handle, saveKey) => {
+    let wasDragged = false;
+    let startX, startY, initialLeft, initialTop;
+
+    const move = (e) => {
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+
+      if (!wasDragged && (Math.abs(dx) > 2 || Math.abs(dy) > 2)) {
+        wasDragged = true;
+      }
+
+      if (wasDragged) {
+        el.style.left = initialLeft + dx + "px";
+        el.style.top = initialTop + dy + "px";
+      }
+    };
+
+    const stop = () => {
+      document.removeEventListener("mousemove", move);
+      document.removeEventListener("mouseup", stop);
+      if (wasDragged) {
+        localStorage.setItem(
+          saveKey,
+          JSON.stringify({ top: el.offsetTop, left: el.offsetLeft }),
+        );
+        // Timeout ensures the click event knows we were dragging
+        setTimeout(() => {
+          wasDragged = false;
+        }, 50);
+      }
+    };
+
+    handle.addEventListener("mousedown", (e) => {
+      startX = e.clientX;
+      startY = e.clientY;
+      initialLeft = el.offsetLeft;
+      initialTop = el.offsetTop;
+      wasDragged = false;
+      document.addEventListener("mousemove", move);
+      document.addEventListener("mouseup", stop);
+    });
+
+    return () => wasDragged;
+  };
+
+  const folderStatus = makeDraggable(folderIcon, folderIcon, "glue_folder_pos");
+  makeDraggable(
+    vistaWindow,
+    vistaWindow.querySelector("#shelf-drag-handle"),
+    "glue_window_pos",
+  );
+
+  folderIcon.addEventListener("click", () => {
+    if (!folderStatus()) {
+      isShelfExpanded = !isShelfExpanded;
+      localStorage.setItem("shelf_expanded", isShelfExpanded);
+      vistaWindow.style.display = isShelfExpanded ? "flex" : "none";
+      if (onToggle) onToggle(isShelfExpanded);
+    }
+  });
+
+  vistaWindow.querySelector("#shelf-close-btn").onclick = () => {
+    isShelfExpanded = false;
+    localStorage.setItem("shelf_expanded", "false");
+    vistaWindow.style.display = "none";
+    if (onToggle) onToggle(false);
+  };
+
+  const shelfStyles = document.createElement("style");
+  shelfStyles.innerHTML = `
+    .shelf-window .vista-content-area { background: url('${ASSET_PATH}glue_bg.jpg') center/cover no-repeat !important; }
+    .aero-plus-card { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:15px; cursor:pointer; border-radius:8px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); backdrop-filter:blur(5px); transition: 0.3s; }
+    .aero-plus-card:hover { background:rgba(255,255,255,0.3); transform:translateY(-3px); }
+    .aero-plus-icon { width:50px; height:50px; border-radius:50%; background:linear-gradient(135deg, #a8ff78 0%, #08fbff 100%); border:3px solid white; color:white; font-size:32px; display:flex; align-items:center; justify-content:center; font-weight:bold; }
+  `;
+  document.head.appendChild(shelfStyles);
+
+  return {
+    folderIcon,
+    vistaWindow,
+    isExpanded: () => isShelfExpanded,
+    update: (usersData) => {
+      const container = document.getElementById("shelf-items-container");
+      if (!container) return;
+      container.innerHTML = "";
+
+      const plusCard = document.createElement("div");
+      plusCard.className = "aero-plus-card";
+      plusCard.innerHTML = `
+        <div class="aero-plus-icon">+</div>
+        <span style="font-size:10px; color:#003366; font-weight:bold; font-family: sans-serif; margin-top:8px; text-shadow: 0 0 5px white;">NEW GLUE</span>
+      `;
+      plusCard.onclick = () => (window.location.hash = "#/ritual");
+      container.appendChild(plusCard);
+
+      usersData.forEach((user) => {
+        if (user.manifestations) {
+          Object.entries(user.manifestations).forEach(([id, data]) => {
+            if (data.isBottled && data.finalImage) {
+              const item = document.createElement("div");
+              item.className = "aero-plus-card";
+              item.innerHTML = `
+                <img src="${data.finalImage}" style="width:50px; height:50px; object-fit:contain; filter:drop-shadow(2px 2px 4px rgba(0,0,0,0.3));">
+                <span style="font-size:10px; color:#000; margin-top:8px; font-family:serif; background: rgba(255,255,255,0.6); padding: 2px 4px; border-radius: 4px;">${data.name || "glue"}</span>
+              `;
+              item.onclick = () => showMemory(data.name || id, data.config);
+              container.appendChild(item);
+            }
+          });
+        }
+      });
+    },
+  };
+}
+
 async function init() {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000000);
@@ -45,12 +205,11 @@ async function init() {
 
   let currentUsername = localStorage.getItem("horse_herd_username") || null;
   let horseDataRef = null;
-
-  // Track if at least one glue bottle exists globally to gate the connection lines
   let globalGlueCreated = false;
 
-  // Setup 3D Components
   const conn = createConnections(scene);
+  conn.lineMaterial.transparent = true;
+  conn.lineMaterial.opacity = 0;
   const overlay = createOverlayUI(scene, db, () => currentUsername);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -79,220 +238,104 @@ async function init() {
     () => horseDataRef,
   );
 
-  // --- GLUE FACTORY & SHELF DOM SETUP ---
   const ritualRoot = document.createElement("div");
   ritualRoot.id = "glue-factory-root";
   document.body.appendChild(ritualRoot);
 
-  // Persistence: Check if shelf was previously expanded
-  let isShelfExpanded = localStorage.getItem("shelf_expanded") === "true";
-
-  // MOBILE RESPONSIVENESS: Shrink shelf elements to prevent UI icon overlap
-  const mobileStyle = document.createElement("style");
-  mobileStyle.innerHTML = `
-    @media (max-width: 600px) {
-      #sanctuary-shelf-wrapper { top: 10px !important; width: 95% !important; }
-      #sanctuary-shelf { height: 80px !important; gap: 10px !important; padding: 5px !important; }
-      #sanctuary-shelf div { width: 50px !important; }
-      #sanctuary-shelf img { max-height: 40px !important; }
-      #sanctuary-shelf span { font-size: 8px !important; }
-      #sanctuary-shelf-header { font-size: 10px !important; padding: 2px 10px !important; }
-    }
-  `;
-  document.head.appendChild(mobileStyle);
-
-  const shelfWrapper = document.createElement("div");
-  shelfWrapper.id = "sanctuary-shelf-wrapper";
-  // Only display if logged in
-  shelfWrapper.style.cssText = `
-    position:fixed; top:20px; left:50%; transform:translateX(-50%); 
-    z-index:50; display: ${currentUsername ? "flex" : "none"}; 
-    flex-direction:column; align-items:center; width:90%; max-width:800px;
-  `;
-
-  const shelfHeader = document.createElement("div");
-  shelfHeader.id = "sanctuary-shelf-header";
-  shelfHeader.innerText = "Reclaiming glue by seizing the factories";
-  shelfHeader.style.cssText =
-    "background:#c0c0c0; border:2px outset #fff; padding:4px 15px; cursor:pointer; font-family:'MS Sans Serif', Arial; font-weight:bold; font-size:12px; margin-bottom:-2px; z-index:51; box-shadow: 2px 2px 5px rgba(0,0,0,0.3); user-select:none;";
-
-  // Interaction Animations for Header
-  shelfHeader.onmouseenter = () =>
-    (shelfHeader.style.backgroundColor = "#e0e0e0");
-  shelfHeader.onmouseleave = () => {
-    shelfHeader.style.backgroundColor = "#c0c0c0";
-    shelfHeader.style.border = "2px outset #fff";
-  };
-  shelfHeader.onmousedown = () => {
-    shelfHeader.style.border = "2px inset #fff";
-    shelfHeader.style.padding = "5px 14px 3px 16px";
-  };
-  shelfHeader.onmouseup = () => {
-    shelfHeader.style.border = "2px outset #fff";
-    shelfHeader.style.padding = "4px 15px";
-  };
-
-  const shelfContainer = document.createElement("div");
-  shelfContainer.id = "sanctuary-shelf";
-  shelfContainer.style.cssText =
-    "width:100%; height:110px; background:#c0c0c0; border:2px outset #fff; display:flex; align-items:center; gap:20px; padding:10px 15px; overflow-x:auto; overflow-y:hidden; box-shadow: 4px 4px 15px rgba(0,0,0,0.5); box-sizing:border-box;";
-
-  const applyShelfState = (expanded, animate = false) => {
-    if (!currentUsername) {
-      shelfWrapper.style.display = "none";
-      return;
-    }
-    shelfWrapper.style.display = "flex";
-    shelfContainer.style.display = expanded ? "flex" : "none";
-
-    // Only allow line opacity if shelf is expanded AND at least one glue exists globally
-    const targetOpacity = expanded && globalGlueCreated ? 0.5 : 0;
-    const targetLabelOpacity = expanded && globalGlueCreated ? "1" : "0";
-
-    // Kill any active tweens to prevent lines from getting stuck
-    gsap.killTweensOf(conn.lineMaterial);
-
-    if (animate) {
-      gsap.to(conn.lineMaterial, { opacity: targetOpacity, duration: 0.5 });
-    } else {
-      conn.lineMaterial.opacity = targetOpacity;
-    }
-    conn.lineLabelDiv.style.opacity = targetLabelOpacity;
-  };
-
-  shelfHeader.onclick = () => {
-    isShelfExpanded = !isShelfExpanded;
-    localStorage.setItem("shelf_expanded", isShelfExpanded);
-    applyShelfState(isShelfExpanded, true);
-  };
-
-  applyShelfState(isShelfExpanded, false);
-
-  shelfWrapper.appendChild(shelfHeader);
-  shelfWrapper.appendChild(shelfContainer);
-  document.body.appendChild(shelfWrapper);
-
   const memoryModal = document.createElement("div");
   memoryModal.id = "memory-modal";
   memoryModal.style.cssText =
-    "position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.85); z-index:1000; display:none; justify-content:center; align-items:center;";
+    "position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.85); z-index:10000; display:none; justify-content:center; align-items:center;";
   document.body.appendChild(memoryModal);
 
-  // --- PREVENT CLICK-THROUGH BUG ---
-  // Stops clicks on the UI from accidentally triggering 3D spheres behind them
-  [ritualRoot, shelfWrapper, memoryModal].forEach((uiElement) => {
+  // --- LINE VISIBILITY LOGIC ---
+  const applyShelfState = (expanded, animate = false) => {
+    if (!currentUsername) return;
+
+    // Lines show strictly when window is open
+    const targetOpacity = expanded ? 0.5 : 0;
+    const targetLabelOpacity = expanded ? "1" : "0";
+
+    gsap.killTweensOf(conn.lineMaterial);
+
+    conn.lineMaterial.transparent = true;
+
+    if (animate) {
+      gsap.to(conn.lineMaterial, {
+        opacity: targetOpacity,
+        duration: 0.5,
+        onUpdate: () => {
+          conn.lineMaterial.needsUpdate = true;
+        },
+      });
+    } else {
+      conn.lineMaterial.opacity = targetOpacity;
+      conn.lineMaterial.needsUpdate = true;
+    }
+
+    if (conn.lineLabelDiv) {
+      conn.lineLabelDiv.style.opacity = targetLabelOpacity;
+      conn.lineLabelDiv.style.pointerEvents = expanded ? "auto" : "none";
+    }
+  };
+
+  const glueShelf = initGlueShelf(currentUsername, showMemory, (expanded) => {
+    applyShelfState(expanded, true);
+  });
+
+  [ritualRoot, memoryModal].forEach((uiElement) => {
     uiElement.addEventListener("pointerdown", (e) => e.stopPropagation());
     uiElement.addEventListener("click", (e) => e.stopPropagation());
-    uiElement.addEventListener("dblclick", (e) => e.stopPropagation());
   });
-  // ---------------------------------
-
-  function updateShelfUI(usersData) {
-    shelfContainer.innerHTML = "";
-    let hasBottles = false;
-    const allBottles = [];
-
-    // 1. Gather all bottled glue from all users
-    usersData.forEach((user) => {
-      if (user.manifestations) {
-        Object.entries(user.manifestations).forEach(([horseID, data]) => {
-          if (data.isBottled && data.finalImage) {
-            allBottles.push({ horseID, data });
-          }
-        });
-      }
-    });
-
-    // 2. Sort by ID (timestamp) so newest is at the end (appearing on the right)
-    allBottles.sort((a, b) => {
-      const timeA = parseInt(a.horseID.replace("horse_", "")) || 0;
-      const timeB = parseInt(b.horseID.replace("horse_", "")) || 0;
-      return timeA - timeB;
-    });
-
-    // 3. Render Sorted Bottles
-    allBottles.forEach(({ horseID, data }) => {
-      hasBottles = true;
-      const bottleDiv = document.createElement("div");
-      bottleDiv.style.cssText =
-        "display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; width:80px; flex-shrink:0; transition: transform 0.2s;";
-      bottleDiv.onmouseenter = () =>
-        (bottleDiv.style.transform = "translateY(-4px)");
-      bottleDiv.onmouseleave = () =>
-        (bottleDiv.style.transform = "translateY(0)");
-
-      const displayName = data.name || horseID;
-
-      bottleDiv.innerHTML = `
-        <div style="width: 80px; height: 60px; display: flex; justify-content: center; align-items: center; margin-bottom: 5px;">
-           <img src="${data.finalImage}" style="max-width: 100%; max-height: 100%; object-fit: contain; filter: drop-shadow(2px 2px 2px rgba(0,0,0,0.4));">
-        </div>
-        <div style="width: 100%; display: flex; justify-content: center;">
-           <span style="font-family:'MS Sans Serif', Arial, sans-serif; font-weight:bold; font-size:10px; color:#000; background:#fff; padding:2px 4px; border:2px inset #fff; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; box-sizing:border-box;">${displayName.toUpperCase()}</span>
-        </div>
-      `;
-      bottleDiv.onclick = () => showMemory(displayName, data.config);
-      shelfContainer.appendChild(bottleDiv);
-    });
-
-    if (!hasBottles) {
-      const emptyMsg = document.createElement("span");
-      emptyMsg.innerHTML =
-        "Nothing holds us together. <br> <span style='color:#0000ee; text-decoration:underline; font-size:10px;'>[ Start the Reclamation ]</span>";
-      emptyMsg.style.cssText =
-        "font-family:'MS Sans Serif', Arial; font-size:12px; color:#000; margin: auto; cursor:pointer; text-align:center;";
-      emptyMsg.onclick = () => (window.location.hash = "#/ritual");
-      shelfContainer.appendChild(emptyMsg);
-    } else {
-      const createBtn = document.createElement("button");
-      createBtn.innerText = "+";
-      createBtn.className = "btn-95";
-      createBtn.style.cssText =
-        "margin-left: auto; font-size: 18px; font-weight: bold; width: 28px; height: 28px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; padding: 0; line-height: 0; cursor: pointer;";
-      createBtn.onclick = () => (window.location.hash = "#/ritual");
-      shelfContainer.appendChild(createBtn);
-    }
-  }
 
   function showMemory(name, config) {
     const ASSET_PATH = import.meta.env.BASE_URL + "GlueFactoryAssets/";
-    const formatCoord = (val) => {
-      const s = String(val);
-      return s.includes("%") || s.includes("px") ? s : s + "%";
-    };
+    const formatCoord = (val) =>
+      String(val).includes("%") || String(val).includes("px") ? val : val + "%";
 
     const partsHtml = config
       .map((p) => {
         const isBack = p.category && p.category.includes("_back");
-        const safeScale = p.scale !== undefined ? p.scale : 0.7;
-        const safeRotate = p.rotate !== undefined ? p.rotate : 0;
-        const safeZ = p.zIndex !== undefined ? p.zIndex : 10;
-
         return `<img src="${ASSET_PATH}${p.file}" 
-                   style="position:absolute; 
-                          left:${formatCoord(p.x)}; 
-                          top:${formatCoord(p.y)}; 
-                          transform:translate(-50%, -50%) scale(${safeScale}) rotate(${safeRotate}deg); 
-                          z-index:${safeZ}; 
-                          pointer-events:none;
-                          display: block;
-                          ${isBack ? "filter: brightness(0.7);" : ""}">`;
+                   style="position:absolute; left:${formatCoord(p.x)}; top:${formatCoord(p.y)}; 
+                          transform:translate(-50%, -50%) scale(${p.scale || 0.7}) rotate(${p.rotate || 0}deg); 
+                          z-index:${p.zIndex || 10}; pointer-events:none; ${isBack ? "filter: brightness(0.7);" : ""}">`;
       })
       .join("");
 
     memoryModal.innerHTML = `
-      <div style="background:#c0c0c0; border:2px outset #fff; padding:3px; display:flex; flex-direction:column; box-shadow: 5px 5px 25px rgba(0,0,0,0.9); width: 90vw; max-width: 1000px;">
-         <div style="background: linear-gradient(90deg, #000080, #1084d0); color: white; padding: 4px 6px; font-weight: bold; font-family:'MS Sans Serif', Arial; font-size: 12px; display: flex; justify-content: space-between; align-items: center;">
+      <div id="memory-drag-container" style="background:#c0c0c0; border:2px outset #fff; padding:3px; display:flex; flex-direction:column; box-shadow: 10px 10px 40px rgba(0,0,0,0.8); width: 70vw; height: 500px; min-width: 400px; position:absolute; z-index:10001; resize:both; overflow:hidden;">
+         <div id="memory-title-handle" style="background: linear-gradient(90deg, #000080, #1084d0); color: white; padding: 4px 6px; font-weight: bold; font-family:'MS Sans Serif', Arial; font-size: 12px; display: flex; justify-content: space-between; align-items: center; cursor:move; user-select:none;">
            <span>Memory of ${name}</span>
-           <button id="close-memory" style="font-weight:bold; cursor:pointer; background:#c0c0c0; border:2px outset #fff; padding: 0 4px; color: #000;">X</button>
+           <button id="close-memory" style="cursor:pointer; background:#c0c0c0; border:2px outset #fff; padding: 0 4px;">X</button>
          </div>
-         <div style="width: 100%; aspect-ratio: 1800 / 1126; position: relative; background-image: url('${ASSET_PATH}bg_dressup_room.jpg'); background-size: cover; background-position: center; border:2px inset #fff; margin-top:3px; overflow: hidden; background-repeat: no-repeat;">
+         <div style="flex-grow:1; width:100%; position:relative; background-image: url('${ASSET_PATH}bg_dressup_room.jpg'); background-size: cover; background-position: center; border:2px inset #fff; margin-top:3px; overflow:hidden;">
             ${partsHtml}
          </div>
       </div>
     `;
 
     memoryModal.style.display = "flex";
+    const container = document.getElementById("memory-drag-container");
+    const handle = document.getElementById("memory-title-handle");
+
+    let mx = 0,
+      my = 0;
+    handle.onmousedown = (e) => {
+      mx = e.clientX - container.offsetLeft;
+      my = e.clientY - container.offsetTop;
+      const move = (me) => {
+        container.style.left = me.clientX - mx + "px";
+        container.style.top = me.clientY - my + "px";
+      };
+      const stop = () => {
+        document.removeEventListener("mousemove", move);
+        document.removeEventListener("mouseup", stop);
+      };
+      document.addEventListener("mousemove", move);
+      document.addEventListener("mouseup", stop);
+    };
+
     document.getElementById("close-memory").onclick = () => {
       memoryModal.style.display = "none";
       memoryModal.innerHTML = "";
@@ -307,47 +350,98 @@ async function init() {
 
   const timer = new Timer();
   let horseUpdater = null;
-
   const FREEZE_DIST = 0.4;
   const FULL_SPEED_DIST = 2.0;
   const GLOBAL_LABEL_DIST = 1.6;
   const INDIVIDUAL_CULL_DIST = 0.8;
 
+  const xpStyle = document.createElement("style");
+  xpStyle.innerHTML = `
+    #xp-loader-overlay {
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: black; z-index: 999999;
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+    }
+    .xp-logo { color: #fff; font-family: 'Tahoma', sans-serif; font-size: 36px; font-weight: bold; font-style: italic; margin-bottom: 50px; text-shadow: 2px 2px 4px rgba(255,255,255,0.3); }
+    .xp-bar-wrapper { width: 160px; height: 18px; border: 2px solid #b2b2b2; border-radius: 5px; background: #000; position: relative; overflow: hidden; }
+    .xp-bar-squares { position: absolute; top: 2px; height: 10px; width: 35px; display: flex; gap: 2px; animation: xp-slide 1.5s infinite linear; }
+    .xp-square { flex: 1; background: linear-gradient(to bottom, #2838c7 0%, #5979f2 50%, #2838c7 100%); border-radius: 1px; }
+    @keyframes xp-slide { 0% { left: -40px; } 100% { left: 170px; } }
+  `;
+  document.head.appendChild(xpStyle);
+
+  const xpLoader = document.createElement("div");
+  xpLoader.id = "xp-loader-overlay";
+  xpLoader.innerHTML = `<div class="xp-logo">galloping...</div><div class="xp-bar-wrapper"><div class="xp-bar-squares"><div class="xp-square"></div><div class="xp-square"></div><div class="xp-square"></div></div></div>`;
+  document.body.appendChild(xpLoader);
+
+  let isInitialLoad = true;
   function handleNavigation() {
     const hash = window.location.hash;
     const isRitual = hash === "#/ritual";
 
-    if (isRitual) {
-      renderer.domElement.style.display = "none";
-      lDom.style.display = "none";
-      shelfWrapper.style.display = "none";
-      const ui = document.getElementById("logged-in-ui");
-      if (ui) ui.style.display = "none";
+    const executeSwap = () => {
+      if (isRitual) {
+        // --- ENTERING RITUAL ---
+        renderer.domElement.style.display = "none";
+        lDom.style.display = "none";
 
-      ritualRoot.style.display = "block";
-      initGlueFactory(ritualRoot, db, currentUsername);
-    } else {
-      renderer.domElement.style.display = "block";
-      lDom.style.display = "block";
+        // Hide UI elements and kill lines immediately
+        glueShelf.folderIcon.style.display = "none";
+        glueShelf.vistaWindow.style.display = "none";
+        applyShelfState(false, false);
 
-      if (currentUsername) {
-        shelfWrapper.style.display = "flex";
-        applyShelfState(isShelfExpanded, false); // Force lines to re-sync
         const ui = document.getElementById("logged-in-ui");
-        if (ui) ui.style.display = "block";
-      } else {
-        shelfWrapper.style.display = "none";
-      }
+        if (ui) ui.style.display = "none";
 
-      ritualRoot.style.display = "none";
-      unmountGlueFactory();
+        ritualRoot.style.display = "block";
+        initGlueFactory(ritualRoot, db, currentUsername);
+      } else {
+        // --- RETURNING HOME ---
+        renderer.domElement.style.display = "block";
+        lDom.style.display = "block";
+
+        if (currentUsername) {
+          glueShelf.folderIcon.style.display = "block";
+
+          // SYNC: Restore window visibility and lines based on the shelf's internal state
+          const currentlyExpanded = glueShelf.isExpanded();
+          glueShelf.vistaWindow.style.display = currentlyExpanded
+            ? "flex"
+            : "none";
+          applyShelfState(currentlyExpanded, false);
+
+          const ui = document.getElementById("logged-in-ui");
+          if (ui) ui.style.display = "block";
+        }
+
+        ritualRoot.style.display = "none";
+        unmountGlueFactory();
+      }
+    };
+
+    if (isInitialLoad) {
+      executeSwap();
+      isInitialLoad = false;
+      return;
     }
+
+    xpLoader.style.display = "flex";
+    xpLoader.style.opacity = "1";
+    executeSwap();
+
+    setTimeout(() => {
+      gsap.to(xpLoader, {
+        opacity: 0,
+        duration: 0.4,
+        onComplete: () => (xpLoader.style.display = "none"),
+      });
+    }, 1500);
   }
 
   window.addEventListener("hashchange", handleNavigation);
   handleNavigation();
-
-  let userUI = null;
 
   try {
     const horseData = await createHorse();
@@ -355,37 +449,32 @@ async function init() {
     horseData.horseGroup.rotation.y = THREE.MathUtils.degToRad(-20);
     scene.add(horseData.horseGroup);
     horseUpdater = horseData.update;
-    userUI = createUserUI(db, overlay, horseData);
+    createUserUI(db, overlay, horseData);
   } catch (err) {
     console.warn("3D Horse Failed to Load:", err);
   }
 
   let initialSync = true;
   const addedUsers = new Set();
-  const initialPause = 1500;
-  const staggerDelay = 300;
-
   onSnapshot(collection(db, "users"), (snap) => {
     const allDocs = snap.docs.map((doc) => doc.data());
 
-    // NEW: Check if ANY glue bottle exists globally to toggle connection line visibility
     globalGlueCreated = allDocs.some(
       (u) =>
         u.manifestations &&
         Object.values(u.manifestations).some((m) => m.isBottled),
     );
 
-    updateShelfUI(allDocs);
+    // Update the shelf UI with new data
+    glueShelf.update(allDocs);
 
-    // Refresh state to handle line visibility now that we know if glue exists
-    applyShelfState(isShelfExpanded, false);
+    // Sync line visibility with the ACTUAL state of the shelf window
+    applyShelfState(glueShelf.isExpanded(), false);
 
     if (!initialSync) {
       snap.docChanges().forEach((c) => {
         const data = c.doc.data();
-        const isVisible = userUI ? userUI.isHerdVisible() : true;
-        if (c.type === "added" && !addedUsers.has(data.username))
-          addUserToScene(data, isVisible);
+        if (c.type === "added") addUserToScene(data, true);
         if (c.type === "modified" && horseDataRef)
           horseDataRef.updateUserColor(
             data.username,
@@ -395,23 +484,8 @@ async function init() {
       });
       return;
     }
-
     initialSync = false;
-    const me = allDocs.find((u) => u.username === currentUsername);
-    if (me) addUserToScene(me, true);
-    const others = allDocs.filter(
-      (u) => u.username !== currentUsername && u.username !== "big horse",
-    );
-
-    setTimeout(() => {
-      others.forEach((userData, index) => {
-        const isVisible = userUI ? userUI.isHerdVisible() : true;
-        setTimeout(
-          () => addUserToScene(userData, isVisible),
-          index * staggerDelay,
-        );
-      });
-    }, initialPause);
+    allDocs.forEach((userData) => addUserToScene(userData, true));
   });
 
   function addUserToScene(data, isVisible) {
@@ -423,11 +497,6 @@ async function init() {
         data.innerColor,
         !!data.password,
       );
-      const sphere = horseDataRef.activeSpheres.find(
-        (s) => s.username === data.username,
-      );
-      if (sphere && data.username !== "big horse")
-        sphere.mesh.visible = isVisible;
     }
     if (data.username === currentUsername && data.innerColor)
       overlay.setInitialColor(data.innerColor);
@@ -436,20 +505,13 @@ async function init() {
   function animate(ts) {
     requestAnimationFrame(animate);
     if (window.location.hash === "#/ritual") return;
-
     timer.update(ts);
     controls.update();
     const camPos = camera.position;
     const camDistFromOrigin = camPos.length();
-
     if (horseDataRef) {
-      // Update if opacity > 0 OR if it logically should be showing (bypasses float errors)
-      if (
-        conn.lineMaterial.opacity > 0 ||
-        (isShelfExpanded && globalGlueCreated)
-      ) {
-        conn.updateConnections(horseDataRef);
-      }
+      // Logic simplified: update connections if opacity is being set
+      if (conn.lineMaterial.opacity > 0) conn.updateConnections(horseDataRef);
 
       const globalActive = camDistFromOrigin < GLOBAL_LABEL_DIST;
       horseDataRef.activeSpheres.forEach((s) => {
@@ -461,21 +523,15 @@ async function init() {
           globalActive && distToSphere < INDIVIDUAL_CULL_DIST ? "1" : "0";
       });
     }
-
     let timeScale = THREE.MathUtils.clamp(
       (camDistFromOrigin - FREEZE_DIST) / (FULL_SPEED_DIST - FREEZE_DIST),
       0,
       1,
     );
-
     if (interactions.getIsPaused()) {
       timeScale = 0;
-      if (camDistFromOrigin >= FULL_SPEED_DIST) {
-        interactions.setIsPaused(false);
-        if (conn.hideInnerHorses) conn.hideInnerHorses(horseDataRef);
-      }
+      if (camDistFromOrigin >= FULL_SPEED_DIST) interactions.setIsPaused(false);
     }
-
     if (horseUpdater) horseUpdater(timer.getDelta() * timeScale, camera);
     renderer.render(scene, camera);
     labelRenderer.render(scene, camera);

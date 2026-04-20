@@ -148,57 +148,43 @@ body {
 
 /* --- 5. interaction elements --- */
 #manifesto-icon {
-  position: fixed;
-  top: 30px;
-  right: 30px;
-  width: 30px;
-  height: 30px;
-  background-color: var(--big-horse-color);
+  /* REMOVED position: fixed, top, and right to fix layout conflict */
+  width: 48px;  /* Match your 48px asset size */
+  height: 48px; /* Match your 48px asset size */
+  background-color: #fff; 
   border-radius: 50%;
   cursor: pointer;
   z-index: 2000;
-  opacity: 0.7;
-  transition: opacity 0.5s ease;
+  opacity: 1; 
+  transition: transform 0.3s ease;
+  
+  /* Centers the Earth asset perfectly inside the white dot */
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-#manifesto-icon:hover { opacity: 1; }
-
-#loading-overlay.active ~ #logged-in-ui #manifesto-icon {
-  opacity: 0;
-  visibility: hidden;
-}
-
-#user-display-name {
-  position: fixed;
-  top: 38px;
-  right: 80px;
-  font-size: 11px;
-  color: var(--text-main);
-  letter-spacing: 1.5px;
-  text-transform: lowercase;
-  z-index: 2001;
+#user-identity-block {
+  position: fixed; 
+  top: 30px; 
+  right: 30px; 
+  display: flex; 
+  flex-direction: row-reverse; /* Keeps icon on right, logout on left */
+  align-items: center; 
+  z-index: 5001; 
   pointer-events: none;
-  font-family: serif;
+  gap: 15px;
 }
 
-#manifesto-icon {
-  z-index: 2000; /* lower than overlay */
+/* --- 6. Scrollbar Aesthetic --- */
+.vista-content-area::-webkit-scrollbar { width: 14px; }
+.vista-content-area::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.1); }
+.vista-content-area::-webkit-scrollbar-thumb { 
+  background: linear-gradient(to right, #f8f8f8, #dcdcdc); 
+  border-radius: 10px; border: 3px solid transparent; background-clip: content-box;
+  box-shadow: inset 0 0 2px rgba(0,0,0,0.2);
 }
 
-#user-display-name {
-  z-index: 2001; /* lower than overlay */
-}
-
-#inner-horse-dot {
-  z-index: 2002; /* lower than overlay */
-}
-
-/* theme menu needs to be lower than 4000 too */
-#theme-menu-container {
-  z-index: 2003 !important;
-}
-
-/* --- 6. overlays --- */
 #loading-overlay {
   position: fixed;
   top: 0;
@@ -233,12 +219,17 @@ body {
   max-width: 600px;
   width: 90%;
   color: var(--big-horse-color);
-  margin: auto;
-  padding: 80px 0;
+  margin: 0 auto; 
+  padding: 30px 0 20px 0; 
   background-color: transparent;
   border: none;
   box-shadow: none;
   cursor: default;
+}
+
+.manifesto-inner h2 {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
 }
 
 .m-body {
@@ -259,6 +250,10 @@ body {
   color: var(--big-horse-color);
   margin-top: 50px;
   margin-bottom: 10px;
+}
+
+.m-body p:last-child {
+  margin-bottom: 0 !important;
 }
 
 /* --- 7. close icon --- */
@@ -297,6 +292,22 @@ body {
 .inner-horse-label {
   font-style: italic;
   margin-top: 2px;
+}
+
+/* Aligning the thistle dot perfectly under the center of the Earth icon */
+#inner-horse-dot {
+  top: 90px !important;    /* Lowered from 75px */
+  right: 47px !important;  /* Adjusted to center-align with a 48px circle */
+  border: none !important;
+}
+
+/* Aligning the vertical label under the dot */
+#color-prompt {
+  top: 115px !important;   /* Lowered to sit under the dot */
+  right: 49px !important;  /* Center-aligned based on 10px font width */
+  font-family: serif !important;
+  text-transform: lowercase;
+  opacity: 0.6 !important;
 }
 
 /* --- 8. responsive fixes --- */
