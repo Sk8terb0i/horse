@@ -517,7 +517,8 @@ function renderBottlePhase(container, horseID, db, username, manifestations) {
     const canvas = document.createElement("canvas");
     const cropW = Math.max(1, maxX - minX + pad * 2);
     const cropH = Math.max(1, maxY - minY + pad * 2);
-    const exportScale = 1.0;
+    // Lower the scale to drastically reduce the number of pixels saved
+    const exportScale = 0.4;
     canvas.width = cropW * exportScale;
     canvas.height = cropH * exportScale;
     const ctx = canvas.getContext("2d");
@@ -541,7 +542,9 @@ function renderBottlePhase(container, horseID, db, username, manifestations) {
     }
 
     try {
-      const imgData = canvas.toDataURL("image/png", 0.8);
+      // Use WebP: Supports transparency AND respects the quality compression parameter
+      const imgData = canvas.toDataURL("image/webp", 0.5);
+
       await updateDoc(doc(db, "users", username), {
         [`manifestations.${horseID}.isBottled`]: true,
         [`manifestations.${horseID}.finalImage`]: imgData,
