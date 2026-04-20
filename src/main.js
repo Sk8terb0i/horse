@@ -255,7 +255,8 @@ async function init() {
         const safeRotate = p.rotate !== undefined ? p.rotate : 0;
         const safeZ = p.zIndex !== undefined ? p.zIndex : 10;
 
-        return `<img src="${p.file}" 
+        // FIXED: Pointing to the public folder
+        return `<img src="/GlueFactoryAssets/${p.file}" 
                    style="position:absolute; 
                           left:${formatCoord(p.x)}; 
                           top:${formatCoord(p.y)}; 
@@ -273,7 +274,7 @@ async function init() {
            <span>Memory of ${name}</span>
            <button id="close-memory" style="font-weight:bold; cursor:pointer; background:#c0c0c0; border:2px outset #fff; padding: 0 4px; color: #000;">X</button>
          </div>
-         <div style="width: 100%; aspect-ratio: 1800 / 1126; position: relative; background-image: url('./src/World/Components/GlueFactory/bg_dressup_room.jpg'); background-size: cover; background-position: center; border:2px inset #fff; margin-top:3px; overflow: hidden; background-repeat: no-repeat;">
+         <div style="width: 100%; aspect-ratio: 1800 / 1126; position: relative; background-image: url('/GlueFactoryAssets/bg_dressup_room.jpg'); background-size: cover; background-position: center; border:2px inset #fff; margin-top:3px; overflow: hidden; background-repeat: no-repeat;">
             ${partsHtml}
          </div>
       </div>

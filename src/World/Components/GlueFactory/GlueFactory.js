@@ -32,47 +32,27 @@ const RECLAMATION_PHRASES = [
   "The transformation is absolute.",
 ];
 
-// --- DYNAMIC ASSET DISCOVERY ---
-const rawImages = import.meta.glob("./*.png", {
-  eager: true,
-  query: "?url",
-  import: "default",
-});
+// --- STATIC ASSET CATALOG FOR PUBLIC FOLDER ---
+// Helper to generate file lists: "head_1.png", "head_2.png", etc.
+const gen = (prefix, max) =>
+  Array.from({ length: max }, (_, i) => `${prefix}_${i + 1}.png`);
 
 const PART_CATALOG = {
-  torso: [],
-  head: [],
-  leg_f_front: [],
-  leg_f_back: [],
-  leg_b_front: [],
-  leg_b_back: [],
-  outfit: [],
+  torso: gen("torso", 7),
+  head: gen("head", 10),
+  leg_f_front: gen("leg_f", 4),
+  leg_f_back: gen("leg_f", 4), // Front and back use the same files
+  leg_b_front: gen("leg_b", 4),
+  leg_b_back: gen("leg_b", 4),
+  outfit: gen("outfit", 8),
 };
 
 const BOTTLE_CATALOG = {
-  bottle: [],
-  label: [],
-  decoration: [],
-  letter: [],
+  bottle: gen("bottle", 4),
+  label: gen("label", 5),
+  decoration: gen("decoration", 5),
+  letter: gen("letter", 5),
 };
-
-Object.keys(rawImages).forEach((path) => {
-  const file = path.replace("./", "");
-  // Store the 'path' instead of just the 'file' name
-  if (file.startsWith("torso_")) PART_CATALOG.torso.push(path);
-  else if (file.startsWith("head_")) PART_CATALOG.head.push(path);
-  else if (file.startsWith("outfit_")) PART_CATALOG.outfit.push(path);
-  else if (file.startsWith("leg_f_")) {
-    PART_CATALOG.leg_f_front.push(path);
-    PART_CATALOG.leg_f_back.push(path);
-  } else if (file.startsWith("leg_b_")) {
-    PART_CATALOG.leg_b_front.push(path);
-    PART_CATALOG.leg_b_back.push(path);
-  } else if (file.startsWith("bottle_")) BOTTLE_CATALOG.bottle.push(path);
-  else if (file.startsWith("label_")) BOTTLE_CATALOG.label.push(path);
-  else if (file.startsWith("decoration_")) BOTTLE_CATALOG.decoration.push(path);
-  else if (file.startsWith("letter_")) BOTTLE_CATALOG.letter.push(path);
-});
 
 function showDialog(container, message) {
   const overlay = document.createElement("div");
@@ -306,7 +286,7 @@ function renderBottlePhase(container, horseID, db, username, manifestations) {
     img.style.zIndex = CATEGORY_Z_INDEX[cat] || 10;
     img.style.left = x;
     img.style.top = y;
-    img.src = rawImages[file];
+    img.src = `/GlueFactoryAssets/${file}`;
     img.crossOrigin = "anonymous";
     img.ondragstart = (e) => e.preventDefault();
     img.onload = () => {
@@ -653,7 +633,7 @@ function renderDressUpPhase(
       }
       applyTransform(img);
     };
-    img.src = rawImages[p.file];
+    img.src = `/GlueFactoryAssets/${data.file}`;
     viewport.appendChild(img);
   };
 
