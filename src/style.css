@@ -149,8 +149,9 @@ body {
 /* --- 5. interaction elements --- */
 #manifesto-icon {
   /* REMOVED position: fixed, top, and right to fix layout conflict */
-  width: 48px;  /* Match your 48px asset size */
-  height: 48px; /* Match your 48px asset size */
+  width: 40px;  /* Match your 48px asset size */
+  height: 40px; /* Match your 48px asset size */
+  margin: 8px;
   background-color: #fff; 
   border-radius: 50%;
   cursor: pointer;

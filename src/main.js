@@ -7,6 +7,7 @@ import { createUserUI } from "./World/Components/UserUI.js";
 import { createConnections } from "./World/Components/Connections.js";
 import { createOverlayUI } from "./World/Components/OverlayUI.js";
 import { createSphereInteractions } from "./World/Components/SphereInteractions.js";
+import { createTaskbar } from "./World/Components/Taskbar.js";
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, onSnapshot } from "firebase/firestore";
 import gsap from "gsap";
@@ -35,7 +36,6 @@ const db = getFirestore(app);
 function initGlueShelf(currentUsername, showMemory, onToggle) {
   const ASSET_PATH = import.meta.env.BASE_URL + "assets/";
 
-  // Persistent positions
   const savedFolderPos = JSON.parse(
     localStorage.getItem("glue_folder_pos"),
   ) || { top: 200, left: 100 };
@@ -44,7 +44,6 @@ function initGlueShelf(currentUsername, showMemory, onToggle) {
   ) || { top: 200, left: 200 };
   let isShelfExpanded = localStorage.getItem("shelf_expanded") === "true";
 
-  // 1. THE FOLDER ICON (Standalone)
   const folderIcon = document.createElement("div");
   folderIcon.id = "glue-folder-standalone";
   folderIcon.style.cssText = `
@@ -63,11 +62,9 @@ function initGlueShelf(currentUsername, showMemory, onToggle) {
     </div>
   `;
 
-  // Folder Hover Animation
   folderIcon.onmouseenter = () => (folderIcon.style.transform = "scale(1.15)");
   folderIcon.onmouseleave = () => (folderIcon.style.transform = "scale(1)");
 
-  // 2. THE VISTA WINDOW (Standalone)
   const vistaWindow = document.createElement("div");
   vistaWindow.className = "vista-window shelf-window";
   vistaWindow.style.cssText = `
@@ -97,7 +94,6 @@ function initGlueShelf(currentUsername, showMemory, onToggle) {
   document.body.appendChild(folderIcon);
   document.body.appendChild(vistaWindow);
 
-  // --- WINDOW ANIMATION LOGIC ---
   const animateWindow = (show) => {
     gsap.to(vistaWindow, {
       duration: 0.4,
@@ -115,7 +111,6 @@ function initGlueShelf(currentUsername, showMemory, onToggle) {
     });
   };
 
-  // Screen Safety Check
   const checkBounds = () => {
     const rect = vistaWindow.getBoundingClientRect();
     if (rect.right > window.innerWidth) {
@@ -123,7 +118,6 @@ function initGlueShelf(currentUsername, showMemory, onToggle) {
     }
   };
 
-  // --- DRAG UTILITY ---
   const makeDraggable = (el, handle, saveKey) => {
     let wasDragged = false;
     let startX, startY, initialLeft, initialTop;
@@ -181,7 +175,6 @@ function initGlueShelf(currentUsername, showMemory, onToggle) {
     "glue_window_pos",
   );
 
-  // Interaction Logic
   folderIcon.addEventListener("click", () => {
     if (folderStatus()) return;
     isShelfExpanded = !isShelfExpanded;
@@ -353,6 +346,10 @@ async function init() {
     applyShelfState(expanded, true);
   });
 
+  // TASKBAR INITIALIZATION
+  const taskbar = createTaskbar(scene);
+  if (!currentUsername) taskbar.style.display = "none";
+
   [ritualRoot, memoryModal].forEach((uiElement) => {
     uiElement.addEventListener("pointerdown", (e) => e.stopPropagation());
     uiElement.addEventListener("click", (e) => e.stopPropagation());
@@ -469,29 +466,41 @@ async function init() {
 
     const executeSwap = () => {
       if (isRitual) {
+        // --- ENTERING RITUAL ---
         renderer.domElement.style.display = "none";
         lDom.style.display = "none";
+
+        // Hide UI elements and kill lines immediately
         glueShelf.folderIcon.style.display = "none";
         glueShelf.vistaWindow.style.display = "none";
+        taskbar.style.display = "none";
         applyShelfState(false, false);
+
         const ui = document.getElementById("logged-in-ui");
         if (ui) ui.style.display = "none";
+
         ritualRoot.style.display = "block";
         initGlueFactory(ritualRoot, db, currentUsername);
       } else {
+        // --- RETURNING HOME ---
         renderer.domElement.style.display = "block";
         lDom.style.display = "block";
+
         if (currentUsername) {
           glueShelf.folderIcon.style.display = "block";
-          const expanded = glueShelf.isExpanded();
-          glueShelf.vistaWindow.style.visibility = expanded
-            ? "visible"
-            : "hidden";
-          glueShelf.vistaWindow.style.opacity = expanded ? 1 : 0;
-          applyShelfState(expanded, false);
+          taskbar.style.display = "flex";
+
+          // SYNC: Restore window visibility and lines based on the shelf's internal state
+          const currentlyExpanded = glueShelf.isExpanded();
+          glueShelf.vistaWindow.style.display = currentlyExpanded
+            ? "flex"
+            : "none";
+          applyShelfState(currentlyExpanded, false);
+
           const ui = document.getElementById("logged-in-ui");
           if (ui) ui.style.display = "block";
         }
+
         ritualRoot.style.display = "none";
         unmountGlueFactory();
       }
@@ -532,6 +541,11 @@ async function init() {
   const addedUsers = new Set();
   onSnapshot(collection(db, "users"), (snap) => {
     const allDocs = snap.docs.map((doc) => doc.data());
+    globalGlueCreated = allDocs.some(
+      (u) =>
+        u.manifestations &&
+        Object.values(u.manifestations).some((m) => m.isBottled),
+    );
     glueShelf.update(allDocs);
     applyShelfState(glueShelf.isExpanded(), false);
     if (!initialSync) {

@@ -2,7 +2,6 @@ import * as THREE from "three";
 import gsap from "gsap";
 import { ManifestoContent } from "./Content.js";
 import { doc, setDoc } from "firebase/firestore";
-import { createThemeUI } from "./ThemeUI.js";
 import { createColorPicker } from "./ColorPickerUI.js";
 import { getNearestColorName } from "../Utils/ColorUtils.js";
 
@@ -177,7 +176,7 @@ export function createOverlayUI(scene, db, getUsername) {
     justify-content: center;
     overflow: visible; /* Allows the 48px icon to sit over the 30px CSS circle */
   `;
-  icon.innerHTML = `<img src="${ASSET_PATH}manifesto_btn.png" alt="Manifesto" style="height: 48px; width: auto; display: block; filter: drop-shadow(1px 1px 2px rgba(0,0,0,0.3));">`;
+  icon.innerHTML = `<img src="${ASSET_PATH}manifesto_btn.png" alt="Manifesto" style="height: 60px; width: auto; display: block; filter: drop-shadow(1px 1px 2px rgba(0,0,0,0.3));">`;
   userContainer.appendChild(icon);
 
   icon.onmouseenter = () => {
@@ -224,9 +223,6 @@ export function createOverlayUI(scene, db, getUsername) {
     sessionStorage.removeItem("horse_herd_username");
     window.location.reload();
   };
-
-  const themeMenu = createThemeUI(scene);
-  uiContainer.appendChild(themeMenu);
 
   const innerHorseDot = document.createElement("div");
   innerHorseDot.id = "inner-horse-dot";
