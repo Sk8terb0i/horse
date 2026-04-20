@@ -32,27 +32,68 @@ const RECLAMATION_PHRASES = [
   "The transformation is absolute.",
 ];
 
-// --- STATIC ASSET CATALOG FOR PUBLIC FOLDER ---
-// Helper to generate file lists: "head_1.png", "head_2.png", etc.
-const gen = (prefix, max) =>
-  Array.from({ length: max }, (_, i) => `${prefix}_${i + 1}.png`);
+// --- DYNAMIC ASSET CATALOG FOR PUBLIC FOLDER ---
+const ASSET_PATH = import.meta.env.BASE_URL + "GlueFactoryAssets/";
 
 const PART_CATALOG = {
-  torso: gen("torso", 7),
-  head: gen("head", 10),
-  leg_f_front: gen("leg_f", 4),
-  leg_f_back: gen("leg_f", 4), // Front and back use the same files
-  leg_b_front: gen("leg_b", 4),
-  leg_b_back: gen("leg_b", 4),
-  outfit: gen("outfit", 8),
+  torso: [],
+  head: [],
+  leg_f_front: [],
+  leg_f_back: [],
+  leg_b_front: [],
+  leg_b_back: [],
+  outfit: [],
 };
 
 const BOTTLE_CATALOG = {
-  bottle: gen("bottle", 4),
-  label: gen("label", 5),
-  decoration: gen("decoration", 5),
-  letter: gen("letter", 5),
+  bottle: [],
+  label: [],
+  decoration: [],
+  letter: [],
 };
+
+let isCatalogLoaded = false;
+
+// Dynamically checks images sequentially until it hits a 404
+async function buildCatalog() {
+  if (isCatalogLoaded) return;
+
+  const checkImage = (url) =>
+    new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(true);
+      img.onerror = () => resolve(false);
+      img.src = url;
+    });
+
+  const probe = async (map, key, prefix) => {
+    let i = 1;
+    while (true) {
+      const file = `${prefix}_${i}.png`;
+      const exists = await checkImage(ASSET_PATH + file);
+      if (exists) {
+        map[key].push(file);
+        if (key === "leg_f_front") map["leg_f_back"].push(file);
+        if (key === "leg_b_front") map["leg_b_back"].push(file);
+        i++;
+      } else break; // Stop counting when image doesn't exist
+    }
+  };
+
+  await Promise.all([
+    probe(PART_CATALOG, "torso", "torso"),
+    probe(PART_CATALOG, "head", "head"),
+    probe(PART_CATALOG, "leg_f_front", "leg_f"),
+    probe(PART_CATALOG, "leg_b_front", "leg_b"),
+    probe(PART_CATALOG, "outfit", "outfit"),
+    probe(BOTTLE_CATALOG, "bottle", "bottle"),
+    probe(BOTTLE_CATALOG, "label", "label"),
+    probe(BOTTLE_CATALOG, "decoration", "decoration"),
+    probe(BOTTLE_CATALOG, "letter", "letter"),
+  ]);
+
+  isCatalogLoaded = true;
+}
 
 function showDialog(container, message) {
   const overlay = document.createElement("div");
@@ -110,6 +151,9 @@ export async function initGlueFactory(container, db, username) {
     document.head.appendChild(styleSheet);
   }
 
+  // Await the dynamic image scanner before showing the room
+  await buildCatalog();
+
   let manifestations = {},
     activeHorseName = "";
 
@@ -126,7 +170,7 @@ export async function initGlueFactory(container, db, username) {
 
         if (horse.isBottled) {
           container.innerHTML = `
-                <div class="game-wrapper" style="display:flex; flex-direction:column; align-items:center; justify-content:center; background-image: url('./src/World/Components/GlueFactory/bg_bottle_shelf.jpg'); background-size: cover; background-position: center;">
+                <div class="game-wrapper" style="display:flex; flex-direction:column; align-items:center; justify-content:center; background-image: url('${ASSET_PATH}bg_bottle_shelf.jpg'); background-size: cover; background-position: center;">
                     <div style="background: rgba(192, 192, 192, 0.9); padding: 20px; border: 2px outset #fff; text-align: center;">
                       <h1 style="color:#000; font-family:'MS Sans Serif'; font-size: 16px;">${horse.name || activeHorseName} is preserved.</h1>
                       <button id="btn-return-sanctuary" class="btn-95" style="margin-top: 15px; font-weight: bold;">Return to the herd</button>
@@ -204,12 +248,12 @@ function renderBottlePhase(container, horseID, db, username, manifestations) {
     let html = `<div class="catalog-category"><h4>Essence: ${horseDisplayName}</h4></div>`;
     if (!currentBottle) {
       html += `<div class="catalog-category"><h4>1. Choose Vessel</h4><div style="display:flex; flex-wrap:wrap;">
-        ${BOTTLE_CATALOG.bottle.map((f) => `<img src="./src/World/Components/GlueFactory/${f}" class="catalog-item" draggable="true" data-file="${f}" data-category="bottle">`).join("")}
+        ${BOTTLE_CATALOG.bottle.map((f) => `<img src="${ASSET_PATH}${f}" class="catalog-item" draggable="true" data-file="${f}" data-category="bottle">`).join("")}
       </div></div>`;
     } else {
       ["label", "letter", "decoration"].forEach((cat) => {
         html += `<div class="catalog-category"><h4>${cat.charAt(0).toUpperCase() + cat.slice(1)}s</h4><div style="display:flex; flex-wrap:wrap;">
-          ${BOTTLE_CATALOG[cat].map((f) => `<img src="./src/World/Components/GlueFactory/${f}" class="catalog-item" draggable="true" data-file="${f}" data-category="${cat}">`).join("")}
+          ${BOTTLE_CATALOG[cat].map((f) => `<img src="${ASSET_PATH}${f}" class="catalog-item" draggable="true" data-file="${f}" data-category="${cat}">`).join("")}
         </div></div>`;
       });
     }
@@ -226,7 +270,7 @@ function renderBottlePhase(container, horseID, db, username, manifestations) {
           <button id="btn-save-bottle" class="btn-95" style="width:100%; font-weight:bold;">Seal & Save ${horseDisplayName}</button>
         </div>
       </div>
-      <div class="viewport-area" id="game-viewport" style="background-image: url('./src/World/Components/GlueFactory/bg_bottle_shelf.jpg'); cursor: default;">
+      <div class="viewport-area" id="game-viewport" style="background-image: url('${ASSET_PATH}bg_bottle_shelf.jpg'); cursor: default;">
         <div id="floating-tools" class="floating-tools" style="user-select: none;">
           <div class="group-stack">
             <div id="handle-forward" class="tool-handle">▲</div>
@@ -286,7 +330,7 @@ function renderBottlePhase(container, horseID, db, username, manifestations) {
     img.style.zIndex = CATEGORY_Z_INDEX[cat] || 10;
     img.style.left = x;
     img.style.top = y;
-    img.src = `/GlueFactoryAssets/${file}`;
+    img.src = ASSET_PATH + file;
     img.crossOrigin = "anonymous";
     img.ondragstart = (e) => e.preventDefault();
     img.onload = () => {
@@ -542,7 +586,7 @@ function renderDressUpPhase(
   for (const [cat, files] of Object.entries(PART_CATALOG)) {
     if (files.length === 0) continue;
     catalogHTML += `<div class="catalog-category"><h4>${cat.replace(/_/g, " ")}</h4><div style="display:flex; flex-wrap:wrap;">
-      ${[...new Set(files)].map((f) => `<img src="./src/World/Components/GlueFactory/${f}" class="catalog-item" draggable="true" data-file="${f}" data-category="${cat}">`).join("")}
+      ${[...new Set(files)].map((f) => `<img src="${ASSET_PATH}${f}" class="catalog-item" draggable="true" data-file="${f}" data-category="${cat}">`).join("")}
     </div></div>`;
   }
 
@@ -555,7 +599,7 @@ function renderDressUpPhase(
           <button id="btn-begin-boil" class="btn-95" style="width:100%; font-weight:bold;">BEGIN THE BOILING</button>
         </div>
       </div>
-      <div class="viewport-area" id="game-viewport" style="background-image: url('./src/World/Components/GlueFactory/bg_dressup_room.jpg'); cursor: default;">
+      <div class="viewport-area" id="game-viewport" style="background-image: url('${ASSET_PATH}bg_dressup_room.jpg'); cursor: default;">
         <div id="floating-tools" class="floating-tools" style="user-select: none;">
           <div class="group-stack">
             <div id="handle-forward" class="tool-handle">▲</div>
@@ -633,7 +677,7 @@ function renderDressUpPhase(
       }
       applyTransform(img);
     };
-    img.src = `/GlueFactoryAssets/${data.file}`;
+    img.src = ASSET_PATH + data.file;
     viewport.appendChild(img);
   };
 
@@ -874,13 +918,13 @@ function renderBoilingPhase(container, horseID, name, config, db, username) {
 
   container.innerHTML = `
     <div class="game-wrapper">
-      <div class="viewport-area" id="boil-viewport" style="background-image: url('./src/World/Components/GlueFactory/bg_boiler_room.jpg'); cursor: none;">
-        <img src="./src/World/Components/GlueFactory/pot_back.png" class="pot-static" style="left:${POT_COORDS.back.left}; top:${POT_COORDS.back.top}; z-index:10; pointer-events:none;" draggable="false">
+      <div class="viewport-area" id="boil-viewport" style="background-image: url('${ASSET_PATH}bg_boiler_room.jpg'); cursor: none;">
+        <img src="${ASSET_PATH}pot_back.png" class="pot-static" style="left:${POT_COORDS.back.left}; top:${POT_COORDS.back.top}; z-index:10; pointer-events:none;" draggable="false">
         <div id="sub-layer" style="position:absolute; width:100%; height:100%; z-index:20; pointer-events:none;"></div>
-        <img src="./src/World/Components/GlueFactory/pot_liquid.png" class="pot-static" style="left:${POT_COORDS.liquid.left}; top:${POT_COORDS.liquid.top}; z-index:30; opacity:0.8; pointer-events:none;" draggable="false">
+        <img src="${ASSET_PATH}pot_liquid.png" class="pot-static" style="left:${POT_COORDS.liquid.left}; top:${POT_COORDS.liquid.top}; z-index:30; opacity:0.8; pointer-events:none;" draggable="false">
         <div id="float-layer" style="position:absolute; width:100%; height:100%; z-index:40; pointer-events:none;"></div>
-        <img id="boil-ladle" src="./src/World/Components/GlueFactory/ladle.png" style="position:absolute; z-index:45; pointer-events:none; transform:translate(-50%, -50%);">
-        <img src="./src/World/Components/GlueFactory/pot_front.png" class="pot-static" style="left:${POT_COORDS.front.left}; top:${POT_COORDS.front.top}; z-index:50; pointer-events:none;" draggable="false">
+        <img id="boil-ladle" src="${ASSET_PATH}ladle.png" style="position:absolute; z-index:45; pointer-events:none; transform:translate(-50%, -50%);">
+        <img src="${ASSET_PATH}pot_front.png" class="pot-static" style="left:${POT_COORDS.front.left}; top:${POT_COORDS.front.top}; z-index:50; pointer-events:none;" draggable="false">
         <div id="particle-container" style="position:absolute; width:100%; height:100%; z-index:115; pointer-events:none;"></div>
         <div style="position:absolute; bottom:20px; width:100%; display:flex; flex-direction:column; align-items:center; color:white; z-index:200; pointer-events:none;">
             <h2 style="text-shadow:2px 2px #000; margin:0;">DISSOLVING ${name.toUpperCase()}...</h2>
@@ -924,7 +968,7 @@ function renderBoilingPhase(container, horseID, name, config, db, username) {
     p.elSub = document.createElement("img");
     p.elFloat = document.createElement("img");
     [p.elSub, p.elFloat].forEach((img) => {
-      img.src = `./src/World/Components/GlueFactory/${p.file}`;
+      img.src = ASSET_PATH + p.file;
       img.className = "boil-part-sprite bobbing";
       img.style.setProperty("--s", p.scale);
       img.style.setProperty("--r", p.rotate + "deg");
@@ -943,7 +987,13 @@ function renderBoilingPhase(container, horseID, name, config, db, username) {
 
   function spawnParticle(type, x, y) {
     const p = document.createElement("img");
-    p.src = `./src/World/Components/GlueFactory/${type === "bubble" ? (Math.random() > 0.5 ? "bubble_1.png" : "bubble_2.png") : "steam.png"}`;
+    p.src =
+      ASSET_PATH +
+      (type === "bubble"
+        ? Math.random() > 0.5
+          ? "bubble_1.png"
+          : "bubble_2.png"
+        : "steam.png");
     p.className = type;
     p.style.left = x + "px";
     p.style.top = y + "px";
@@ -1093,7 +1143,7 @@ async function transitionToBottlePhase(container, horseID, db, username) {
     console.error(err);
   }
   container.innerHTML = `
-    <div class="game-wrapper" style="background-image: url('./src/World/Components/GlueFactory/bg_boiler_room.jpg'); background-size: cover; background-position: center; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+    <div class="game-wrapper" style="background-image: url('${ASSET_PATH}bg_boiler_room.jpg'); background-size: cover; background-position: center; display:flex; flex-direction:column; align-items:center; justify-content:center;">
       <div style="background: rgba(192, 192, 192, 0.9); padding: 20px; border: 2px outset #fff; text-align: center; box-shadow: 4px 4px 15px rgba(0,0,0,0.5);">
         <h1 style="color:#000; font-family:'MS Sans Serif'; font-size: 18px; margin-top: 0;">TRANSFORMATION COMPLETE.</h1>
         <button class="btn-95" onclick="location.reload()" style="margin-top: 15px; font-weight: bold; padding: 5px 15px;">NEXT: DECORATE THE VESSEL</button>
