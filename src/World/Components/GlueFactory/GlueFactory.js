@@ -66,17 +66,30 @@ async function buildCatalog() {
       img.src = url;
     });
 
-  const probe = async (map, key, prefix) => {
-    let i = 1;
-    while (true) {
-      const file = `${prefix}_${i}.png`;
-      const exists = await checkImage(ASSET_PATH + file);
-      if (exists) {
-        map[key].push(file);
-        if (key === "leg_f_front") map["leg_f_back"].push(file);
-        if (key === "leg_b_front") map["leg_b_back"].push(file);
-        i++;
-      } else break; // Stop counting when image doesn't exist
+  // Added a 'type' parameter to switch between number and letter checking
+  const probe = async (map, key, prefix, type = "number") => {
+    if (type === "number") {
+      let i = 1;
+      while (true) {
+        const file = `${prefix}_${i}.png`;
+        const exists = await checkImage(ASSET_PATH + file);
+        if (exists) {
+          map[key].push(file);
+          if (key === "leg_f_front") map["leg_f_back"].push(file);
+          if (key === "leg_b_front") map["leg_b_back"].push(file);
+          i++;
+        } else break;
+      }
+    } else if (type === "letter") {
+      // Check for letters a through z
+      const alphabet = "abcdefghijklmnopqrstuvwxyz".split("");
+      for (const char of alphabet) {
+        const file = `${prefix}_${char}.png`;
+        const exists = await checkImage(ASSET_PATH + file);
+        if (exists) {
+          map[key].push(file);
+        }
+      }
     }
   };
 
@@ -89,7 +102,8 @@ async function buildCatalog() {
     probe(BOTTLE_CATALOG, "bottle", "bottle"),
     probe(BOTTLE_CATALOG, "label", "label"),
     probe(BOTTLE_CATALOG, "decoration", "decoration"),
-    probe(BOTTLE_CATALOG, "letter", "letter"),
+    // Notice the specific "letter" flag here:
+    probe(BOTTLE_CATALOG, "letter", "letter", "letter"),
   ]);
 
   isCatalogLoaded = true;
