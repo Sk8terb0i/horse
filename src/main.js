@@ -35,6 +35,7 @@ const db = getFirestore(app);
 function initGlueShelf(currentUsername, showMemory, onToggle) {
   const ASSET_PATH = import.meta.env.BASE_URL + "assets/";
 
+  // Persistent positions
   const savedFolderPos = JSON.parse(
     localStorage.getItem("glue_folder_pos"),
   ) || { top: 200, left: 100 };
@@ -43,38 +44,86 @@ function initGlueShelf(currentUsername, showMemory, onToggle) {
   ) || { top: 200, left: 200 };
   let isShelfExpanded = localStorage.getItem("shelf_expanded") === "true";
 
-  // 1. THE FOLDER ICON
+  // 1. THE FOLDER ICON (Standalone)
   const folderIcon = document.createElement("div");
   folderIcon.id = "glue-folder-standalone";
-  folderIcon.style.cssText = `position:fixed; top:${savedFolderPos.top}px; left:${savedFolderPos.left}px; z-index:5000; cursor:pointer; display:${currentUsername ? "block" : "none"};`;
+  folderIcon.style.cssText = `
+    position: fixed; 
+    top: ${savedFolderPos.top}px; 
+    left: ${savedFolderPos.left}px; 
+    z-index: 5000; 
+    cursor: pointer; 
+    display: ${currentUsername ? "block" : "none"}; 
+    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  `;
   folderIcon.innerHTML = `
-    <div style="display:flex; flex-direction:column; align-items:center; transition:transform 0.2s;">
-      <img src="${ASSET_PATH}folder.png" style="width:70px; height:auto; filter:sepia(1) saturate(10) hue-rotate(245deg) brightness(0.9) drop-shadow(2px 4px 6px rgba(0,0,0,0.3)); pointer-events:none;">
-      <span style="font-family:serif; font-size:14px; color:white; text-shadow:1px 1px 3px black; pointer-events:none;">Glue</span>
+    <div style="display: flex; flex-direction: column; align-items: center; pointer-events: none;">
+      <img src="${ASSET_PATH}folder.png" style="width: 70px; height: auto; filter: sepia(1) saturate(10) hue-rotate(245deg) brightness(0.9) drop-shadow(2px 4px 6px rgba(0,0,0,0.3));">
+      <span style="font-family: serif; font-size: 14px; color: white; text-shadow: 1px 1px 3px black; margin-top: 0px;">Glue</span>
     </div>
   `;
 
-  // 2. THE VISTA WINDOW
+  // Folder Hover Animation
+  folderIcon.onmouseenter = () => (folderIcon.style.transform = "scale(1.15)");
+  folderIcon.onmouseleave = () => (folderIcon.style.transform = "scale(1)");
+
+  // 2. THE VISTA WINDOW (Standalone)
   const vistaWindow = document.createElement("div");
   vistaWindow.className = "vista-window shelf-window";
   vistaWindow.style.cssText = `
-    display:${isShelfExpanded ? "flex" : "none"}; position:fixed; 
-    top:${savedWindowPos.top}px; left:${savedWindowPos.left}px; 
-    width:320px; height:400px; z-index:5001; flex-direction:column;
+    display: flex; 
+    visibility: ${isShelfExpanded ? "visible" : "hidden"}; 
+    opacity: ${isShelfExpanded ? 1 : 0};
+    transform: ${isShelfExpanded ? "scale(1)" : "scale(0.9) translateY(10px)"};
+    position: fixed; 
+    top: ${savedWindowPos.top}px; 
+    left: ${savedWindowPos.left}px; 
+    width: 320px; 
+    height: 400px; 
+    z-index: 5001; 
+    flex-direction: column;
+    pointer-events: ${isShelfExpanded ? "auto" : "none"};
   `;
+
   vistaWindow.innerHTML = `
-    <div class="vista-title-bar" id="shelf-drag-handle" style="cursor:move; user-select:none;">
+    <div class="vista-title-bar" id="shelf-drag-handle" style="cursor: move; user-select: none;">
       <div class="vista-title">Glue Shelf</div>
-      <img src="${ASSET_PATH}aero_close.png" id="shelf-close-btn" style="height:22px; cursor:pointer;">
+      <img src="${ASSET_PATH}aero_close.png" id="shelf-close-btn" style="height: 22px; cursor: pointer; transition: filter 0.2s;">
     </div>
-    <div class="vista-content-area" id="shelf-items-container" style="display:grid; grid-template-columns:repeat(2,1fr); gap:15px; padding:20px; overflow-y:auto; flex-grow:1;">
+    <div class="vista-content-area" id="shelf-items-container" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; padding: 20px; overflow-y: auto; flex-grow: 1;">
     </div>
   `;
 
   document.body.appendChild(folderIcon);
   document.body.appendChild(vistaWindow);
 
-  // --- REUSABLE DRAG FUNCTION ---
+  // --- WINDOW ANIMATION LOGIC ---
+  const animateWindow = (show) => {
+    gsap.to(vistaWindow, {
+      duration: 0.4,
+      opacity: show ? 1 : 0,
+      scale: show ? 1 : 0.9,
+      y: show ? 0 : 10,
+      visibility: show ? "visible" : "hidden",
+      ease: "back.out(1.7)",
+      onStart: () => {
+        if (show) vistaWindow.style.pointerEvents = "auto";
+      },
+      onComplete: () => {
+        if (!show) vistaWindow.style.pointerEvents = "none";
+      },
+    });
+  };
+
+  // Screen Safety Check
+  const checkBounds = () => {
+    const rect = vistaWindow.getBoundingClientRect();
+    if (rect.right > window.innerWidth) {
+      vistaWindow.style.left = window.innerWidth - rect.width - 20 + "px";
+    }
+  };
+
+  // --- DRAG UTILITY ---
   const makeDraggable = (el, handle, saveKey) => {
     let wasDragged = false;
     let startX, startY, initialLeft, initialTop;
@@ -85,11 +134,13 @@ function initGlueShelf(currentUsername, showMemory, onToggle) {
 
       if (!wasDragged && (Math.abs(dx) > 2 || Math.abs(dy) > 2)) {
         wasDragged = true;
+        el.style.transition = "none";
       }
 
       if (wasDragged) {
         el.style.left = initialLeft + dx + "px";
         el.style.top = initialTop + dy + "px";
+        if (el === vistaWindow) checkBounds();
       }
     };
 
@@ -97,11 +148,13 @@ function initGlueShelf(currentUsername, showMemory, onToggle) {
       document.removeEventListener("mousemove", move);
       document.removeEventListener("mouseup", stop);
       if (wasDragged) {
+        if (el === folderIcon)
+          el.style.transition =
+            "transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)";
         localStorage.setItem(
           saveKey,
           JSON.stringify({ top: el.offsetTop, left: el.offsetLeft }),
         );
-        // Timeout ensures the click event knows we were dragging
         setTimeout(() => {
           wasDragged = false;
         }, 50);
@@ -128,28 +181,51 @@ function initGlueShelf(currentUsername, showMemory, onToggle) {
     "glue_window_pos",
   );
 
+  // Interaction Logic
   folderIcon.addEventListener("click", () => {
-    if (!folderStatus()) {
-      isShelfExpanded = !isShelfExpanded;
-      localStorage.setItem("shelf_expanded", isShelfExpanded);
-      vistaWindow.style.display = isShelfExpanded ? "flex" : "none";
-      if (onToggle) onToggle(isShelfExpanded);
-    }
+    if (folderStatus()) return;
+    isShelfExpanded = !isShelfExpanded;
+    localStorage.setItem("shelf_expanded", isShelfExpanded);
+    animateWindow(isShelfExpanded);
+    if (onToggle) onToggle(isShelfExpanded);
   });
 
-  vistaWindow.querySelector("#shelf-close-btn").onclick = () => {
+  vistaWindow.querySelector("#shelf-close-btn").onclick = (e) => {
+    e.stopPropagation();
     isShelfExpanded = false;
     localStorage.setItem("shelf_expanded", "false");
-    vistaWindow.style.display = "none";
+    animateWindow(false);
     if (onToggle) onToggle(false);
   };
 
   const shelfStyles = document.createElement("style");
   shelfStyles.innerHTML = `
     .shelf-window .vista-content-area { background: url('${ASSET_PATH}glue_bg.jpg') center/cover no-repeat !important; }
-    .aero-plus-card { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:15px; cursor:pointer; border-radius:8px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); backdrop-filter:blur(5px); transition: 0.3s; }
-    .aero-plus-card:hover { background:rgba(255,255,255,0.3); transform:translateY(-3px); }
-    .aero-plus-icon { width:50px; height:50px; border-radius:50%; background:linear-gradient(135deg, #a8ff78 0%, #08fbff 100%); border:3px solid white; color:white; font-size:32px; display:flex; align-items:center; justify-content:center; font-weight:bold; }
+    .aero-plus-card { 
+       display:flex; flex-direction:column; align-items:center; justify-content:center; 
+       padding:15px; cursor:pointer; border-radius:8px; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+       background:rgba(255, 255, 255, 0.1); border:1px solid rgba(255,255,255,0.2); backdrop-filter:blur(5px); 
+    }
+    .aero-plus-card:hover { 
+      background: rgba(255, 255, 255, 0.4) !important;
+      transform: translateY(-5px) scale(1.02) !important;
+      box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+      border-color: rgba(255, 255, 255, 0.8) !important;
+    }
+    .aero-plus-card:active { transform: translateY(0) scale(0.98) !important; }
+    .aero-plus-icon { 
+      width:50px; height:50px; border-radius:50%; background:linear-gradient(135deg, #a8ff78 0%, #08fbff 100%); 
+      border:3px solid white; color:white; font-size:32px; display:flex; align-items:center; justify-content:center; 
+      font-weight:bold; transition: transform 0.2s ease;
+    }
+    .aero-plus-card:hover .aero-plus-icon { transform: rotate(90deg) scale(1.1); }
+    #shelf-items-container::-webkit-scrollbar { width: 12px; }
+    #shelf-items-container::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.1); }
+    #shelf-items-container::-webkit-scrollbar-thumb { 
+      background: linear-gradient(to right, #f0f0f0, #cccccc); 
+      border-radius: 10px; border: 3px solid transparent; background-clip: content-box;
+    }
+    #shelf-close-btn:hover { filter: brightness(1.2); }
   `;
   document.head.appendChild(shelfStyles);
 
@@ -164,10 +240,7 @@ function initGlueShelf(currentUsername, showMemory, onToggle) {
 
       const plusCard = document.createElement("div");
       plusCard.className = "aero-plus-card";
-      plusCard.innerHTML = `
-        <div class="aero-plus-icon">+</div>
-        <span style="font-size:10px; color:#003366; font-weight:bold; font-family: sans-serif; margin-top:8px; text-shadow: 0 0 5px white;">NEW GLUE</span>
-      `;
+      plusCard.innerHTML = `<div class="aero-plus-icon">+</div><span style="font-size:10px; color:#003366; font-weight:bold; text-transform:uppercase; font-family: sans-serif; margin-top:8px; text-shadow: 0 0 5px white;">NEW GLUE</span>`;
       plusCard.onclick = () => (window.location.hash = "#/ritual");
       container.appendChild(plusCard);
 
@@ -251,13 +324,10 @@ async function init() {
   // --- LINE VISIBILITY LOGIC ---
   const applyShelfState = (expanded, animate = false) => {
     if (!currentUsername) return;
-
-    // Lines show strictly when window is open
     const targetOpacity = expanded ? 0.5 : 0;
     const targetLabelOpacity = expanded ? "1" : "0";
 
     gsap.killTweensOf(conn.lineMaterial);
-
     conn.lineMaterial.transparent = true;
 
     if (animate) {
@@ -304,10 +374,10 @@ async function init() {
       .join("");
 
     memoryModal.innerHTML = `
-      <div id="memory-drag-container" style="background:#c0c0c0; border:2px outset #fff; padding:3px; display:flex; flex-direction:column; box-shadow: 10px 10px 40px rgba(0,0,0,0.8); width: 70vw; height: 500px; min-width: 400px; position:absolute; z-index:10001; resize:both; overflow:hidden;">
+      <div id="memory-drag-container" style="background:#c0c0c0; border:2px outset #fff; padding:3px; display:flex; flex-direction:column; box-shadow: 10px 10px 40px rgba(0,0,0,0.8); width: 70vw; height: 500px; min-width: 400px; position:absolute; z-index:10001; resize:both; overflow:hidden; opacity: 0; transform: scale(0.8);">
          <div id="memory-title-handle" style="background: linear-gradient(90deg, #000080, #1084d0); color: white; padding: 4px 6px; font-weight: bold; font-family:'MS Sans Serif', Arial; font-size: 12px; display: flex; justify-content: space-between; align-items: center; cursor:move; user-select:none;">
            <span>Memory of ${name}</span>
-           <button id="close-memory" style="cursor:pointer; background:#c0c0c0; border:2px outset #fff; padding: 0 4px;">X</button>
+           <button id="close-memory" style="cursor:pointer; background:#c0c0c0; border:2px outset #fff; padding: 0 4px; transition: all 0.1s;">X</button>
          </div>
          <div style="flex-grow:1; width:100%; position:relative; background-image: url('${ASSET_PATH}bg_dressup_room.jpg'); background-size: cover; background-position: center; border:2px inset #fff; margin-top:3px; overflow:hidden;">
             ${partsHtml}
@@ -317,8 +387,17 @@ async function init() {
 
     memoryModal.style.display = "flex";
     const container = document.getElementById("memory-drag-container");
-    const handle = document.getElementById("memory-title-handle");
 
+    // OPEN ANIMATION
+    gsap.to(memoryModal, { opacity: 1, duration: 0.3 });
+    gsap.to(container, {
+      opacity: 1,
+      scale: 1,
+      duration: 0.4,
+      ease: "back.out(1.2)",
+    });
+
+    const handle = document.getElementById("memory-title-handle");
     let mx = 0,
       my = 0;
     handle.onmousedown = (e) => {
@@ -337,8 +416,15 @@ async function init() {
     };
 
     document.getElementById("close-memory").onclick = () => {
-      memoryModal.style.display = "none";
-      memoryModal.innerHTML = "";
+      gsap.to(container, { opacity: 0, scale: 0.8, duration: 0.2 });
+      gsap.to(memoryModal, {
+        opacity: 0,
+        duration: 0.3,
+        onComplete: () => {
+          memoryModal.style.display = "none";
+          memoryModal.innerHTML = "";
+        },
+      });
     };
   }
 
@@ -383,39 +469,29 @@ async function init() {
 
     const executeSwap = () => {
       if (isRitual) {
-        // --- ENTERING RITUAL ---
         renderer.domElement.style.display = "none";
         lDom.style.display = "none";
-
-        // Hide UI elements and kill lines immediately
         glueShelf.folderIcon.style.display = "none";
         glueShelf.vistaWindow.style.display = "none";
         applyShelfState(false, false);
-
         const ui = document.getElementById("logged-in-ui");
         if (ui) ui.style.display = "none";
-
         ritualRoot.style.display = "block";
         initGlueFactory(ritualRoot, db, currentUsername);
       } else {
-        // --- RETURNING HOME ---
         renderer.domElement.style.display = "block";
         lDom.style.display = "block";
-
         if (currentUsername) {
           glueShelf.folderIcon.style.display = "block";
-
-          // SYNC: Restore window visibility and lines based on the shelf's internal state
-          const currentlyExpanded = glueShelf.isExpanded();
-          glueShelf.vistaWindow.style.display = currentlyExpanded
-            ? "flex"
-            : "none";
-          applyShelfState(currentlyExpanded, false);
-
+          const expanded = glueShelf.isExpanded();
+          glueShelf.vistaWindow.style.visibility = expanded
+            ? "visible"
+            : "hidden";
+          glueShelf.vistaWindow.style.opacity = expanded ? 1 : 0;
+          applyShelfState(expanded, false);
           const ui = document.getElementById("logged-in-ui");
           if (ui) ui.style.display = "block";
         }
-
         ritualRoot.style.display = "none";
         unmountGlueFactory();
       }
@@ -426,11 +502,9 @@ async function init() {
       isInitialLoad = false;
       return;
     }
-
     xpLoader.style.display = "flex";
     xpLoader.style.opacity = "1";
     executeSwap();
-
     setTimeout(() => {
       gsap.to(xpLoader, {
         opacity: 0,
@@ -458,19 +532,8 @@ async function init() {
   const addedUsers = new Set();
   onSnapshot(collection(db, "users"), (snap) => {
     const allDocs = snap.docs.map((doc) => doc.data());
-
-    globalGlueCreated = allDocs.some(
-      (u) =>
-        u.manifestations &&
-        Object.values(u.manifestations).some((m) => m.isBottled),
-    );
-
-    // Update the shelf UI with new data
     glueShelf.update(allDocs);
-
-    // Sync line visibility with the ACTUAL state of the shelf window
     applyShelfState(glueShelf.isExpanded(), false);
-
     if (!initialSync) {
       snap.docChanges().forEach((c) => {
         const data = c.doc.data();
@@ -491,13 +554,12 @@ async function init() {
   function addUserToScene(data, isVisible) {
     if (addedUsers.has(data.username)) return;
     addedUsers.add(data.username);
-    if (horseDataRef) {
+    if (horseDataRef)
       horseDataRef.addUserSphere(
         data.username,
         data.innerColor,
         !!data.password,
       );
-    }
     if (data.username === currentUsername && data.innerColor)
       overlay.setInitialColor(data.innerColor);
   }
@@ -510,27 +572,25 @@ async function init() {
     const camPos = camera.position;
     const camDistFromOrigin = camPos.length();
     if (horseDataRef) {
-      // Logic simplified: update connections if opacity is being set
       if (conn.lineMaterial.opacity > 0) conn.updateConnections(horseDataRef);
-
-      const globalActive = camDistFromOrigin < GLOBAL_LABEL_DIST;
+      const globalActive = camDistFromOrigin < 1.6;
       horseDataRef.activeSpheres.forEach((s) => {
         if (!s.label || !s.mesh.visible) return;
         const sphereWorldPos = new THREE.Vector3();
         s.mesh.getWorldPosition(sphereWorldPos);
         const distToSphere = camPos.distanceTo(sphereWorldPos);
         s.label.element.style.opacity =
-          globalActive && distToSphere < INDIVIDUAL_CULL_DIST ? "1" : "0";
+          globalActive && distToSphere < 0.8 ? "1" : "0";
       });
     }
     let timeScale = THREE.MathUtils.clamp(
-      (camDistFromOrigin - FREEZE_DIST) / (FULL_SPEED_DIST - FREEZE_DIST),
+      (camDistFromOrigin - 0.4) / (2.0 - 0.4),
       0,
       1,
     );
     if (interactions.getIsPaused()) {
       timeScale = 0;
-      if (camDistFromOrigin >= FULL_SPEED_DIST) interactions.setIsPaused(false);
+      if (camDistFromOrigin >= 2.0) interactions.setIsPaused(false);
     }
     if (horseUpdater) horseUpdater(timer.getDelta() * timeScale, camera);
     renderer.render(scene, camera);
