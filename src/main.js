@@ -8,6 +8,7 @@ import { createConnections } from "./World/Components/Connections.js";
 import { createOverlayUI } from "./World/Components/OverlayUI.js";
 import { createSphereInteractions } from "./World/Components/SphereInteractions.js";
 import { createTaskbar } from "./World/Components/Taskbar.js";
+import { createAudioLibrary } from "./World/Components/AudioLibrary.js";
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, onSnapshot } from "firebase/firestore";
 import gsap from "gsap";
@@ -283,6 +284,8 @@ async function init() {
   const taskbar = createTaskbar(scene);
   if (!currentUsername) taskbar.style.display = "none";
 
+  const audioLibrary = createAudioLibrary(currentUsername);
+
   [ritualRoot, memoryModal].forEach((uiElement) => {
     uiElement.addEventListener("pointerdown", (e) => e.stopPropagation());
     uiElement.addEventListener("click", (e) => e.stopPropagation());
@@ -408,6 +411,7 @@ async function init() {
         glueShelf.vistaWindow.style.display = "none";
         taskbar.style.display = "none";
         applyShelfState(false, false);
+        audioLibrary.setDisplay(false);
 
         const ui = document.getElementById("logged-in-ui");
         if (ui) ui.style.display = "none";
@@ -422,6 +426,7 @@ async function init() {
         if (currentUsername) {
           glueShelf.folderIcon.style.display = "block";
           taskbar.style.display = "flex";
+          audioLibrary.setDisplay(true);
 
           // SYNC: Restore window visibility and lines based on the shelf's internal state
           const currentlyExpanded = glueShelf.isExpanded();
