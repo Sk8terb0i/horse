@@ -4,7 +4,6 @@ import * as THREE from "three";
 export function createTaskbar(scene) {
   const ASSET_PATH = import.meta.env.BASE_URL + "assets/";
 
-  // 1. THE TASKBAR BASE
   const bar = document.createElement("div");
   bar.id = "vista-taskbar";
   bar.style.cssText = `
@@ -16,14 +15,20 @@ export function createTaskbar(scene) {
     box-shadow: 0 -1px 5px rgba(0,0,0,0.3);
   `;
 
-  // 2. SYSTEM TRAY (Right Side Container)
+  // --- NEW: TASKBAR APPS CONTAINER ---
+  const appsContainer = document.createElement("div");
+  appsContainer.id = "taskbar-apps-container";
+  appsContainer.style.cssText = `
+    display: flex; gap: 6px; flex-grow: 1; align-items: center; height: 100%;
+  `;
+  bar.appendChild(appsContainer);
+
   const systemTray = document.createElement("div");
   systemTray.style.cssText = `
     margin-left: auto; display: flex; align-items: center; gap: 10px;
     font-family: 'Segoe UI', Tahoma, sans-serif; font-size: 11px; color: white;
   `;
 
-  // Clock
   const timeDisplay = document.createElement("div");
   timeDisplay.style.textShadow = "1px 1px 2px rgba(0,0,0,0.8)";
   const updateTime = () => {
@@ -36,7 +41,6 @@ export function createTaskbar(scene) {
   setInterval(updateTime, 1000);
   updateTime();
 
-  // 3. THE SMALL THEME ORB (Right of Time)
   const themeOrb = document.createElement("div");
   themeOrb.id = "tray-theme-orb";
   themeOrb.style.cssText = `
@@ -46,7 +50,6 @@ export function createTaskbar(scene) {
     overflow: hidden; box-shadow: 0 0 5px rgba(0,0,0,0.5);
   `;
 
-  // Glossy reflection overlay for the orb
   const shine = document.createElement("div");
   shine.style.cssText = `
     position: absolute; top: 1px; left: 3px; width: 12px; height: 7px;
@@ -55,12 +58,10 @@ export function createTaskbar(scene) {
   `;
   themeOrb.appendChild(shine);
 
-  // Append items to tray: Time FIRST, then Orb
   systemTray.appendChild(timeDisplay);
   systemTray.appendChild(themeOrb);
   bar.appendChild(systemTray);
 
-  // 4. THEME FLYOUT MENU
   const themeMenu = document.createElement("div");
   themeMenu.id = "theme-flyout-menu";
   themeMenu.style.cssText = `
@@ -115,7 +116,6 @@ export function createTaskbar(scene) {
       setTheme(t);
       toggleMenu(false);
     };
-
     btn.onmouseenter = () => {
       if (document.documentElement.getAttribute("data-theme") !== t.id) {
         btn.style.background = "rgba(255,255,255,0.15)";
@@ -136,7 +136,68 @@ export function createTaskbar(scene) {
   bar.appendChild(themeMenu);
   document.body.appendChild(bar);
 
-  // --- LOGIC ---
+  // --- NEW: GLOBAL TASKBAR WINDOW MANAGER API ---
+  window.TaskbarAPI = {
+    updateApp: (id, title, iconSrc, isRunning, isVisible, onToggle) => {
+      let btn = document.getElementById(`taskbar-btn-${id}`);
+
+      // If closed, remove from taskbar
+      if (!isRunning) {
+        if (btn) btn.remove();
+        return;
+      }
+
+      // If opened, create the taskbar icon
+      if (!btn) {
+        btn = document.createElement("div");
+        btn.id = `taskbar-btn-${id}`;
+        btn.style.cssText = `
+          display: flex; align-items: center; gap: 6px; padding: 0 10px; height: 24px;
+          border-radius: 4px; cursor: pointer; color: white; font-family: 'Segoe UI', Tahoma, sans-serif;
+          font-size: 11px; transition: all 0.2s; border: 1px solid transparent; user-select: none;
+        `;
+        btn.innerHTML = `
+          <img src="${iconSrc}" style="height: 14px; width: auto; filter: drop-shadow(1px 1px 2px rgba(0,0,0,0.5));">
+          <span style="text-shadow: 1px 1px 2px rgba(0,0,0,0.8);">${title}</span>
+        `;
+
+        btn.onmouseenter = () => {
+          if (btn.dataset.active !== "true") {
+            btn.style.background = "rgba(255,255,255,0.1)";
+            btn.style.borderColor = "rgba(255,255,255,0.2)";
+          }
+        };
+        btn.onmouseleave = () => {
+          if (btn.dataset.active !== "true") {
+            btn.style.background = "transparent";
+            btn.style.borderColor = "transparent";
+          }
+        };
+
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          onToggle();
+        };
+        appsContainer.appendChild(btn);
+      }
+
+      // Handle Minimize / Maximize Visual States
+      btn.dataset.active = isVisible;
+      if (isVisible) {
+        btn.style.background =
+          "linear-gradient(180deg, rgba(255,255,255,0.2), rgba(255,255,255,0.05))";
+        btn.style.border = "1px solid rgba(255, 255, 255, 0.4)";
+        btn.style.boxShadow =
+          "inset 0 0 5px rgba(255, 255, 255, 0.3), 0 1px 3px rgba(0,0,0,0.5)";
+      } else {
+        btn.style.background = "transparent";
+        btn.style.border = "1px solid transparent";
+        btn.style.boxShadow = "none";
+      }
+    },
+  };
+  // ----------------------------------------------
+
   let isOpen = false;
   const toggleMenu = (state) => {
     isOpen = state !== undefined ? state : !isOpen;
@@ -163,19 +224,14 @@ export function createTaskbar(scene) {
   const setTheme = (t) => {
     document.documentElement.setAttribute("data-theme", t.id);
     localStorage.setItem("horse_herd_theme", t.id);
-
-    // Update Orb Color to represent selection
     themeOrb.style.background = t.grad;
     themeOrb.style.boxShadow = `0 0 8px ${t.color}`;
-
-    // Update Menu Selection Indication
     Object.keys(tileElements).forEach((id) => {
       tileElements[id].style.background =
         id === t.id ? "rgba(255,255,255,0.3)" : "rgba(255,255,255,0.05)";
       tileElements[id].style.borderColor =
         id === t.id ? "rgba(255,255,255,0.5)" : "transparent";
     });
-
     const style = getComputedStyle(document.documentElement);
     const bgColor = style.getPropertyValue("--bg-color").trim();
     gsap.to(scene.background, { ...new THREE.Color(bgColor), duration: 1.5 });

@@ -9,7 +9,10 @@ export function initGlueShelf(currentUsername, showMemory, onToggle) {
   const savedWindowPos = JSON.parse(
     localStorage.getItem("glue_window_pos"),
   ) || { top: 200, left: 200 };
-  let isShelfExpanded = localStorage.getItem("shelf_expanded") === "true";
+
+  // Separated Running State (in taskbar) vs Visible State (on screen)
+  let isAppRunning = localStorage.getItem("shelf_expanded") === "true";
+  let isWindowVisible = isAppRunning;
 
   const folderIcon = document.createElement("div");
   folderIcon.id = "glue-folder-standalone";
@@ -31,19 +34,28 @@ export function initGlueShelf(currentUsername, showMemory, onToggle) {
   const vistaWindow = document.createElement("div");
   vistaWindow.className = "vista-window shelf-window";
   vistaWindow.style.cssText = `
-    display: ${isShelfExpanded ? "flex" : "none"}; 
-    visibility: ${isShelfExpanded ? "visible" : "hidden"}; 
-    opacity: ${isShelfExpanded ? 1 : 0};
-    transform: ${isShelfExpanded ? "scale(1)" : "scale(0.9) translateY(10px)"};
+    display: ${isWindowVisible ? "flex" : "none"}; 
+    visibility: ${isWindowVisible ? "visible" : "hidden"}; 
+    opacity: ${isWindowVisible ? 1 : 0};
+    transform: ${isWindowVisible ? "scale(1)" : "scale(0.9) translateY(10px)"};
     position: fixed; top: ${savedWindowPos.top}px; left: ${savedWindowPos.left}px; 
     width: 320px; height: 400px; z-index: 5001; flex-direction: column;
-    pointer-events: ${isShelfExpanded ? "auto" : "none"};
+    pointer-events: ${isWindowVisible ? "auto" : "none"};
   `;
 
   vistaWindow.innerHTML = `
     <div class="vista-title-bar" id="shelf-drag-handle" style="cursor: move; user-select: none;">
       <div class="vista-title">Glue Shelf</div>
-      <img src="${ASSET_PATH}aero_close.png" id="shelf-close-btn" style="height: 22px; cursor: pointer; transition: filter 0.2s;">
+      
+      <div style="display: flex; gap: 6px; align-items: center;">
+        <div id="shelf-minimize-btn" style="width: 24px; height: 22px; border: 1px solid rgba(255,255,255,0.4); border-radius: 4px; background: linear-gradient(180deg, rgba(255,255,255,0.3), rgba(255,255,255,0.05)); cursor: pointer; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 5px; box-sizing: border-box; transition: background 0.2s;">
+          <div style="width: 10px; height: 2px; background: white; box-shadow: 0 1px 2px rgba(0,0,0,0.5);"></div>
+        </div>
+        
+        <div id="shelf-close-btn" style="width: 38px; height: 22px; border: 1px solid rgba(255,255,255,0.4); border-radius: 4px; background: linear-gradient(180deg, rgba(230,80,80,0.85) 0%, rgba(190,30,30,0.9) 49%, rgba(150,10,10,0.95) 50%, rgba(210,40,40,0.9) 100%); cursor: pointer; display: flex; align-items: center; justify-content: center; box-sizing: border-box; transition: all 0.2s ease; box-shadow: inset 0 1px 2px rgba(255,255,255,0.6), 0 1px 3px rgba(0,0,0,0.3);">
+          <svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 1 L9 9 M9 1 L1 9" stroke="white" stroke-width="1.5" stroke-linecap="round" style="filter: drop-shadow(0 1px 1px rgba(0,0,0,0.8));"></path></svg>
+        </div>
+      </div>
     </div>
     <div class="vista-content-area" id="shelf-items-container" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; padding: 20px; overflow-y: auto; flex-grow: 1;">
     </div>
@@ -52,13 +64,32 @@ export function initGlueShelf(currentUsername, showMemory, onToggle) {
   document.body.appendChild(folderIcon);
   document.body.appendChild(vistaWindow);
 
-  // --- Z-INDEX MANAGEMENT ---
+  // --- WINDOW MANAGEMENT ---
   const bringToFront = () => {
     window.__highestVistaZIndex = (window.__highestVistaZIndex || 5001) + 1;
     vistaWindow.style.zIndex = window.__highestVistaZIndex;
   };
   vistaWindow.addEventListener("mousedown", bringToFront);
-  // --------------------------
+
+  const syncTaskbar = () => {
+    if (window.TaskbarAPI) {
+      window.TaskbarAPI.updateApp(
+        "glue-shelf",
+        "Glue Shelf",
+        `${ASSET_PATH}folder.png`,
+        isAppRunning,
+        isWindowVisible,
+        () => {
+          isWindowVisible = !isWindowVisible;
+          if (isWindowVisible) bringToFront();
+          animateWindow(isWindowVisible);
+          syncTaskbar();
+          if (onToggle) onToggle(isWindowVisible);
+        },
+      );
+    }
+  };
+  setTimeout(syncTaskbar, 100);
 
   const animateWindow = (show) => {
     if (show) {
@@ -94,6 +125,7 @@ export function initGlueShelf(currentUsername, showMemory, onToggle) {
       if (wasDragged) {
         el.style.left = initialLeft + dx + "px";
         el.style.top = initialTop + dy + "px";
+        if (el === vistaWindow) checkBounds();
       }
     };
     const stop = () => {
@@ -125,6 +157,12 @@ export function initGlueShelf(currentUsername, showMemory, onToggle) {
   };
 
   const folderStatus = makeDraggable(folderIcon, folderIcon, "glue_folder_pos");
+
+  const checkBounds = () => {
+    const rect = vistaWindow.getBoundingClientRect();
+    if (rect.right > window.innerWidth)
+      vistaWindow.style.left = window.innerWidth - rect.width - 20 + "px";
+  };
   makeDraggable(
     vistaWindow,
     vistaWindow.querySelector("#shelf-drag-handle"),
@@ -133,29 +171,62 @@ export function initGlueShelf(currentUsername, showMemory, onToggle) {
 
   folderIcon.addEventListener("click", () => {
     if (folderStatus()) return;
-    isShelfExpanded = !isShelfExpanded;
-    localStorage.setItem("shelf_expanded", isShelfExpanded);
-    if (isShelfExpanded) bringToFront(); // Bring to front when opening
-    animateWindow(isShelfExpanded);
-    if (onToggle) onToggle(isShelfExpanded);
+
+    isAppRunning = true;
+    isWindowVisible = true;
+    localStorage.setItem("shelf_expanded", "true");
+
+    bringToFront();
+    animateWindow(true);
+    syncTaskbar();
+    if (onToggle) onToggle(true);
   });
 
-  vistaWindow.querySelector("#shelf-close-btn").onclick = (e) => {
+  // --- CUSTOM MINIMIZE BUTTON LOGIC ---
+  const minBtn = vistaWindow.querySelector("#shelf-minimize-btn");
+  minBtn.onmouseenter = () =>
+    (minBtn.style.background =
+      "linear-gradient(180deg, rgba(255,255,255,0.6), rgba(255,255,255,0.2))");
+  minBtn.onmouseleave = () =>
+    (minBtn.style.background =
+      "linear-gradient(180deg, rgba(255,255,255,0.3), rgba(255,255,255,0.05))");
+  minBtn.onclick = (e) => {
     e.stopPropagation();
-    isShelfExpanded = false;
-    localStorage.setItem("shelf_expanded", "false");
+    isWindowVisible = false; // Minimizes but stays in taskbar
     animateWindow(false);
+    syncTaskbar();
+    if (onToggle) onToggle(false);
+  };
+
+  // --- CSS CLOSE BUTTON LOGIC ---
+  const closeBtn = vistaWindow.querySelector("#shelf-close-btn");
+  closeBtn.onmouseenter = () => {
+    closeBtn.style.background =
+      "linear-gradient(180deg, rgba(255,120,120,0.95) 0%, rgba(230,50,50,1) 49%, rgba(200,20,20,1) 50%, rgba(250,70,70,1) 100%)";
+    closeBtn.style.boxShadow =
+      "inset 0 1px 4px rgba(255,255,255,0.8), 0 0 8px rgba(255,50,50,0.6)";
+  };
+  closeBtn.onmouseleave = () => {
+    closeBtn.style.background =
+      "linear-gradient(180deg, rgba(230,80,80,0.85) 0%, rgba(190,30,30,0.9) 49%, rgba(150,10,10,0.95) 50%, rgba(210,40,40,0.9) 100%)";
+    closeBtn.style.boxShadow =
+      "inset 0 1px 2px rgba(255,255,255,0.6), 0 1px 3px rgba(0,0,0,0.3)";
+  };
+  closeBtn.onclick = (e) => {
+    e.stopPropagation();
+    isAppRunning = false;
+    isWindowVisible = false;
+    localStorage.setItem("shelf_expanded", "false");
+
+    animateWindow(false);
+    syncTaskbar();
     if (onToggle) onToggle(false);
   };
 
   const shelfStyles = document.createElement("style");
   shelfStyles.innerHTML = `
     .shelf-window .vista-content-area { background: url('${ASSET_PATH}glue_bg.jpg') center/cover no-repeat !important; }
-    .aero-plus-card { 
-      display:flex; flex-direction:column; align-items:center; justify-content:center; 
-      padding:15px; cursor:pointer; border-radius:8px; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      background:rgba(255, 255, 255, 0.1); border:1px solid rgba(255,255,255,0.2); backdrop-filter:blur(5px); 
-    }
+    .aero-plus-card { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:15px; cursor:pointer; border-radius:8px; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); background:rgba(255, 255, 255, 0.1); border:1px solid rgba(255,255,255,0.2); backdrop-filter:blur(5px); }
     .aero-plus-card:hover { background: rgba(255, 255, 255, 0.4) !important; transform: translateY(-5px) scale(1.02) !important; box-shadow: 0 10px 20px rgba(0,0,0,0.2); border-color: rgba(255, 255, 255, 0.8) !important; }
     .aero-plus-card:active { transform: translateY(0) scale(0.98) !important; }
     .aero-plus-icon { width:50px; height:50px; border-radius:50%; background:linear-gradient(135deg, #a8ff78 0%, #08fbff 100%); border:3px solid white; color:white; font-size:32px; display:flex; align-items:center; justify-content:center; font-weight:bold; transition: transform 0.2s ease; }
@@ -166,7 +237,7 @@ export function initGlueShelf(currentUsername, showMemory, onToggle) {
   return {
     folderIcon,
     wrapper: vistaWindow,
-    isExpanded: () => isShelfExpanded,
+    isExpanded: () => isWindowVisible,
     update: (usersData) => {
       const container = document.getElementById("shelf-items-container");
       if (!container) return;

@@ -10,7 +10,10 @@ export function createAudioLibrary(currentUsername) {
   const savedWindowPos = JSON.parse(
     localStorage.getItem("audio_window_pos"),
   ) || { top: 200, left: 250 };
-  let isExpanded = false;
+
+  // State tracking
+  let isAppRunning = localStorage.getItem("audio_running") === "true";
+  let isWindowVisible = isAppRunning;
 
   const player = new Audio();
   let currentlyPlayingItem = null;
@@ -34,9 +37,10 @@ export function createAudioLibrary(currentUsername) {
   windowEl.className = "vista-window";
 
   windowEl.style.cssText = `
-    display: none; visibility: hidden; opacity: 0; transform: scale(0.9) translateY(10px);
+    display: ${isWindowVisible ? "flex" : "none"}; visibility: ${isWindowVisible ? "visible" : "hidden"}; 
+    opacity: ${isWindowVisible ? 1 : 0}; transform: ${isWindowVisible ? "scale(1)" : "scale(0.9) translateY(10px)"};
     position: fixed; top: ${savedWindowPos.top}px; left: ${savedWindowPos.left}px;
-    width: 380px; height: 520px; z-index: 5001; flex-direction: column; pointer-events: none;
+    width: 380px; height: 520px; z-index: 5001; flex-direction: column; pointer-events: ${isWindowVisible ? "auto" : "none"};
     overflow: hidden; background: url('${ASSET_PATH}audio_bg.webp') center/cover no-repeat;
     border-radius: 8px; box-shadow: 0 15px 40px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(255,255,255,0.4);
   `;
@@ -44,7 +48,17 @@ export function createAudioLibrary(currentUsername) {
   windowEl.innerHTML = `
     <div class="vista-title-bar" id="audio-drag-handle" style="cursor: move; user-select: none;">
       <div class="vista-title">Media Player</div>
-      <img src="${ASSET_PATH}aero_close.png" id="audio-close-btn" style="height: 22px; cursor: pointer; transition: filter 0.2s;">
+      
+      <div style="display: flex; gap: 6px; align-items: center;">
+        <div id="audio-minimize-btn" style="width: 24px; height: 22px; border: 1px solid rgba(255,255,255,0.4); border-radius: 4px; background: linear-gradient(180deg, rgba(255,255,255,0.3), rgba(255,255,255,0.05)); cursor: pointer; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 5px; box-sizing: border-box; transition: background 0.2s;">
+          <div style="width: 10px; height: 2px; background: white; box-shadow: 0 1px 2px rgba(0,0,0,0.5);"></div>
+        </div>
+        
+        <div id="audio-close-btn" style="width: 38px; height: 22px; border: 1px solid rgba(255,255,255,0.4); border-radius: 4px; background: linear-gradient(180deg, rgba(230,80,80,0.85) 0%, rgba(190,30,30,0.9) 49%, rgba(150,10,10,0.95) 50%, rgba(210,40,40,0.9) 100%); cursor: pointer; display: flex; align-items: center; justify-content: center; box-sizing: border-box; transition: all 0.2s ease; box-shadow: inset 0 1px 2px rgba(255,255,255,0.6), 0 1px 3px rgba(0,0,0,0.3);">
+          <svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 1 L9 9 M9 1 L1 9" stroke="white" stroke-width="1.5" stroke-linecap="round" style="filter: drop-shadow(0 1px 1px rgba(0,0,0,0.8));"></path></svg>
+        </div>
+      </div>
+
     </div>
     
     <div style="padding: 15px; background: rgba(255,255,255,0.2); border-bottom: 1px solid rgba(255,255,255,0.4); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); display: flex; flex-direction: column; gap: 12px; align-items: center; flex-shrink: 0; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
@@ -71,14 +85,33 @@ export function createAudioLibrary(currentUsername) {
   document.body.appendChild(icon);
   document.body.appendChild(windowEl);
 
-  // --- Z-INDEX MANAGEMENT ---
+  // --- WINDOW MANAGEMENT ---
   const bringToFront = () => {
     window.__highestVistaZIndex = (window.__highestVistaZIndex || 5001) + 1;
     windowEl.style.zIndex = window.__highestVistaZIndex;
   };
   windowEl.addEventListener("mousedown", bringToFront);
-  // --------------------------
 
+  const syncTaskbar = () => {
+    if (window.TaskbarAPI) {
+      window.TaskbarAPI.updateApp(
+        "audio-library",
+        "Media Player",
+        `${ASSET_PATH}audio.png`,
+        isAppRunning,
+        isWindowVisible,
+        () => {
+          isWindowVisible = !isWindowVisible;
+          if (isWindowVisible) bringToFront();
+          animateWindow(isWindowVisible);
+          syncTaskbar();
+        },
+      );
+    }
+  };
+  setTimeout(syncTaskbar, 100);
+
+  // 3. MEDIA PLAYER LOGIC
   const playBtn = windowEl.querySelector("#player-play-btn");
   const progressBg = windowEl.querySelector("#player-progress-bg");
   const progressFill = windowEl.querySelector("#player-progress-fill");
@@ -135,9 +168,8 @@ export function createAudioLibrary(currentUsername) {
       const container = windowEl.querySelector("#audio-items-container");
       container.innerHTML = "";
 
-      if (data.status !== "ok" || !data.items || data.items.length === 0) {
-        throw new Error("No items returned from feed.");
-      }
+      if (data.status !== "ok" || !data.items || data.items.length === 0)
+        throw new Error("No items returned");
 
       data.items.forEach((item, index) => {
         const title = item.title || "Unknown Episode";
@@ -205,12 +237,8 @@ export function createAudioLibrary(currentUsername) {
         }
       });
     } catch (err) {
-      console.error("Podcast fetch error:", err);
-      windowEl.querySelector("#audio-items-container").innerHTML = `
-        <div style="color: red; font-family: sans-serif; text-align: center; margin-top: 20px; background: rgba(255,255,255,0.8); padding: 10px; border-radius: 6px;">
-          Failed to load podcast.<br>
-          <span style="font-size: 10px; color: #555;">Feed might be private or invalid.</span>
-        </div>`;
+      windowEl.querySelector("#audio-items-container").innerHTML =
+        `<div style="color: red; font-family: sans-serif; text-align: center; margin-top: 20px; background: rgba(255,255,255,0.8); padding: 10px; border-radius: 6px;">Failed to load podcast.<br><span style="font-size: 10px; color: #555;">Feed might be private or invalid.</span></div>`;
     }
   };
 
@@ -296,15 +324,56 @@ export function createAudioLibrary(currentUsername) {
 
   icon.addEventListener("click", () => {
     if (iconStatus()) return;
-    isExpanded = !isExpanded;
-    if (isExpanded) bringToFront(); // Bring to front when opening
-    animateWindow(isExpanded);
+
+    isAppRunning = true;
+    isWindowVisible = true;
+    localStorage.setItem("audio_running", "true");
+
+    bringToFront();
+    animateWindow(true);
+    syncTaskbar();
   });
 
-  windowEl.querySelector("#audio-close-btn").onclick = (e) => {
+  // --- CUSTOM MINIMIZE BUTTON LOGIC ---
+  const minBtn = windowEl.querySelector("#audio-minimize-btn");
+  minBtn.onmouseenter = () =>
+    (minBtn.style.background =
+      "linear-gradient(180deg, rgba(255,255,255,0.6), rgba(255,255,255,0.2))");
+  minBtn.onmouseleave = () =>
+    (minBtn.style.background =
+      "linear-gradient(180deg, rgba(255,255,255,0.3), rgba(255,255,255,0.05))");
+  minBtn.onclick = (e) => {
     e.stopPropagation();
-    isExpanded = false;
+    isWindowVisible = false; // Minimizes but stays in taskbar
     animateWindow(false);
+    syncTaskbar();
+  };
+
+  // --- CSS CLOSE BUTTON LOGIC ---
+  const closeBtn = windowEl.querySelector("#audio-close-btn");
+  closeBtn.onmouseenter = () => {
+    closeBtn.style.background =
+      "linear-gradient(180deg, rgba(255,120,120,0.95) 0%, rgba(230,50,50,1) 49%, rgba(200,20,20,1) 50%, rgba(250,70,70,1) 100%)";
+    closeBtn.style.boxShadow =
+      "inset 0 1px 4px rgba(255,255,255,0.8), 0 0 8px rgba(255,50,50,0.6)";
+  };
+  closeBtn.onmouseleave = () => {
+    closeBtn.style.background =
+      "linear-gradient(180deg, rgba(230,80,80,0.85) 0%, rgba(190,30,30,0.9) 49%, rgba(150,10,10,0.95) 50%, rgba(210,40,40,0.9) 100%)";
+    closeBtn.style.boxShadow =
+      "inset 0 1px 2px rgba(255,255,255,0.6), 0 1px 3px rgba(0,0,0,0.3)";
+  };
+  closeBtn.onclick = (e) => {
+    e.stopPropagation();
+
+    isAppRunning = false;
+    isWindowVisible = false;
+    localStorage.setItem("audio_running", "false");
+
+    if (!player.paused) player.pause();
+
+    animateWindow(false);
+    syncTaskbar();
   };
 
   return {
@@ -312,7 +381,7 @@ export function createAudioLibrary(currentUsername) {
       icon.style.display = show && currentUsername ? "flex" : "none";
       if (!show) {
         windowEl.style.display = "none";
-      } else if (isExpanded) {
+      } else if (isAppRunning && isWindowVisible) {
         windowEl.style.display = "flex";
         windowEl.style.opacity = "1";
         windowEl.style.visibility = "visible";

@@ -1,11 +1,11 @@
 /* --- 1. theme definitions --- */
 :root, [data-theme="herd"] {
-  --big-horse-color: #9ece27;
+  --big-horse-color: #b5ce27;
   --user-horse-color: #dedcff;
   --bg-color: #0f0d0b;
   --text-main: #ededee;
   --text-dim: #d6d6d6;
-  --accent-white: #f13bff;
+  --accent-white: #e49aff;
 }
 
 [data-theme="dolphin pov"] {
@@ -21,9 +21,9 @@
   --big-horse-color: #ac6ef7;
   --user-horse-color: #9cb157;
   --bg-color: #0c0c0f;
-  --text-main: #414348;
-  --text-dim: #36383b;
-  --accent-white: #000000;
+  --text-main: #9b9fa9;
+  --text-dim: #72767b;
+  --accent-white: #e9dcf9;
 }
 
 [data-theme="lone"] {
