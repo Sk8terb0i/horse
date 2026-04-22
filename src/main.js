@@ -27,6 +27,8 @@ import {
 import gsap from "gsap";
 import { createAudioManager } from "./World/Components/AudioManager.js";
 
+// MOVED TO TOP LEVEL
+import { createHorseSignaturesUI } from "./World/Components/HorseSignaturesUI.js";
 import {
   initGlueFactory,
   unmountGlueFactory,
@@ -44,7 +46,10 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+// Global State
 let globalVoidMessages = [];
+const signatureUI = createHorseSignaturesUI();
+let globalSignatures = [];
 
 async function init() {
   const scene = new THREE.Scene();
@@ -146,7 +151,45 @@ async function init() {
     (exp) => applyShelfState(exp, true),
   );
   const audioLibrary = createAudioLibrary(currentUsername);
-  const overlay = createOverlayUI(scene, db, () => currentUsername);
+  // ZOOM TO SELF LOGIC
+  const zoomToUserDot = () => {
+    if (!currentUsername || !horseDataRef) return;
+
+    // Find the sphere matching the current username
+    const target = horseDataRef.activeSpheres.find(
+      (s) => s.mesh.name.trim() === currentUsername.trim(),
+    );
+
+    if (target) {
+      const pos = new THREE.Vector3();
+      target.mesh.getWorldPosition(pos);
+
+      // Offset position for the Vista 'docking' view
+      const offset = pos.clone().normalize().multiplyScalar(0.6);
+      const camPos = pos.clone().add(offset);
+
+      gsap.to(camera.position, {
+        x: camPos.x,
+        y: camPos.y,
+        z: camPos.z,
+        duration: 1.5,
+        ease: "power3.inOut",
+      });
+      gsap.to(controls.target, {
+        x: pos.x,
+        y: pos.y,
+        z: pos.z,
+        duration: 1.5,
+        ease: "power3.inOut",
+      });
+    }
+  };
+  const overlay = createOverlayUI(
+    scene,
+    db,
+    () => currentUsername,
+    zoomToUserDot,
+  );
 
   const handleThemeChange = (themeId) => {
     if (themeId === "void") {
@@ -209,8 +252,6 @@ async function init() {
           renderer.domElement.style.display = "none";
           lDom.style.display = "none";
           taskbar.style.display = "flex";
-
-          // UPDATED: Pass globalVoidMessages here to ensure windows populate immediately
           voidMgr.start(getManifestations(), globalVoidMessages);
         } else {
           isVoidMode = false;
@@ -311,12 +352,38 @@ async function init() {
     if (horseDataRef) {
       if (conn.lineMaterial.opacity > 0) conn.updateConnections(horseDataRef);
       const globalActive = camDistFromOrigin < 1.6;
+
       horseDataRef.activeSpheres.forEach((s) => {
         if (!s.label || !s.mesh.visible) return;
         const sphereWorldPos = new THREE.Vector3();
         s.mesh.getWorldPosition(sphereWorldPos);
-        s.label.element.style.opacity =
-          globalActive && camPos.distanceTo(sphereWorldPos) < 0.8 ? "1" : "0";
+
+        const isTargeted =
+          globalActive && camPos.distanceTo(sphereWorldPos) < 0.8;
+        const targetOpacity = isTargeted ? "1" : "0";
+
+        if (
+          isTargeted &&
+          !s.label.element.querySelector(".aero-signature-container")
+        ) {
+          const username = s.mesh.name;
+          const randomSig = signatureUI.getRandomSignature(username);
+
+          if (randomSig) {
+            s.label.element.insertAdjacentHTML(
+              "afterbegin",
+              signatureUI.getSignatureHTML(randomSig),
+            );
+          }
+        } else if (!isTargeted) {
+          // Remove signature when no longer targeted to allow a new random one next time
+          const existing = s.label.element.querySelector(
+            ".aero-signature-container",
+          );
+          if (existing) existing.remove();
+        }
+
+        s.label.element.style.opacity = targetOpacity;
       });
     }
 
@@ -352,12 +419,40 @@ async function init() {
     (snap) => {
       globalVoidMessages = snap.docs.map((doc) => doc.data());
       const theme = localStorage.getItem("horse_herd_theme");
-      // Refresh the Void Manager whenever new messages arrive
       if (theme === "void" && currentUsername) {
         voidMgr.start(getManifestations(), globalVoidMessages);
       }
     },
   );
+
+  const startApp = () => {
+    if (currentUsername) {
+      overlay.showMainUI();
+      taskbar.style.display = "flex";
+    }
+  };
+
+  const policyAgreed = localStorage.getItem(`policy_agreed_${currentUsername}`);
+  if (!policyAgreed && currentUsername && window.location.hash !== "#/ritual") {
+    taskbar.style.display = "none";
+    const ui = document.getElementById("logged-in-ui");
+    if (ui) ui.style.display = "none";
+
+    import("./World/Components/PolicyManager.js").then((module) => {
+      module.createPolicyManager(db, currentUsername, () => {
+        if (ui) ui.style.display = "block";
+        startApp();
+      });
+    });
+  } else {
+    startApp();
+  }
+
+  // SIGNATURE SYNC
+  onSnapshot(collection(db, "policy_signatures"), (snap) => {
+    globalSignatures = snap.docs.map((doc) => doc.data());
+    signatureUI.updateSignatures(globalSignatures);
+  });
 }
 
 init();

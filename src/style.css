@@ -337,3 +337,27 @@ body {
   display: block;
   opacity: 0.8;
 }
+
+/* Add to OverlayUI.js aeroStyle.innerHTML or main.js */
+#logged-in-ui label, .css2d-label {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  pointer-events: none;
+  transition: opacity 0.5s ease;
+}
+
+.aero-signature-container {
+  animation: aero-fade-in 0.4s ease-out;
+}
+
+@keyframes aero-fade-in {
+  from { opacity: 0; transform: scale(0.8) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.css2d-label {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+}
