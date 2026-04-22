@@ -2,7 +2,7 @@ import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 
 export function createPolicyManager(db, username, onComplete) {
   const PREAMBLE_TEXT =
-    "To gallop alongsideh us, you must first acknowledge the collective spirit of the herd. Proceed to agree to our terms and join the herd.";
+    "To gallop alongside us, you must first acknowledge the collective spirit of the herd. Proceed to agree to our terms and join the herd.";
 
   const RULES = [
     "I love horses.",

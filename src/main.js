@@ -155,9 +155,9 @@ async function init() {
   const zoomToUserDot = () => {
     if (!currentUsername || !horseDataRef) return;
 
-    // Find the sphere matching the current username
+    // FIX: Look at s.username instead of s.mesh.name
     const target = horseDataRef.activeSpheres.find(
-      (s) => s.mesh.name.trim() === currentUsername.trim(),
+      (s) => s.username === currentUsername,
     );
 
     if (target) {
@@ -366,17 +366,48 @@ async function init() {
           isTargeted &&
           !s.label.element.querySelector(".aero-signature-container")
         ) {
-          const username = s.mesh.name;
+          // FIX: Look at s.username, NOT s.mesh.name
+          const username = s.username;
           const randomSig = signatureUI.getRandomSignature(username);
+
+          // Check if this dot belongs to the logged-in user
+          const isCurrentUserDot =
+            currentUsername && username === currentUsername;
 
           if (randomSig) {
             s.label.element.insertAdjacentHTML(
               "afterbegin",
-              signatureUI.getSignatureHTML(randomSig),
+              signatureUI.getSignatureHTML(randomSig, isCurrentUserDot),
+            );
+
+            // If it's your dot, make the image clickable to redraw
+            if (isCurrentUserDot) {
+              const sigDiv = s.label.element.querySelector(
+                ".aero-signature-container",
+              );
+              if (sigDiv) {
+                sigDiv.onclick = (e) => {
+                  e.stopPropagation();
+                  // Re-open the Policy Manager
+                  import("./World/Components/PolicyManager.js").then(
+                    (module) => {
+                      module.createPolicyManager(db, currentUsername, () => {
+                        // Remove the old image so the next frame grabs the new one
+                        sigDiv.remove();
+                      });
+                    },
+                  );
+                };
+              }
+            }
+          } else {
+            // Invisible placeholder so it doesn't crash if they have no drawing
+            s.label.element.insertAdjacentHTML(
+              "afterbegin",
+              '<div class="aero-signature-container" style="display:none;"></div>',
             );
           }
         } else if (!isTargeted) {
-          // Remove signature when no longer targeted to allow a new random one next time
           const existing = s.label.element.querySelector(
             ".aero-signature-container",
           );
