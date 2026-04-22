@@ -3,7 +3,6 @@ import gsap from "gsap";
 export function createAudioLibrary(currentUsername) {
   const ASSET_PATH = import.meta.env.BASE_URL + "assets/";
 
-  // Persistent positions
   const savedIconPos = JSON.parse(localStorage.getItem("audio_icon_pos")) || {
     top: 320,
     left: 100,
@@ -13,7 +12,9 @@ export function createAudioLibrary(currentUsername) {
   ) || { top: 200, left: 250 };
   let isExpanded = false;
 
-  // 1. THE DESKTOP ICON
+  const player = new Audio();
+  let currentlyPlayingItem = null;
+
   const icon = document.createElement("div");
   icon.id = "audio-library-standalone";
   icon.style.cssText = `
@@ -29,74 +30,192 @@ export function createAudioLibrary(currentUsername) {
   icon.onmouseenter = () => (icon.style.transform = "scale(1.15)");
   icon.onmouseleave = () => (icon.style.transform = "scale(1)");
 
-  // 2. THE VISTA WINDOW
   const windowEl = document.createElement("div");
   windowEl.className = "vista-window";
+
   windowEl.style.cssText = `
     display: none; visibility: hidden; opacity: 0; transform: scale(0.9) translateY(10px);
     position: fixed; top: ${savedWindowPos.top}px; left: ${savedWindowPos.left}px;
-    width: 360px; height: 500px; z-index: 5001; flex-direction: column; pointer-events: none;
+    width: 380px; height: 520px; z-index: 5001; flex-direction: column; pointer-events: none;
+    overflow: hidden; background: url('${ASSET_PATH}audio_bg.webp') center/cover no-repeat;
+    border-radius: 8px; box-shadow: 0 15px 40px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(255,255,255,0.4);
   `;
 
   windowEl.innerHTML = `
     <div class="vista-title-bar" id="audio-drag-handle" style="cursor: move; user-select: none;">
-      <div class="vista-title">Podcast Library</div>
+      <div class="vista-title">Media Player</div>
       <img src="${ASSET_PATH}aero_close.png" id="audio-close-btn" style="height: 22px; cursor: pointer; transition: filter 0.2s;">
     </div>
-    <div class="vista-content-area" id="audio-items-container" style="display: flex; flex-direction: column; gap: 15px; padding: 20px; overflow-y: auto; flex-grow: 1;">
-      <div style="color: #000; font-family: 'Segoe UI', Tahoma, sans-serif; font-size: 12px; text-align: center; font-style: italic;">Loading episodes...</div>
+    
+    <div style="padding: 15px; background: rgba(255,255,255,0.2); border-bottom: 1px solid rgba(255,255,255,0.4); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); display: flex; flex-direction: column; gap: 12px; align-items: center; flex-shrink: 0; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+      <div id="now-playing-title" style="font-family: 'Segoe UI', Tahoma, sans-serif; font-size: 15px; font-weight: bold; color: #001a33; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; text-shadow: 0 0 5px rgba(255,255,255,0.9), 0 0 10px rgba(255,255,255,0.8);">
+        Select an episode to play
+      </div>
+      
+      <div style="display: flex; align-items: center; gap: 15px; width: 100%; justify-content: center;">
+        <button id="player-play-btn" style="width: 44px; height: 44px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.9); background: radial-gradient(circle at 30% 30%, #5cb3ff, #0059b3); color: white; cursor: pointer; box-shadow: inset 0 2px 5px rgba(255,255,255,0.6), 0 4px 10px rgba(0,0,0,0.4); font-size: 16px; display: flex; align-items: center; justify-content: center; outline: none; transition: transform 0.1s;">▶</button>
+        
+        <div id="player-progress-bg" style="flex-grow: 1; height: 14px; background: rgba(0,0,0,0.3); border-radius: 7px; cursor: pointer; border: 1px solid rgba(255,255,255,0.3); box-shadow: inset 0 2px 5px rgba(0,0,0,0.5); position: relative; overflow: hidden;">
+          <div id="player-progress-fill" style="width: 0%; height: 100%; background: linear-gradient(90deg, #5cb3ff, #08fbff); pointer-events: none; border-radius: 7px; box-shadow: 0 0 8px #08fbff;"></div>
+        </div>
+        
+        <div id="player-time" style="font-family: 'Segoe UI', Tahoma, sans-serif; font-size: 12px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.9); min-width: 35px; font-weight: bold;">0:00</div>
+      </div>
+    </div>
+
+    <div class="vista-content-area" id="audio-items-container" style="display: flex; flex-direction: column; gap: 8px; padding: 12px; overflow-y: auto; flex-grow: 1; background: transparent;">
+      <div style="color: white; text-shadow: 0 1px 3px black; font-family: 'Segoe UI', Tahoma, sans-serif; font-size: 13px; text-align: center; font-style: italic; margin-top: 20px;">Loading episodes...</div>
     </div>
   `;
 
   document.body.appendChild(icon);
   document.body.appendChild(windowEl);
 
-  // 3. FETCH & PARSE RSS FEED
+  // --- Z-INDEX MANAGEMENT ---
+  const bringToFront = () => {
+    window.__highestVistaZIndex = (window.__highestVistaZIndex || 5001) + 1;
+    windowEl.style.zIndex = window.__highestVistaZIndex;
+  };
+  windowEl.addEventListener("mousedown", bringToFront);
+  // --------------------------
+
+  const playBtn = windowEl.querySelector("#player-play-btn");
+  const progressBg = windowEl.querySelector("#player-progress-bg");
+  const progressFill = windowEl.querySelector("#player-progress-fill");
+  const timeDisplay = windowEl.querySelector("#player-time");
+  const titleDisplay = windowEl.querySelector("#now-playing-title");
+
+  const formatTime = (seconds) => {
+    if (isNaN(seconds)) return "0:00";
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60)
+      .toString()
+      .padStart(2, "0");
+    return `${m}:${s}`;
+  };
+
+  playBtn.onclick = () => {
+    if (!player.src) return;
+    if (player.paused) {
+      player.play();
+    } else {
+      player.pause();
+    }
+  };
+
+  playBtn.onmousedown = () => (playBtn.style.transform = "scale(0.95)");
+  playBtn.onmouseup = () => (playBtn.style.transform = "scale(1)");
+  playBtn.onmouseleave = () => (playBtn.style.transform = "scale(1)");
+
+  player.onplay = () => (playBtn.innerHTML = "⏸");
+  player.onpause = () => (playBtn.innerHTML = "▶");
+
+  player.ontimeupdate = () => {
+    const percent = (player.currentTime / player.duration) * 100;
+    progressFill.style.width = `${percent || 0}%`;
+    timeDisplay.innerText = formatTime(player.currentTime);
+  };
+
+  progressBg.onclick = (e) => {
+    if (!player.src || !player.duration) return;
+    const rect = progressBg.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const percent = clickX / rect.width;
+    player.currentTime = percent * player.duration;
+  };
+
   const loadPodcast = async () => {
     try {
       const rssUrl = "https://anchor.fm/s/1106e92d4/podcast/rss";
-      // CORS Proxy to allow frontend fetching
-      const response = await fetch(
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(rssUrl)}`,
-      );
-      const text = await response.text();
-      const xml = new window.DOMParser().parseFromString(text, "text/xml");
-      const items = Array.from(xml.querySelectorAll("item"));
+      const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
+
+      const response = await fetch(apiUrl);
+      const data = await response.json();
 
       const container = windowEl.querySelector("#audio-items-container");
-      container.innerHTML = ""; // Clear loader
+      container.innerHTML = "";
 
-      items.forEach((item) => {
-        const title =
-          item.querySelector("title")?.textContent || "Unknown Episode";
-        const enclosure = item.querySelector("enclosure");
-        const audioUrl = enclosure ? enclosure.getAttribute("url") : null;
+      if (data.status !== "ok" || !data.items || data.items.length === 0) {
+        throw new Error("No items returned from feed.");
+      }
+
+      data.items.forEach((item, index) => {
+        const title = item.title || "Unknown Episode";
+        const audioUrl =
+          item.enclosure && item.enclosure.link ? item.enclosure.link : null;
 
         if (audioUrl) {
-          const card = document.createElement("div");
-          card.style.cssText = `
-            background: rgba(255, 255, 255, 0.4); border: 1px solid rgba(255, 255, 255, 0.6);
-            border-radius: 8px; padding: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-            display: flex; flex-direction: column; gap: 8px; backdrop-filter: blur(5px);
+          const row = document.createElement("div");
+
+          row.style.cssText = `
+            padding: 10px 12px; border-radius: 6px; cursor: pointer; border: 1px solid rgba(255,255,255,0.6);
+            font-family: 'Segoe UI', Tahoma, sans-serif; font-size: 13px; color: #000;
+            display: flex; align-items: center; gap: 10px; transition: all 0.2s ease;
+            background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(5px); box-shadow: 0 2px 6px rgba(0,0,0,0.15);
           `;
-          card.innerHTML = `
-            <div style="font-family: 'Segoe UI', Tahoma, sans-serif; font-weight: 600; font-size: 13px; color: #003366; line-height: 1.2;">${title}</div>
-            <audio controls style="width: 100%; height: 35px; outline: none;">
-              <source src="${audioUrl}" type="audio/mpeg">
-            </audio>
+
+          row.innerHTML = `
+            <div style="width: 24px; height: 24px; background: rgba(0,51,102,0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #003366; font-weight: bold; border: 1px solid rgba(0,51,102,0.2); flex-shrink: 0;">
+              ${index + 1}
+            </div>
+            <div style="flex-grow: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500;">
+              ${title}
+            </div>
           `;
-          container.appendChild(card);
+
+          row.onmouseenter = () => {
+            if (currentlyPlayingItem !== row) {
+              row.style.background = "rgba(255, 255, 255, 0.9)";
+              row.style.borderColor = "rgba(255, 255, 255, 1)";
+              row.style.transform = "translateX(2px)";
+            }
+          };
+          row.onmouseleave = () => {
+            if (currentlyPlayingItem !== row) {
+              row.style.background = "rgba(255, 255, 255, 0.7)";
+              row.style.borderColor = "rgba(255, 255, 255, 0.6)";
+              row.style.transform = "translateX(0)";
+            }
+          };
+
+          row.onclick = () => {
+            if (currentlyPlayingItem) {
+              currentlyPlayingItem.style.background =
+                "rgba(255, 255, 255, 0.7)";
+              currentlyPlayingItem.style.borderColor =
+                "rgba(255, 255, 255, 0.6)";
+              currentlyPlayingItem.style.color = "#000";
+              currentlyPlayingItem.style.textShadow = "none";
+              currentlyPlayingItem.style.transform = "translateX(0)";
+            }
+
+            currentlyPlayingItem = row;
+            row.style.background = "linear-gradient(180deg, #5cb3ff, #0059b3)";
+            row.style.borderColor = "#fff";
+            row.style.color = "#fff";
+            row.style.textShadow = "0 1px 2px rgba(0,0,0,0.8)";
+            row.style.transform = "translateX(4px)";
+
+            titleDisplay.innerText = title;
+            player.src = audioUrl;
+            player.play();
+          };
+
+          container.appendChild(row);
         }
       });
     } catch (err) {
-      windowEl.querySelector("#audio-items-container").innerHTML =
-        `<div style="color: red; text-align: center;">Failed to load podcast.</div>`;
+      console.error("Podcast fetch error:", err);
+      windowEl.querySelector("#audio-items-container").innerHTML = `
+        <div style="color: red; font-family: sans-serif; text-align: center; margin-top: 20px; background: rgba(255,255,255,0.8); padding: 10px; border-radius: 6px;">
+          Failed to load podcast.<br>
+          <span style="font-size: 10px; color: #555;">Feed might be private or invalid.</span>
+        </div>`;
     }
   };
 
   loadPodcast();
 
-  // 4. ANIMATION & INTERACTION LOGIC
   const animateWindow = (show) => {
     if (show) {
       windowEl.style.display = "flex";
@@ -178,6 +297,7 @@ export function createAudioLibrary(currentUsername) {
   icon.addEventListener("click", () => {
     if (iconStatus()) return;
     isExpanded = !isExpanded;
+    if (isExpanded) bringToFront(); // Bring to front when opening
     animateWindow(isExpanded);
   });
 
@@ -187,7 +307,6 @@ export function createAudioLibrary(currentUsername) {
     animateWindow(false);
   };
 
-  // 5. EXPORT METHOD FOR NAVIGATION SYNC
   return {
     setDisplay: (show) => {
       icon.style.display = show && currentUsername ? "flex" : "none";

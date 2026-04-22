@@ -52,6 +52,14 @@ export function initGlueShelf(currentUsername, showMemory, onToggle) {
   document.body.appendChild(folderIcon);
   document.body.appendChild(vistaWindow);
 
+  // --- Z-INDEX MANAGEMENT ---
+  const bringToFront = () => {
+    window.__highestVistaZIndex = (window.__highestVistaZIndex || 5001) + 1;
+    vistaWindow.style.zIndex = window.__highestVistaZIndex;
+  };
+  vistaWindow.addEventListener("mousedown", bringToFront);
+  // --------------------------
+
   const animateWindow = (show) => {
     if (show) {
       vistaWindow.style.display = "flex";
@@ -127,6 +135,7 @@ export function initGlueShelf(currentUsername, showMemory, onToggle) {
     if (folderStatus()) return;
     isShelfExpanded = !isShelfExpanded;
     localStorage.setItem("shelf_expanded", isShelfExpanded);
+    if (isShelfExpanded) bringToFront(); // Bring to front when opening
     animateWindow(isShelfExpanded);
     if (onToggle) onToggle(isShelfExpanded);
   });
@@ -156,7 +165,7 @@ export function initGlueShelf(currentUsername, showMemory, onToggle) {
 
   return {
     folderIcon,
-    vistaWindow,
+    wrapper: vistaWindow,
     isExpanded: () => isShelfExpanded,
     update: (usersData) => {
       const container = document.getElementById("shelf-items-container");
