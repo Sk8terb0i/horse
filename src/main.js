@@ -158,7 +158,7 @@ async function init() {
       audioLibrary.setDisplay(false);
       const ui = document.getElementById("logged-in-ui");
       if (ui) ui.style.display = "none";
-      voidMgr.start(getManifestations());
+      voidMgr.start(getManifestations(), globalVoidMessages);
     } else {
       isVoidMode = false;
       voidMgr.stop();
