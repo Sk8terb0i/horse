@@ -1,7 +1,8 @@
 import gsap from "gsap";
 import * as THREE from "three";
 
-export function createTaskbar(scene) {
+// NEW: Accepts onThemeChange callback
+export function createTaskbar(scene, onThemeChange) {
   const ASSET_PATH = import.meta.env.BASE_URL + "assets/";
 
   const bar = document.createElement("div");
@@ -15,25 +16,18 @@ export function createTaskbar(scene) {
     box-shadow: 0 -1px 5px rgba(0,0,0,0.3);
   `;
 
-  // --- NEW: TASKBAR APPS CONTAINER ---
   const appsContainer = document.createElement("div");
   appsContainer.id = "taskbar-apps-container";
-  appsContainer.style.cssText = `
-    display: flex; gap: 6px; flex-grow: 1; align-items: center; height: 100%;
-  `;
+  appsContainer.style.cssText = `display: flex; gap: 6px; flex-grow: 1; align-items: center; height: 100%;`;
   bar.appendChild(appsContainer);
 
   const systemTray = document.createElement("div");
-  systemTray.style.cssText = `
-    margin-left: auto; display: flex; align-items: center; gap: 10px;
-    font-family: 'Segoe UI', Tahoma, sans-serif; font-size: 11px; color: white;
-  `;
+  systemTray.style.cssText = `margin-left: auto; display: flex; align-items: center; gap: 10px; font-family: 'Segoe UI', Tahoma, sans-serif; font-size: 11px; color: white;`;
 
   const timeDisplay = document.createElement("div");
   timeDisplay.style.textShadow = "1px 1px 2px rgba(0,0,0,0.8)";
   const updateTime = () => {
-    const now = new Date();
-    timeDisplay.innerText = now.toLocaleTimeString([], {
+    timeDisplay.innerText = new Date().toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
     });
@@ -43,19 +37,10 @@ export function createTaskbar(scene) {
 
   const themeOrb = document.createElement("div");
   themeOrb.id = "tray-theme-orb";
-  themeOrb.style.cssText = `
-    width: 20px; height: 20px; border-radius: 50%; cursor: pointer;
-    border: 1.5px solid rgba(255, 255, 255, 0.6); position: relative;
-    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    overflow: hidden; box-shadow: 0 0 5px rgba(0,0,0,0.5);
-  `;
+  themeOrb.style.cssText = `width: 20px; height: 20px; border-radius: 50%; cursor: pointer; border: 1.5px solid rgba(255, 255, 255, 0.6); position: relative; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); overflow: hidden; box-shadow: 0 0 5px rgba(0,0,0,0.5);`;
 
   const shine = document.createElement("div");
-  shine.style.cssText = `
-    position: absolute; top: 1px; left: 3px; width: 12px; height: 7px;
-    background: linear-gradient(to bottom, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0) 100%);
-    border-radius: 50% 50% 40% 40%; pointer-events: none;
-  `;
+  shine.style.cssText = `position: absolute; top: 1px; left: 3px; width: 12px; height: 7px; background: linear-gradient(to bottom, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0) 100%); border-radius: 50% 50% 40% 40%; pointer-events: none;`;
   themeOrb.appendChild(shine);
 
   systemTray.appendChild(timeDisplay);
@@ -73,42 +58,40 @@ export function createTaskbar(scene) {
     flex-direction: column; gap: 3px; padding: 6px;
   `;
 
-  const themes = [
-    {
-      id: "void",
-      name: "Void",
-      color: "#ac6ef7",
-      grad: "radial-gradient(circle at 30% 30%, #ac6ef7, #4b0082 70%, #000)",
-    },
-    {
-      id: "dolphin pov",
-      name: "Dolphin POV",
-      color: "#21dff0",
-      grad: "radial-gradient(circle at 30% 30%, #21dff0, #0059b3 70%, #001a33)",
-    },
-    {
-      id: "lone",
-      name: "Lone",
-      color: "#ffffff",
-      grad: "radial-gradient(circle at 30% 30%, #ffffff, #888 70%, #222)",
-    },
-    {
-      id: "herd",
-      name: "Herd",
-      color: "#9ece27",
-      grad: "radial-gradient(circle at 30% 30%, #9ece27, #4b6b00 70%, #1a2400)",
-    },
+  const themeDefinitions = [
+    { id: "herd", name: "Herd" },
+    { id: "void", name: "Void" },
+    { id: "dolphin pov", name: "Dolphin POV" },
+    { id: "lone", name: "Lone" },
   ];
+
+  const themes = themeDefinitions.map((def) => {
+    const dummy = document.createElement("div");
+    dummy.setAttribute("data-theme", def.id);
+    dummy.style.position = "absolute";
+    dummy.style.visibility = "hidden";
+    document.body.appendChild(dummy);
+    const styles = getComputedStyle(dummy);
+    let color =
+      styles
+        .getPropertyValue(
+          def.id === "dolphin pov" ? "--accent-white" : "--big-horse-color",
+        )
+        .trim() || "#ffffff";
+    let bgColor = styles.getPropertyValue("--bg-color").trim() || "#000000";
+    document.body.removeChild(dummy);
+    return {
+      id: def.id,
+      name: def.name,
+      color: color,
+      grad: `radial-gradient(circle at 30% 30%, ${color}, ${bgColor} 85%, #000)`,
+    };
+  });
 
   const tileElements = {};
   themes.forEach((t) => {
     const btn = document.createElement("div");
-    btn.style.cssText = `
-      padding: 8px 10px; color: white; cursor: pointer; border-radius: 4px;
-      display: flex; align-items: center; gap: 8px; font-family: 'Segoe UI', sans-serif;
-      font-size: 12px; transition: 0.2s ease; background: rgba(255,255,255,0.05);
-      border: 1px solid transparent;
-    `;
+    btn.style.cssText = `padding: 8px 10px; color: white; cursor: pointer; border-radius: 4px; display: flex; align-items: center; gap: 8px; font-family: 'Segoe UI', sans-serif; font-size: 12px; transition: 0.2s ease; background: rgba(255,255,255,0.05); border: 1px solid transparent;`;
     btn.innerHTML = `<div style="width:8px; height:8px; border-radius:50%; background:${t.color}; border:1px solid white; box-shadow: 0 0 3px ${t.color};"></div><span>${t.name}</span>`;
 
     btn.onclick = (e) => {
@@ -131,36 +114,29 @@ export function createTaskbar(scene) {
 
     tileElements[t.id] = btn;
     themeMenu.appendChild(btn);
+
+    if (t.id === "herd") {
+      const divider = document.createElement("div");
+      divider.style.cssText = `height: 1px; background: rgba(255,255,255,0.2); margin: 2px 0 4px 0; border-radius: 1px;`;
+      themeMenu.appendChild(divider);
+    }
   });
 
   bar.appendChild(themeMenu);
   document.body.appendChild(bar);
 
-  // --- NEW: GLOBAL TASKBAR WINDOW MANAGER API ---
   window.TaskbarAPI = {
     updateApp: (id, title, iconSrc, isRunning, isVisible, onToggle) => {
       let btn = document.getElementById(`taskbar-btn-${id}`);
-
-      // If closed, remove from taskbar
       if (!isRunning) {
         if (btn) btn.remove();
         return;
       }
-
-      // If opened, create the taskbar icon
       if (!btn) {
         btn = document.createElement("div");
         btn.id = `taskbar-btn-${id}`;
-        btn.style.cssText = `
-          display: flex; align-items: center; gap: 6px; padding: 0 10px; height: 24px;
-          border-radius: 4px; cursor: pointer; color: white; font-family: 'Segoe UI', Tahoma, sans-serif;
-          font-size: 11px; transition: all 0.2s; border: 1px solid transparent; user-select: none;
-        `;
-        btn.innerHTML = `
-          <img src="${iconSrc}" style="height: 14px; width: auto; filter: drop-shadow(1px 1px 2px rgba(0,0,0,0.5));">
-          <span style="text-shadow: 1px 1px 2px rgba(0,0,0,0.8);">${title}</span>
-        `;
-
+        btn.style.cssText = `display: flex; align-items: center; gap: 6px; padding: 0 10px; height: 24px; border-radius: 4px; cursor: pointer; color: white; font-family: 'Segoe UI', Tahoma, sans-serif; font-size: 11px; transition: all 0.2s; border: 1px solid transparent; user-select: none;`;
+        btn.innerHTML = `<img src="${iconSrc}" style="height: 14px; width: auto; filter: drop-shadow(1px 1px 2px rgba(0,0,0,0.5));"><span style="text-shadow: 1px 1px 2px rgba(0,0,0,0.8);">${title}</span>`;
         btn.onmouseenter = () => {
           if (btn.dataset.active !== "true") {
             btn.style.background = "rgba(255,255,255,0.1)";
@@ -173,15 +149,12 @@ export function createTaskbar(scene) {
             btn.style.borderColor = "transparent";
           }
         };
-
         btn.onclick = (e) => {
           e.stopPropagation();
           onToggle();
         };
         appsContainer.appendChild(btn);
       }
-
-      // Handle Minimize / Maximize Visual States
       btn.dataset.active = isVisible;
       if (isVisible) {
         btn.style.background =
@@ -196,7 +169,6 @@ export function createTaskbar(scene) {
       }
     },
   };
-  // ----------------------------------------------
 
   let isOpen = false;
   const toggleMenu = (state) => {
@@ -235,6 +207,9 @@ export function createTaskbar(scene) {
     const style = getComputedStyle(document.documentElement);
     const bgColor = style.getPropertyValue("--bg-color").trim();
     gsap.to(scene.background, { ...new THREE.Color(bgColor), duration: 1.5 });
+
+    // TRIGGER CALLBACK FOR MAIN.JS
+    if (onThemeChange) onThemeChange(t.id);
   };
 
   themeOrb.onclick = (e) => {
@@ -252,7 +227,7 @@ export function createTaskbar(scene) {
     if (isOpen) toggleMenu(false);
   });
 
-  const savedThemeId = localStorage.getItem("horse_herd_theme") || "lone";
+  const savedThemeId = localStorage.getItem("horse_herd_theme") || "herd";
   setTheme(themes.find((t) => t.id === savedThemeId));
 
   return bar;

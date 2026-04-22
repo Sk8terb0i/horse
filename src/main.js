@@ -12,12 +12,21 @@ import { createAudioLibrary } from "./World/Components/AudioLibrary.js";
 import { initGlueShelf } from "./World/Components/GlueShelf.js";
 import { createMemoryModal } from "./World/Components/MemoryModal.js";
 import { createXPLoader } from "./World/Components/XPLoader.js";
+import { createVoidManager } from "./World/Components/VoidManager.js";
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, onSnapshot } from "firebase/firestore";
+import {
+  getFirestore,
+  collection,
+  onSnapshot,
+  addDoc,
+  serverTimestamp,
+  query,
+  orderBy,
+  limit,
+} from "firebase/firestore";
 import gsap from "gsap";
 import { createAudioManager } from "./World/Components/AudioManager.js";
 
-// Glue Factory Imports
 import {
   initGlueFactory,
   unmountGlueFactory,
@@ -35,6 +44,8 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+let globalVoidMessages = [];
+
 async function init() {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000000);
@@ -49,17 +60,17 @@ async function init() {
 
   let currentUsername = localStorage.getItem("horse_herd_username") || null;
   let horseDataRef = null;
-  let globalGlueCreated = false;
-
-  // FIXED: These must be declared at the very top before any async/await calls
+  let globalUsersData = [];
+  let isVoidMode = false;
   let horseUpdater = null;
+
   const timer = new Timer();
+  const FREEZE_DIST = 0.4;
+  const FULL_SPEED_DIST = 2.0;
 
   const conn = createConnections(scene);
   conn.lineMaterial.transparent = true;
   conn.lineMaterial.opacity = 0;
-
-  const overlay = createOverlayUI(scene, db, () => currentUsername);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -77,9 +88,6 @@ async function init() {
 
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
-  controls.minDistance = 0.01;
-  controls.maxDistance = 10;
-
   const interactions = createSphereInteractions(
     camera,
     controls,
@@ -87,141 +95,167 @@ async function init() {
     () => horseDataRef,
   );
 
-  // Setup Ritual Root
   const ritualRoot = document.createElement("div");
   ritualRoot.id = "glue-factory-root";
   document.body.appendChild(ritualRoot);
-  ritualRoot.addEventListener("pointerdown", (e) => e.stopPropagation());
-  ritualRoot.addEventListener("click", (e) => e.stopPropagation());
 
-  // EXTERNAL UI COMPONENTS
   const memoryModal = createMemoryModal();
   const xpLoader = createXPLoader();
+  const voidMgr = createVoidManager();
 
   const applyShelfState = (expanded, animate = false) => {
-    if (!currentUsername) return;
+    if (!currentUsername || isVoidMode) return;
     const targetOpacity = expanded ? 0.5 : 0;
-    const targetLabelOpacity = expanded ? "1" : "0";
-
-    gsap.killTweensOf(conn.lineMaterial);
-    conn.lineMaterial.transparent = true;
-
-    if (animate) {
-      gsap.to(conn.lineMaterial, {
-        opacity: targetOpacity,
-        duration: 0.5,
-        onUpdate: () => {
-          conn.lineMaterial.needsUpdate = true;
-        },
-      });
-    } else {
-      conn.lineMaterial.opacity = targetOpacity;
-      conn.lineMaterial.needsUpdate = true;
-    }
-
+    gsap.to(conn.lineMaterial, {
+      opacity: targetOpacity,
+      duration: animate ? 0.5 : 0,
+    });
     if (conn.lineLabelDiv) {
-      conn.lineLabelDiv.style.opacity = targetLabelOpacity;
+      conn.lineLabelDiv.style.opacity = expanded ? "1" : "0";
       conn.lineLabelDiv.style.pointerEvents = expanded ? "auto" : "none";
+    }
+  };
+
+  const getManifestations = () => {
+    let manifestations = [];
+    globalUsersData.forEach((u) => {
+      if (u.manifestations) {
+        Object.values(u.manifestations).forEach((m) => {
+          if (m.isBottled && m.finalImage && m.config) manifestations.push(m);
+        });
+      }
+    });
+    return manifestations;
+  };
+
+  window.VoidAPI_SubmitMessage = async (text) => {
+    try {
+      await addDoc(collection(db, "void_messages"), {
+        text: text,
+        user: currentUsername || "Anonymous",
+        timestamp: serverTimestamp(),
+      });
+    } catch (e) {
+      console.error("Ledger write failed", e);
     }
   };
 
   const glueShelf = initGlueShelf(
     currentUsername,
     memoryModal.showMemory,
-    (expanded) => {
-      applyShelfState(expanded, true);
-    },
+    (exp) => applyShelfState(exp, true),
   );
+  const audioLibrary = createAudioLibrary(currentUsername);
+  const overlay = createOverlayUI(scene, db, () => currentUsername);
 
-  const taskbar = createTaskbar(scene);
+  const handleThemeChange = (themeId) => {
+    if (themeId === "void") {
+      isVoidMode = true;
+      renderer.domElement.style.display = "none";
+      lDom.style.display = "none";
+      if (glueShelf.wrapper) glueShelf.wrapper.style.display = "none";
+      if (glueShelf.folderIcon) glueShelf.folderIcon.style.display = "none";
+      audioLibrary.setDisplay(false);
+      const ui = document.getElementById("logged-in-ui");
+      if (ui) ui.style.display = "none";
+      voidMgr.start(getManifestations());
+    } else {
+      isVoidMode = false;
+      voidMgr.stop();
+      if (window.location.hash !== "#/ritual") {
+        renderer.domElement.style.display = "block";
+        lDom.style.display = "block";
+        if (currentUsername) {
+          if (glueShelf.wrapper)
+            glueShelf.wrapper.style.display = glueShelf.isExpanded()
+              ? "flex"
+              : "none";
+          if (glueShelf.folderIcon)
+            glueShelf.folderIcon.style.display = "block";
+          audioLibrary.setDisplay(true);
+          const ui = document.getElementById("logged-in-ui");
+          if (ui) ui.style.display = "block";
+        }
+      }
+    }
+  };
+
+  const taskbar = createTaskbar(scene, handleThemeChange);
   if (!currentUsername) taskbar.style.display = "none";
 
-  const audioLibrary = createAudioLibrary(currentUsername);
-
-  if (currentUsername) {
-    overlay.showMainUI();
-    overlay.setUsername(currentUsername);
-    createAudioManager();
-  }
-
-  // NAVIGATION SYNC
-  let isInitialLoad = true;
   function handleNavigation() {
     const hash = window.location.hash;
     const isRitual = hash === "#/ritual";
+    const currentTheme = localStorage.getItem("horse_herd_theme") || "herd";
 
     const executeSwap = () => {
       if (isRitual) {
+        voidMgr.stop();
         renderer.domElement.style.display = "none";
         lDom.style.display = "none";
-
-        // Match the 'wrapper' object from your uploaded GlueShelf.js
         if (glueShelf.wrapper) glueShelf.wrapper.style.display = "none";
         taskbar.style.display = "none";
         audioLibrary.setDisplay(false);
         applyShelfState(false, false);
-
         const ui = document.getElementById("logged-in-ui");
         if (ui) ui.style.display = "none";
         ritualRoot.style.display = "block";
         initGlueFactory(ritualRoot, db, currentUsername);
       } else {
-        renderer.domElement.style.display = "block";
-        lDom.style.display = "block";
-
-        if (currentUsername) {
-          if (glueShelf.wrapper) glueShelf.wrapper.style.display = "flex";
-          taskbar.style.display = "flex";
-          audioLibrary.setDisplay(true);
-          applyShelfState(glueShelf.isExpanded(), false);
-
-          const ui = document.getElementById("logged-in-ui");
-          if (ui) ui.style.display = "block";
-        }
         ritualRoot.style.display = "none";
         unmountGlueFactory();
+        if (currentTheme === "void") {
+          isVoidMode = true;
+          renderer.domElement.style.display = "none";
+          lDom.style.display = "none";
+          taskbar.style.display = "flex";
+
+          // UPDATED: Pass globalVoidMessages here to ensure windows populate immediately
+          voidMgr.start(getManifestations(), globalVoidMessages);
+        } else {
+          isVoidMode = false;
+          renderer.domElement.style.display = "block";
+          lDom.style.display = "block";
+          if (currentUsername) {
+            if (glueShelf.wrapper)
+              glueShelf.wrapper.style.display = glueShelf.isExpanded()
+                ? "flex"
+                : "none";
+            taskbar.style.display = "flex";
+            audioLibrary.setDisplay(true);
+            applyShelfState(glueShelf.isExpanded(), false);
+            const ui = document.getElementById("logged-in-ui");
+            if (ui) ui.style.display = "block";
+          }
+        }
       }
     };
-
-    if (isInitialLoad) {
-      executeSwap();
-      isInitialLoad = false;
-      return;
-    }
-    xpLoader.triggerLoad(executeSwap);
+    isInitialLoad
+      ? (executeSwap(), (isInitialLoad = false))
+      : xpLoader.triggerLoad(executeSwap);
   }
 
+  let isInitialLoad = true;
   window.addEventListener("hashchange", handleNavigation);
   handleNavigation();
-
-  try {
-    const horseData = await createHorse();
-    horseDataRef = horseData;
-    horseData.horseGroup.rotation.y = THREE.MathUtils.degToRad(-20);
-    scene.add(horseData.horseGroup);
-    horseUpdater = horseData.update;
-    createUserUI(db, overlay, horseData);
-  } catch (err) {
-    console.warn("3D Horse Failed to Load:", err);
-  }
 
   let initialSync = true;
   const addedUsers = new Set();
 
   onSnapshot(collection(db, "users"), (snap) => {
-    const allDocs = snap.docs.map((doc) => doc.data());
-    globalGlueCreated = allDocs.some(
-      (u) =>
-        u.manifestations &&
-        Object.values(u.manifestations).some((m) => m.isBottled),
-    );
-    glueShelf.update(allDocs);
-    applyShelfState(glueShelf.isExpanded(), false);
+    globalUsersData = snap.docs.map((doc) => doc.data());
+    glueShelf.update(globalUsersData);
+
+    const currentTheme = localStorage.getItem("horse_herd_theme") || "herd";
+    if (currentTheme === "void" && currentUsername) {
+      const manifestations = getManifestations();
+      if (manifestations.length > 0) voidMgr.start(manifestations);
+    }
 
     if (!initialSync) {
       snap.docChanges().forEach((c) => {
         const data = c.doc.data();
-        if (c.type === "added") addUserToScene(data, true);
+        if (c.type === "added") addUserToScene(data);
         if (c.type === "modified" && horseDataRef)
           horseDataRef.updateUserColor(
             data.username,
@@ -232,10 +266,10 @@ async function init() {
       return;
     }
     initialSync = false;
-    allDocs.forEach((userData) => addUserToScene(userData, true));
+    globalUsersData.forEach((userData) => addUserToScene(userData));
   });
 
-  function addUserToScene(data, isVisible) {
+  function addUserToScene(data) {
     if (addedUsers.has(data.username)) return;
     addedUsers.add(data.username);
     if (horseDataRef)
@@ -248,9 +282,27 @@ async function init() {
       overlay.setInitialColor(data.innerColor);
   }
 
+  try {
+    const horseData = await createHorse();
+    horseDataRef = horseData;
+    horseData.horseGroup.rotation.y = THREE.MathUtils.degToRad(-20);
+    scene.add(horseData.horseGroup);
+    horseUpdater = horseData.update;
+    createUserUI(db, overlay, horseData);
+    if (currentUsername) {
+      overlay.showMainUI();
+      overlay.setUsername(currentUsername);
+      createAudioManager();
+    }
+  } catch (err) {
+    console.warn("3D Horse Failed to Load:", err);
+  }
+
   function animate(ts) {
     requestAnimationFrame(animate);
-    if (window.location.hash === "#/ritual") return;
+    if (window.location.hash === "#/ritual" || isVoidMode) return;
+
+    const delta = timer.getDelta();
     timer.update(ts);
     controls.update();
     const camPos = camera.position;
@@ -269,20 +321,19 @@ async function init() {
     }
 
     let timeScale = THREE.MathUtils.clamp(
-      (camDistFromOrigin - 0.4) / (2.0 - 0.4),
+      (camDistFromOrigin - FREEZE_DIST) / (FULL_SPEED_DIST - FREEZE_DIST),
       0,
       1,
     );
     if (interactions.getIsPaused()) {
       timeScale = 0;
-      if (camDistFromOrigin >= 2.0) interactions.setIsPaused(false);
+      if (camDistFromOrigin >= FULL_SPEED_DIST) interactions.setIsPaused(false);
     }
+    if (horseUpdater) horseUpdater(delta * timeScale, camera);
 
-    if (horseUpdater) horseUpdater(timer.getDelta() * timeScale, camera);
     renderer.render(scene, camera);
     labelRenderer.render(scene, camera);
   }
-
   requestAnimationFrame(animate);
 
   window.addEventListener("resize", () => {
@@ -291,6 +342,22 @@ async function init() {
     renderer.setSize(window.innerWidth, window.innerHeight);
     labelRenderer.setSize(window.innerWidth, window.innerHeight);
   });
+
+  onSnapshot(
+    query(
+      collection(db, "void_messages"),
+      orderBy("timestamp", "desc"),
+      limit(30),
+    ),
+    (snap) => {
+      globalVoidMessages = snap.docs.map((doc) => doc.data());
+      const theme = localStorage.getItem("horse_herd_theme");
+      // Refresh the Void Manager whenever new messages arrive
+      if (theme === "void" && currentUsername) {
+        voidMgr.start(getManifestations(), globalVoidMessages);
+      }
+    },
+  );
 }
 
 init();
