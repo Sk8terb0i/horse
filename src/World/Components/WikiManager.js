@@ -863,8 +863,15 @@ function openWikiOverlay(db, currentUsername, userRole) {
       formattedContent = parseMarkdownAndLinks(article.content);
     }
 
-    const canEdit = userRole === "admin" || article.section === "community";
-    const canDelete = userRole === "admin";
+    // --- REFINED PERMISSION LOGIC ---
+    const isAdmin = userRole === "admin";
+    const isAuthor = article.author === currentUsername;
+    const isCommunity = article.section === "community";
+
+    // Admins edit/delete everything; Users only their own Community posts
+    const canEdit = isAdmin || (isCommunity && isAuthor);
+    const canDelete = isAdmin || (isCommunity && isAuthor);
+
     let actionButtonsHTML = "";
     if (canEdit)
       actionButtonsHTML += `<button class="wiki-action-btn" id="wiki-edit-btn">Edit</button>`;
@@ -895,6 +902,7 @@ function openWikiOverlay(db, currentUsername, userRole) {
             await deleteDoc(doc(db, "wiki_articles", article.id));
             currentArticleId = null;
             renderSidebar();
+            articleBody.innerHTML = `<h2 style="color: #ccc; text-align: center; margin-top: 20%;">Entry deleted.</h2>`;
           } catch (err) {
             alert("Error deleting.");
           }
