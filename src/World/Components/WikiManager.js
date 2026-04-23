@@ -52,7 +52,9 @@ function openWikiOverlay(db, currentUsername, userRole) {
 
   let currentSection = "lore";
   let articles = [];
+  let activeSuggestions = []; // NEW: Local cache for suggestions
   let currentArticleId = null;
+  let currentSelectionData = null; // NEW: Stores highlighted text for suggestion
 
   const savedWindowPos = JSON.parse(
     localStorage.getItem("wiki_window_pos"),
@@ -73,7 +75,7 @@ function openWikiOverlay(db, currentUsername, userRole) {
   overlay.style.cssText = `
     position: fixed; inset: 0; pointer-events: auto;
     z-index: 10000; display: block; font-family: 'Segoe UI', Tahoma, sans-serif;
-    background: rgba(0,0,0,0.01); /* Invisible block to stop clicks behind window */
+    background: rgba(0,0,0,0.01);
   `;
   wikiWindowRef = overlay;
 
@@ -99,7 +101,7 @@ function openWikiOverlay(db, currentUsername, userRole) {
       .wiki-tab.active { background: #fff; color: #0072ff; box-shadow: inset 0 3px 0 #0072ff; }
       .wiki-content { display: flex; flex-grow: 1; overflow: hidden; background: #fff; position: relative; }
       .wiki-sidebar { width: 250px; background: #f0f4f8; border-right: 1px solid #ccc; overflow-y: auto; padding: 10px 5px; flex-shrink: 0; }
-      .wiki-article-view { flex-grow: 1; padding: 30px 40px; overflow-y: auto; color: #222; font-size: 15px; line-height: 1.6; display: flex; flex-direction: column; }
+      .wiki-article-view { flex-grow: 1; padding: 30px 40px; overflow-y: auto; color: #222; font-size: 15px; line-height: 1.6; display: flex; flex-direction: column; position: relative; }
       
       .obsidian-link { color: #0072ff; text-decoration: none; font-weight: 600; cursor: pointer; background: rgba(0, 114, 255, 0.1); padding: 2px 4px; border-radius: 3px; }
       .obsidian-link:hover { text-decoration: underline; background: rgba(0, 114, 255, 0.2); }
@@ -107,48 +109,46 @@ function openWikiOverlay(db, currentUsername, userRole) {
       
       .wiki-text-content h2, .rich-text-content h2 { color: #004488; border-bottom: 1px solid #ccc; padding-bottom: 5px; margin-top: 25px; margin-bottom: 15px; font-size: 20px; }
       .wiki-text-content h3, .rich-text-content h3 { color: #0059b3; margin-top: 20px; margin-bottom: 10px; font-size: 16px; }
-      .wiki-text-content strong, .rich-text-content strong { font-weight: 700; color: #111; }
-      .wiki-text-content ul, .rich-text-content ul { margin-top: 5px; margin-bottom: 15px; padding-left: 20px; }
-      .wiki-text-content li, .rich-text-content li { margin-bottom: 5px; }
       .wiki-text-content img, .rich-text-content img { max-width: 100%; height: auto; border-radius: 6px; margin: 10px 0; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
-      .wiki-text-content iframe, .rich-text-content iframe { max-width: 100%; border-radius: 6px; margin: 10px 0; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
-      .wiki-text-content audio, .rich-text-content audio { width: 100%; max-width: 400px; margin: 10px 0; }
       
       .sidebar-category-header { padding: 12px 8px 4px 10px; font-weight: 800; color: #0059b3; font-size: 13px; border-bottom: 2px solid #ccc; margin-top: 5px; display: flex; align-items: center; gap: 6px; user-select: none; }
       .sidebar-item { padding: 6px 8px 6px 20px; cursor: pointer; border-bottom: 1px solid transparent; color: #444; font-size: 13px; transition: all 0.2s; user-select: none; border-radius: 4px; margin: 1px 4px; }
       .sidebar-item:hover { background: #e6f2ff; color: #004488; }
       .sidebar-item.active-item { background: linear-gradient(90deg, #0072ff, #0099ff); color: white; font-weight: 600; box-shadow: 0 2px 4px rgba(0,0,0,0.2); border-bottom: none; }
       
+      /* NEW: Suggestion CSS */
+      .suggestion-highlight { background: rgba(255, 235, 59, 0.4); border-bottom: 2px dashed #fbc02d; cursor: pointer; transition: background 0.2s; }
+      .suggestion-highlight:hover { background: rgba(255, 235, 59, 0.6); }
+      .suggest-float-btn { 
+        position: absolute; 
+        background: #0072ff; 
+        color: white; 
+        padding: 6px 12px; 
+        border-radius: 20px; 
+        font-size: 11px; 
+        font-weight: bold; 
+        cursor: pointer; 
+        display: none; 
+        z-index: 10002; 
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3); 
+        border: 1px solid rgba(255,255,255,0.3);
+        pointer-events: auto;
+        white-space: nowrap;
+      }
+
       /* REFERENCE CARD STYLES */
       .ref-section-container { margin-bottom: 10px; border: 1px solid #ddd; border-radius: 6px; overflow: hidden; background: #fff; transition: all 0.3s; }
-      .ref-section-header { 
-        background: linear-gradient(to bottom, #f9f9f9, #ececec); padding: 10px 15px; 
-        cursor: pointer; display: flex; justify-content: space-between; align-items: center;
-        font-weight: bold; color: #004488; border-bottom: 1px solid #ddd;
-      }
-      .ref-section-header:hover { background: #eef6ff; }
+      .ref-section-header { background: linear-gradient(to bottom, #f9f9f9, #ececec); padding: 10px 15px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: bold; color: #004488; border-bottom: 1px solid #ddd; }
       .ref-count { font-size: 10px; background: #0072ff; color: white; padding: 2px 8px; border-radius: 10px; opacity: 0.8; }
-      .ref-section-content { padding: 20px; display: block; }
-      .collapsed .ref-section-content { display: none; }
-      .collapsed .ref-section-header { border-bottom: none; }
-      .ref-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px; }
-      .reference-card { 
-        background: rgba(255,255,255,0.9); border: 1px solid #ccc; border-radius: 4px; 
-        padding: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); transition: transform 0.2s;
-        border-left: 4px solid #0072ff;
-      }
-      .reference-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-color: #0072ff; }
-      .ref-card-header { font-weight: 700; color: #111; margin-bottom: 8px; font-size: 14px; line-height: 1.3; }
-      .ref-card-body { font-size: 13px; color: #444; line-height: 1.5; }
+      .ref-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px; padding: 20px; }
+      .reference-card { background: rgba(255,255,255,0.9); border: 1px solid #ccc; border-radius: 4px; padding: 12px; border-left: 4px solid #0072ff; }
 
       .wiki-toolbar { display: flex; gap: 5px; padding: 8px; background: #f0f4f8; border: 1px solid #ccc; border-bottom: none; border-radius: 4px 4px 0 0; flex-wrap: wrap; align-items: center; }
-      .wiki-tool-btn { background: white; border: 1px solid #ccc; border-radius: 3px; padding: 4px 10px; cursor: pointer; font-size: 14px; font-weight: bold; color: #333; transition: 0.2s; }
-      .wiki-tool-btn:hover { background: #e6f2ff; border-color: #0072ff; color: #0072ff; }
-      .wiki-editor-textarea { flex-grow: 1; border: 1px solid #ccc; border-radius: 0 0 4px 4px; padding: 15px; font-family: 'Segoe UI', Tahoma, sans-serif; font-size: 15px; line-height: 1.6; overflow-y: auto; background: white; outline: none; margin-bottom: 10px; }
+      .wiki-tool-btn { background: white; border: 1px solid #ccc; border-radius: 3px; padding: 4px 10px; cursor: pointer; font-size: 14px; }
+      .wiki-editor-textarea { flex-grow: 1; border: 1px solid #ccc; border-radius: 0 0 4px 4px; padding: 15px; font-family: 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.6; overflow-y: auto; background: white; outline: none; }
       
-      .wiki-tool-modal { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); padding: 20px; border-radius: 8px; border: 1px solid #999; box-shadow: 0 15px 40px rgba(0,0,0,0.5); z-index: 10001; display: none; flex-direction: column; width: 350px; }
+      .wiki-tool-modal { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); padding: 20px; border-radius: 8px; border: 1px solid #999; box-shadow: 0 15px 40px rgba(0,0,0,0.5); z-index: 10005; display: none; flex-direction: column; width: 350px; }
       .wiki-modal-close { position: absolute; top: 10px; right: 10px; cursor: pointer; font-weight: bold; color: #888; }
-      
       .vista-resize-handle { position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize; z-index: 100; background: linear-gradient(135deg, transparent 50%, rgba(0,0,0,0.2) 50%); border-bottom-right-radius: 8px; }
     </style>
     <div class="wiki-window">
@@ -172,6 +172,16 @@ function openWikiOverlay(db, currentUsername, userRole) {
         <div class="wiki-sidebar" id="wiki-article-list"></div>
         <div class="wiki-article-view" id="wiki-article-body"></div>
         
+        <div id="wiki-suggest-btn" class="suggest-float-btn">✨ Suggest Edit</div>
+
+        <div id="wiki-suggestion-modal" class="wiki-tool-modal">
+          <div class="wiki-modal-close" onclick="this.parentElement.style.display='none'">X</div>
+          <h3 style="margin:0 0 10px 0; color:#004488;">Suggest Edit</h3>
+          <p style="font-size:11px; color:#666; margin-bottom:5px;">Proposed change for: <br><span id="wiki-orig-preview" style="font-style:italic; background:#eee;"></span></p>
+          <textarea id="wiki-suggest-text" class="wiki-editor-input" style="height:100px;" placeholder="Your proposed text..."></textarea>
+          <button class="wiki-btn" id="wiki-submit-suggest-btn">Submit Proposal</button>
+        </div>
+
         <div id="wiki-link-modal" class="wiki-tool-modal">
           <div class="wiki-modal-close" onclick="this.parentElement.style.display='none'">X</div>
           <h3 style="margin:0 0 10px 0; color:#004488;">Link to Article</h3>
@@ -183,8 +193,8 @@ function openWikiOverlay(db, currentUsername, userRole) {
           <div class="wiki-modal-close" onclick="this.parentElement.style.display='none'">X</div>
           <h3 style="margin:0 0 10px 0; color:#004488;">Insert Image</h3>
           <input type="file" id="wiki-image-file" accept="image/*" class="wiki-editor-input" />
-          <canvas id="wiki-image-canvas" style="width:100%; max-height:200px; background:#eee; border:1px dashed #999; margin-bottom:10px; display:none; object-fit:contain;"></canvas>
-          <div style="display:flex; gap:5px; margin-bottom:10px;">
+          <canvas id="wiki-image-canvas" style="width:100%; max-height:200px; display:none;"></canvas>
+          <div style="display:flex; gap:5px; margin:10px 0;">
             <button class="wiki-tool-btn" id="wiki-crop-orig" style="flex:1;">Orig</button>
             <button class="wiki-tool-btn" id="wiki-crop-sq" style="flex:1;">1:1</button>
             <button class="wiki-tool-btn" id="wiki-crop-wide" style="flex:1;">16:9</button>
@@ -207,6 +217,10 @@ function openWikiOverlay(db, currentUsername, userRole) {
   document.body.appendChild(overlay);
 
   const wikiWindow = overlay.querySelector(".wiki-window");
+  const suggestBtn = overlay.querySelector("#wiki-suggest-btn");
+  const suggestModal = overlay.querySelector("#wiki-suggestion-modal");
+  const suggestText = overlay.querySelector("#wiki-suggest-text");
+  const origPreview = overlay.querySelector("#wiki-orig-preview");
 
   const bringToFront = () => {
     window.__highestVistaZIndex = (window.__highestVistaZIndex || 10000) + 1;
@@ -297,10 +311,16 @@ function openWikiOverlay(db, currentUsername, userRole) {
     });
   };
 
-  const dragHandle = overlay.querySelector("#wiki-drag-handle");
-  const resizeHandle = overlay.querySelector("#wiki-resize-handle");
-  makeDraggable(wikiWindow, dragHandle, "wiki_window_pos");
-  makeResizable(wikiWindow, resizeHandle, "wiki_window_size");
+  makeDraggable(
+    wikiWindow,
+    overlay.querySelector("#wiki-drag-handle"),
+    "wiki_window_pos",
+  );
+  makeResizable(
+    wikiWindow,
+    overlay.querySelector("#wiki-resize-handle"),
+    "wiki_window_size",
+  );
 
   const sidebar = overlay.querySelector("#wiki-article-list");
   const articleBody = overlay.querySelector("#wiki-article-body");
@@ -353,13 +373,12 @@ function openWikiOverlay(db, currentUsername, userRole) {
     if (text.trim().startsWith('<div class="rich-text-content">')) return text;
     let parsed = text.replace(/\[\[(.*?)\]\]/g, (match, inner) => {
       const parts = inner.split("|");
-      const target = parts[0];
-      const display = parts.length > 1 ? parts[1] : parts[0];
-      return `<span class="obsidian-link" data-target="${target.trim()}">${display.trim()}</span>`;
+      return `<span class="obsidian-link" data-target="${parts[0].trim()}">${(parts[1] || parts[0]).trim()}</span>`;
     });
-    parsed = parsed.replace(/^### (.*$)/gim, "<h3>$1</h3>");
-    parsed = parsed.replace(/^## (.*$)/gim, "<h2>$1</h2>");
-    parsed = parsed.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+    parsed = parsed
+      .replace(/^### (.*$)/gim, "<h3>$1</h3>")
+      .replace(/^## (.*$)/gim, "<h2>$1</h2>")
+      .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
     let inList = false;
     parsed = parsed
       .split("\n")
@@ -375,17 +394,62 @@ function openWikiOverlay(db, currentUsername, userRole) {
           inList = false;
           line = `</ul>${line}`;
         }
-        if (
-          line.trim().startsWith("<h") ||
-          line.trim().startsWith("<ul>") ||
-          line.trim().startsWith("</ul>")
-        )
-          return line;
         return line.trim() === "" ? "<br>" : `${line}<br>`;
       })
       .join("");
     if (inList) parsed += "</ul>";
     return `<div class="rich-text-content">${parsed}</div>`;
+  };
+
+  // NEW: Suggestion Popup Logic
+  const showSuggestionManagementPopup = (e, sug, article) => {
+    const isAdmin = userRole === "admin";
+    const isAuthor = article.author === currentUsername;
+
+    const pop = document.createElement("div");
+    pop.className = "wiki-suggestion-action-pop";
+    pop.style.cssText = `position: absolute; top: ${e.clientY}px; left: ${e.clientX}px; background: white; border: 1px solid #999; border-radius: 8px; padding: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); z-index: 11000; width: 250px; font-size: 13px; font-family: sans-serif;`;
+    pop.innerHTML = `
+      <div style="color:#0072ff; font-weight:bold; margin-bottom:5px;">✨ Edit Suggestion</div>
+      <div style="font-size:11px; color:#666; margin-bottom:10px;">By: ${sug.suggestedBy}</div>
+      <div style="background:#f9f9f9; padding:8px; border:1px solid #ddd; border-radius:4px; margin-bottom:10px; max-height:100px; overflow-y:auto;">${sug.suggestedText}</div>
+      <div id="pop-controls" style="display:flex; gap:5px; justify-content:flex-end;">
+        <button class="wiki-action-btn" id="pop-ignore">Ignore</button>
+      </div>
+    `;
+
+    if (isAdmin || isAuthor) {
+      pop.querySelector("#pop-controls").insertAdjacentHTML(
+        "afterbegin",
+        `
+        <button class="wiki-action-btn" style="color:green; border-color:green;" id="pop-agree">Agree</button>
+        <button class="wiki-action-btn" style="color:red; border-color:red;" id="pop-delete">Delete</button>
+      `,
+      );
+    }
+
+    document.body.appendChild(pop);
+    pop.querySelector("#pop-ignore").onclick = () => pop.remove();
+
+    if (isAdmin || isAuthor) {
+      pop.querySelector("#pop-agree").onclick = async () => {
+        const newContent = article.content.replace(
+          sug.originalText,
+          sug.suggestedText,
+        );
+        await updateDoc(doc(db, "wiki_articles", article.id), {
+          content: newContent,
+        });
+        await deleteDoc(doc(db, "wiki_suggestions", sug.id));
+        pop.remove();
+        renderArticle({ ...article, content: newContent });
+      };
+      pop.querySelector("#pop-delete").onclick = async () => {
+        await deleteDoc(doc(db, "wiki_suggestions", sug.id));
+        pop.remove();
+        renderArticle(article);
+      };
+    }
   };
 
   const renderSidebar = () => {
@@ -398,7 +462,6 @@ function openWikiOverlay(db, currentUsername, userRole) {
       (a) => a.section === currentSection,
     );
     const groupedArticles = {};
-
     sectionArticles.forEach((article) => {
       let rawCat = article.category;
       if (!rawCat) {
@@ -410,44 +473,39 @@ function openWikiOverlay(db, currentUsername, userRole) {
       if (rawCat === "01_The_Apparatus") rawCat = "03_The_Apparatus";
       if (rawCat === "02_The_Essence") rawCat = "01_The_Essence";
       if (rawCat === "03_The_Solvents") rawCat = "02_The_Solvents";
-
       if (!groupedArticles[rawCat]) groupedArticles[rawCat] = [];
       groupedArticles[rawCat].push(article);
     });
 
-    const sortedCategories = Object.keys(groupedArticles).sort();
-
-    sortedCategories.forEach((rawCat) => {
-      const catHeader = document.createElement("div");
-      catHeader.className = "sidebar-category-header";
-      const displayName = rawCat
-        .replace(/^\d{2}_/, "")
-        .replace(/_/g, " ")
-        .trim();
-      const icon = getCategoryIcon(displayName);
-
-      catHeader.innerHTML = `<span>${icon}</span> <span>${displayName}</span>`;
-      sidebar.appendChild(catHeader);
-
-      groupedArticles[rawCat].forEach((article) => {
-        const item = document.createElement("div");
-        item.className = "sidebar-item";
-        if (article.id === currentArticleId) item.classList.add("active-item");
-        item.innerText = article.title;
-        item.onclick = () => {
-          currentArticleId = article.id;
-          renderArticle(article);
-          renderSidebar();
-        };
-        sidebar.appendChild(item);
+    Object.keys(groupedArticles)
+      .sort()
+      .forEach((rawCat) => {
+        const catHeader = document.createElement("div");
+        catHeader.className = "sidebar-category-header";
+        const displayName = rawCat
+          .replace(/^\d{2}_/, "")
+          .replace(/_/g, " ")
+          .trim();
+        catHeader.innerHTML = `<span>${getCategoryIcon(displayName)}</span> <span>${displayName}</span>`;
+        sidebar.appendChild(catHeader);
+        groupedArticles[rawCat].forEach((article) => {
+          const item = document.createElement("div");
+          item.className =
+            "sidebar-item" +
+            (article.id === currentArticleId ? " active-item" : "");
+          item.innerText = article.title;
+          item.onclick = () => {
+            currentArticleId = article.id;
+            renderArticle(article);
+            renderSidebar();
+          };
+          sidebar.appendChild(item);
+        });
       });
-    });
 
     const newBtn = sidebar.querySelector("#wiki-new-article");
-    if (newBtn) {
-      newBtn.onclick = () => {
-        currentArticleId = null;
-        renderSidebar();
+    if (newBtn)
+      newBtn.onclick = () =>
         renderEditor({
           title: "",
           tags: [],
@@ -456,489 +514,287 @@ function openWikiOverlay(db, currentUsername, userRole) {
           section: currentSection,
           author: currentUsername,
         });
-      };
-    }
-  };
-
-  const renderEditor = (article) => {
-    const isNew = !article.id;
-    const uniqueCleanCategories = [
-      ...new Set(
-        articles.map((a) => {
-          let raw = a.category || categoryMap[a.title] || "Uncategorized";
-          if (raw === "01_The_Apparatus") raw = "03_The_Apparatus";
-          if (raw === "02_The_Essence") raw = "01_The_Essence";
-          if (raw === "03_The_Solvents") raw = "02_The_Solvents";
-          return raw
-            .replace(/^\d{2}_/, "")
-            .replace(/_/g, " ")
-            .trim();
-        }),
-      ),
-    ].sort();
-
-    const dataListHTML = `<datalist id="category-options">${uniqueCleanCategories.map((c) => `<option value="${c}">`).join("")}</datalist>`;
-    let displayCategory = article.category
-      ? article.category
-          .replace(/^\d{2}_/, "")
-          .replace(/_/g, " ")
-          .trim()
-      : "";
-
-    let initContent = article.content || "";
-    if (
-      initContent &&
-      !initContent.startsWith('<div class="rich-text-content">')
-    ) {
-      initContent = parseMarkdownAndLinks(initContent);
-    }
-    initContent = initContent
-      .replace(/^<div class="rich-text-content">/, "")
-      .replace(/<\/div>$/, "");
-
-    articleBody.innerHTML = `
-      <h2 style="color: #004488; margin-bottom: 15px;">${isNew ? "Create New Entry" : "Editing: " + article.title}</h2>
-      <div style="display:flex; gap:10px;">
-        <input type="text" id="edit-title" class="wiki-editor-input" style="flex:2;" value="${article.title ? article.title.replace(/"/g, "&quot;") : ""}" placeholder="Article Title" />
-        <input type="text" id="edit-category" list="category-options" class="wiki-editor-input" style="flex:1;" value="${displayCategory}" placeholder="Category" />
-      </div>
-      <input type="text" id="edit-tags" class="wiki-editor-input" value="${article.tags ? article.tags.join(", ") : ""}" placeholder="Tags (comma separated)" />
-      <div class="wiki-toolbar">
-        <button class="wiki-tool-btn" data-cmd="bold" title="Bold">🅱️</button>
-        <button class="wiki-tool-btn" data-cmd="italic" title="Italic">ℹ️</button>
-        <div style="width:1px; height:20px; background:#ccc; margin:0 5px;"></div>
-        <button class="wiki-tool-btn" data-cmd="formatBlock" data-val="H2" title="Header 2">H2</button>
-        <button class="wiki-tool-btn" data-cmd="formatBlock" data-val="H3" title="Header 3">H3</button>
-        <button class="wiki-tool-btn" data-cmd="insertUnorderedList" title="Bullet List">• List</button>
-        <div style="width:1px; height:20px; background:#ccc; margin:0 5px;"></div>
-        <button class="wiki-tool-btn" id="tool-link" title="Link to Article">🔗 Link</button>
-        <button class="wiki-tool-btn" id="tool-image" title="Insert Image">🖼️ Image</button>
-        <button class="wiki-tool-btn" id="tool-embed" title="Embed Video/Audio">🎬 Embed</button>
-        <button class="wiki-tool-btn" id="tool-mic" title="Record Audio">🎙️ Mic</button>
-      </div>
-      <div id="edit-content" class="wiki-editor-textarea rich-text-content" contenteditable="true">${initContent}</div>
-      ${dataListHTML}
-      <div style="display: flex; gap: 10px; flex-shrink: 0;">
-        <button class="wiki-btn" id="wiki-save-btn" style="width: auto;">Save Entry</button>
-        <button class="wiki-btn" id="wiki-cancel-btn" style="width: auto; background: linear-gradient(to bottom, #999, #666); border-color: #555;">Cancel</button>
-      </div>
-    `;
-
-    const editorDiv = articleBody.querySelector("#edit-content");
-    let savedRange = null;
-    const saveSelection = () => {
-      const sel = window.getSelection();
-      if (sel.getRangeAt && sel.rangeCount) savedRange = sel.getRangeAt(0);
-    };
-    const restoreSelection = () => {
-      if (savedRange) {
-        const sel = window.getSelection();
-        sel.removeAllRanges();
-        sel.addRange(savedRange);
-      }
-    };
-
-    articleBody.querySelectorAll(".wiki-tool-btn[data-cmd]").forEach((btn) => {
-      btn.onclick = (e) => {
-        e.preventDefault();
-        const cmd = btn.getAttribute("data-cmd");
-        const val = btn.getAttribute("data-val") || null;
-        document.execCommand(cmd, false, val);
-        editorDiv.focus();
-      };
-    });
-
-    // Modals
-    const linkModal = overlay.querySelector("#wiki-link-modal");
-    const linkSearch = overlay.querySelector("#wiki-link-search");
-    const linkResults = overlay.querySelector("#wiki-link-results");
-
-    articleBody.querySelector("#tool-link").onclick = () => {
-      saveSelection();
-      if (!savedRange || savedRange.collapsed)
-        return alert("Please highlight text first to create a link.");
-      linkModal.style.display = "flex";
-      linkSearch.value = "";
-      linkResults.innerHTML = "";
-      linkSearch.focus();
-    };
-
-    linkSearch.oninput = () => {
-      const val = linkSearch.value.toLowerCase();
-      linkResults.innerHTML = "";
-      if (!val) return;
-      const matches = articles.filter((a) =>
-        a.title.toLowerCase().includes(val),
-      );
-      matches.forEach((m) => {
-        const div = document.createElement("div");
-        div.style.cssText =
-          "padding: 8px; cursor:pointer; border-bottom:1px solid #eee; font-size:13px;";
-        div.innerText = m.title;
-        div.onclick = () => {
-          restoreSelection();
-          const span = document.createElement("span");
-          span.className = "obsidian-link";
-          span.dataset.target = m.title;
-          span.innerText = savedRange.toString();
-          savedRange.deleteContents();
-          savedRange.insertNode(span);
-          savedRange.setStartAfter(span);
-          savedRange.collapse(true);
-          const sel = window.getSelection();
-          sel.removeAllRanges();
-          sel.addRange(savedRange);
-          linkModal.style.display = "none";
-        };
-        linkResults.appendChild(div);
-      });
-    };
-
-    const imgModal = overlay.querySelector("#wiki-image-modal");
-    const imgFile = overlay.querySelector("#wiki-image-file");
-    const imgCanvas = overlay.querySelector("#wiki-image-canvas");
-    const ctx = imgCanvas.getContext("2d");
-    let currentImage = null;
-    let cropMode = "orig";
-
-    articleBody.querySelector("#tool-image").onclick = () => {
-      saveSelection();
-      imgModal.style.display = "flex";
-      imgCanvas.style.display = "none";
-      imgFile.value = "";
-    };
-
-    const drawImage = () => {
-      if (!currentImage) return;
-      imgCanvas.style.display = "block";
-      const MAX_WIDTH = 800;
-      let width = currentImage.width;
-      let height = currentImage.height;
-      let sourceX = 0,
-        sourceY = 0,
-        sourceW = width,
-        sourceH = height;
-      if (cropMode === "sq") {
-        const min = Math.min(width, height);
-        sourceX = (width - min) / 2;
-        sourceY = (height - min) / 2;
-        sourceW = min;
-        sourceH = min;
-      } else if (cropMode === "wide") {
-        const targetRatio = 16 / 9;
-        const currentRatio = width / height;
-        if (currentRatio > targetRatio) {
-          sourceW = height * targetRatio;
-          sourceX = (width - sourceW) / 2;
-        } else {
-          sourceH = width / targetRatio;
-          sourceY = (height - sourceH) / 2;
-        }
-      }
-      let targetW = sourceW,
-        targetH = sourceH;
-      if (targetW > MAX_WIDTH) {
-        targetH = Math.round((targetH * MAX_WIDTH) / targetW);
-        targetW = MAX_WIDTH;
-      }
-      imgCanvas.width = targetW;
-      imgCanvas.height = targetH;
-      ctx.drawImage(
-        currentImage,
-        sourceX,
-        sourceY,
-        sourceW,
-        sourceH,
-        0,
-        0,
-        targetW,
-        targetH,
-      );
-    };
-
-    imgFile.onchange = (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        currentImage = new Image();
-        currentImage.onload = drawImage;
-        currentImage.src = ev.target.result;
-      };
-      reader.readAsDataURL(file);
-    };
-
-    overlay.querySelector("#wiki-crop-orig").onclick = () => {
-      cropMode = "orig";
-      drawImage();
-    };
-    overlay.querySelector("#wiki-crop-sq").onclick = () => {
-      cropMode = "sq";
-      drawImage();
-    };
-    overlay.querySelector("#wiki-crop-wide").onclick = () => {
-      cropMode = "wide";
-      drawImage();
-    };
-
-    overlay.querySelector("#wiki-insert-image-btn").onclick = () => {
-      if (!currentImage) return alert("Select an image first.");
-      restoreSelection();
-      const dataUrl = imgCanvas.toDataURL("image/webp", 0.7);
-      document.execCommand("insertImage", false, dataUrl);
-      imgModal.style.display = "none";
-    };
-
-    const embedModal = overlay.querySelector("#wiki-embed-modal");
-    const embedUrl = overlay.querySelector("#wiki-embed-url");
-    articleBody.querySelector("#tool-embed").onclick = () => {
-      saveSelection();
-      embedModal.style.display = "flex";
-      embedUrl.value = "";
-    };
-    overlay.querySelector("#wiki-insert-embed-btn").onclick = () => {
-      const url = embedUrl.value.trim();
-      if (!url) return;
-      restoreSelection();
-      let html = "";
-      if (url.includes("youtube.com") || url.includes("youtu.be")) {
-        const vidId =
-          url.split("v=")[1]?.split("&")[0] ||
-          url.split("youtu.be/")[1]?.split("?")[0];
-        if (vidId)
-          html = `<iframe width="100%" height="315" src="https://www.youtube.com/embed/${vidId}" frameborder="0" allowfullscreen></iframe><br>`;
-      } else if (url.match(/\.(mp3|wav|ogg)$/i))
-        html = `<audio controls src="${url}"></audio><br>`;
-      else if (url.match(/\.(mp4|webm)$/i))
-        html = `<video controls src="${url}" style="width:100%; max-width:600px;"></video><br>`;
-      else html = `<a href="${url}" target="_blank">${url}</a>`;
-      document.execCommand("insertHTML", false, html);
-      embedModal.style.display = "none";
-    };
-
-    let mediaRecorder;
-    let audioChunks = [];
-    const micBtn = articleBody.querySelector("#tool-mic");
-    micBtn.onclick = async () => {
-      if (mediaRecorder && mediaRecorder.state === "recording") {
-        mediaRecorder.stop();
-        micBtn.style.color = "#333";
-        micBtn.innerHTML = "🎙️ Mic";
-      } else {
-        try {
-          saveSelection();
-          const stream = await navigator.mediaDevices.getUserMedia({
-            audio: true,
-          });
-          mediaRecorder = new MediaRecorder(stream);
-          mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
-          mediaRecorder.onstop = () => {
-            const blob = new Blob(audioChunks, { type: "audio/webm" });
-            audioChunks = [];
-            const reader = new FileReader();
-            reader.onloadend = () => {
-              restoreSelection();
-              document.execCommand(
-                "insertHTML",
-                false,
-                `<audio controls src="${reader.result}"></audio><br>`,
-              );
-            };
-            reader.readAsDataURL(blob);
-          };
-          mediaRecorder.start();
-          micBtn.style.color = "red";
-          micBtn.innerHTML = "🔴 Rec...";
-        } catch (e) {
-          alert("Microphone access denied.");
-        }
-      }
-    };
-
-    articleBody.querySelector("#wiki-save-btn").onclick = async () => {
-      const newTitle = articleBody.querySelector("#edit-title").value.trim();
-      const newCatStr = articleBody
-        .querySelector("#edit-category")
-        .value.trim();
-      const newTagsStr = articleBody.querySelector("#edit-tags").value.trim();
-      const rawHTML = articleBody.querySelector("#edit-content").innerHTML;
-      const newContent = `<div class="rich-text-content">${rawHTML}</div>`;
-      const newTags = newTagsStr
-        .split(",")
-        .map((t) => t.trim())
-        .filter((t) => t);
-      if (!newTitle) return alert("Title is required!");
-
-      let finalCategory = newCatStr || "Uncategorized";
-      const matchingArticle = articles.find((a) => {
-        let raw = a.category || categoryMap[a.title] || "Uncategorized";
-        if (raw === "01_The_Apparatus") raw = "03_The_Apparatus";
-        if (raw === "02_The_Essence") raw = "01_The_Essence";
-        if (raw === "03_The_Solvents") raw = "02_The_Solvents";
-        return (
-          raw
-            .replace(/^\d{2}_/, "")
-            .replace(/_/g, " ")
-            .trim()
-            .toLowerCase() === newCatStr.toLowerCase()
-        );
-      });
-      if (matchingArticle) {
-        finalCategory =
-          matchingArticle.category ||
-          categoryMap[matchingArticle.title] ||
-          finalCategory;
-        if (finalCategory === "01_The_Apparatus")
-          finalCategory = "03_The_Apparatus";
-        if (finalCategory === "02_The_Essence")
-          finalCategory = "01_The_Essence";
-        if (finalCategory === "03_The_Solvents")
-          finalCategory = "02_The_Solvents";
-      }
-
-      try {
-        if (isNew) {
-          const docRef = await addDoc(collection(db, "wiki_articles"), {
-            title: newTitle,
-            category: finalCategory,
-            tags: newTags,
-            content: newContent,
-            section: currentSection,
-            author: currentUsername,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
-          currentArticleId = docRef.id;
-        } else {
-          await updateDoc(doc(db, "wiki_articles", article.id), {
-            title: newTitle,
-            category: finalCategory,
-            tags: newTags,
-            content: newContent,
-            updatedAt: serverTimestamp(),
-          });
-          renderArticle({
-            ...article,
-            title: newTitle,
-            category: finalCategory,
-            tags: newTags,
-            content: newContent,
-          });
-        }
-      } catch (err) {
-        alert("Error saving article.");
-      }
-    };
   };
 
   const renderArticle = (article) => {
     currentArticleId = article.id;
     const isReference = article.section === "references";
-    let formattedContent = "";
+    let articleContent = article.content;
 
+    // INJECT SUGGESTION HIGHLIGHTS
+    activeSuggestions
+      .filter((s) => s.articleId === article.id && s.status === "pending")
+      .forEach((s) => {
+        const highlight = `<span class="suggestion-highlight" data-sid="${s.id}">${s.originalText}</span>`;
+        articleContent = articleContent.replace(s.originalText, highlight);
+      });
+
+    let html = "";
     if (isReference) {
-      const segments = article.content.split(/(?=^### )/gm);
-      formattedContent = segments
-        .map((segment) => {
-          if (!segment.trim()) return "";
-          const themeMatch = segment.match(/^### (.*$)/m);
-          const themeTitle = themeMatch ? themeMatch[1] : "General References";
-          const bullets = segment.split(/\n- /g).slice(1);
-          const introText = segment
-            .split(/\n- /g)[0]
-            .replace(/^### .*$/m, "")
-            .trim();
-          const cardsHTML = bullets
-            .map((bullet) => {
-              const parts = bullet.match(/^\*\*(.*?)\*\*:(.*)/s);
-              const header = parts ? parts[1] : "Source";
-              const body = parts ? parts[2] : bullet;
-              return `<div class="reference-card"><div class="ref-card-header">${parseMarkdownAndLinks(header)}</div><div class="ref-card-body">${parseMarkdownAndLinks(body)}</div></div>`;
+      const segments = articleContent.split(/(?=^### )/gm);
+      html = segments
+        .map((seg) => {
+          if (!seg.trim()) return "";
+          const theme = (seg.match(/^### (.*$)/m) || [])[1] || "General";
+          const bullets = seg.split(/\n- /g).slice(1);
+          const cards = bullets
+            .map((b) => {
+              const p = b.match(/^\*\*(.*?)\*\*:(.*)/s);
+              return `<div class="reference-card"><div class="ref-card-header">${parseMarkdownAndLinks(p ? p[1] : "Source")}</div><div class="ref-card-body">${parseMarkdownAndLinks(p ? p[2] : b)}</div></div>`;
             })
             .join("");
-          return `<div class="ref-section-container"><div class="ref-section-header" onclick="this.parentElement.classList.toggle('collapsed')"><span>📂 ${themeTitle}</span><span class="ref-count">${bullets.length} Sources</span></div><div class="ref-section-content">${introText ? `<p style="margin-bottom:15px; font-style:italic; color:#555;">${parseMarkdownAndLinks(introText)}</p>` : ""}<div class="ref-grid">${cardsHTML}</div></div></div>`;
+          return `<div class="ref-section-container"><div class="ref-section-header" onclick="this.parentElement.classList.toggle('collapsed')"><span>📂 ${theme}</span><span class="ref-count">${bullets.length} Sources</span></div><div class="ref-grid">${cards}</div></div>`;
         })
         .join("");
     } else {
-      formattedContent = parseMarkdownAndLinks(article.content);
+      html = parseMarkdownAndLinks(articleContent);
     }
 
-    // --- REFINED PERMISSION LOGIC ---
     const isAdmin = userRole === "admin";
     const isAuthor = article.author === currentUsername;
-    const isCommunity = article.section === "community";
-
-    // Admins edit/delete everything; Users only their own Community posts
-    const canEdit = isAdmin || (isCommunity && isAuthor);
-    const canDelete = isAdmin || (isCommunity && isAuthor);
-
-    let actionButtonsHTML = "";
-    if (canEdit)
-      actionButtonsHTML += `<button class="wiki-action-btn" id="wiki-edit-btn">Edit</button>`;
-    if (canDelete)
-      actionButtonsHTML += `<button class="wiki-action-btn delete" id="wiki-delete-btn">Delete</button>`;
+    const canEdit = isAdmin || (article.section === "community" && isAuthor);
 
     articleBody.innerHTML = `
-      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 5px;">
-        <h1 style="color: #002244; margin: 0; font-size: 28px;">${article.title}</h1>
-        <div style="display: flex; margin-top: 5px;">${actionButtonsHTML}</div>
+      <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:5px;">
+        <h1 style="color:#002244; margin:0; font-size:28px;">${article.title}</h1>
+        <div style="display:flex;">
+          ${canEdit ? `<button class="wiki-action-btn" id="wiki-edit-btn">Edit</button>` : ""}
+          ${isAdmin || (isAuthor && article.section === "community") ? `<button class="wiki-action-btn" id="wiki-delete-btn" style="color:red;">Delete</button>` : ""}
+        </div>
       </div>
-      <div style="font-size: 12px; color: #666; margin-bottom: 25px; padding-bottom: 10px; border-bottom: 1px solid #eee;">
-        By: <strong>${article.author}</strong> | Section: <span style="text-transform: capitalize;">${article.section}</span>
-      </div>
-      <div class="wiki-text-content">${formattedContent}</div>
-      <hr style="margin-top: 50px; border: 0; border-top: 1px dashed #ccc;">
-      <h3 style="color: #555; margin-top: 20px;">Community Suggestions & Comments</h3>
-      <div id="wiki-comments-section" style="font-style: italic; color: #888; background: #f9f9f9; padding: 15px; border-radius: 4px; border: 1px solid #ddd;">(Commenting coming online soon...)</div>
+      <div style="font-size:12px; color:#666; margin-bottom:20px; border-bottom: 1px solid #eee; padding-bottom: 10px;">By: <strong>${article.author}</strong> | Section: ${article.section}</div>
+      <div class="wiki-text-content">${html}</div>
     `;
 
-    if (canEdit)
-      articleBody.querySelector("#wiki-edit-btn").onclick = () =>
-        renderEditor(article);
-    if (canDelete) {
-      articleBody.querySelector("#wiki-delete-btn").onclick = async () => {
-        if (confirm(`Delete "${article.title}"?`)) {
-          try {
-            await deleteDoc(doc(db, "wiki_articles", article.id));
-            currentArticleId = null;
-            renderSidebar();
-            articleBody.innerHTML = `<h2 style="color: #ccc; text-align: center; margin-top: 20%;">Entry deleted.</h2>`;
-          } catch (err) {
-            alert("Error deleting.");
-          }
-        }
+    // Highlight Suggest Listener
+
+    articleBody.onmouseup = (e) => {
+      const sel = window.getSelection();
+      if (
+        sel.rangeCount > 0 &&
+        !sel.isCollapsed &&
+        sel.toString().trim().length > 0
+      ) {
+        const range = sel.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        const contentRect = overlay
+          .querySelector(".wiki-content")
+          .getBoundingClientRect();
+
+        currentSelectionData = {
+          text: sel.toString().trim(),
+          articleId: currentArticleId,
+        };
+
+        // Use contentRect as the anchor for absolute positioning
+        suggestBtn.style.left = `${rect.left - contentRect.left + rect.width / 2 - 45}px`;
+        suggestBtn.style.top = `${rect.top - contentRect.top - 40}px`;
+        suggestBtn.style.display = "block";
+      } else {
+        suggestBtn.style.display = "none";
+      }
+    };
+
+    articleBody.querySelectorAll(".suggestion-highlight").forEach((el) => {
+      el.onclick = (e) => {
+        e.stopPropagation();
+        showSuggestionManagementPopup(
+          e,
+          activeSuggestions.find((s) => s.id === el.dataset.sid),
+          article,
+        );
       };
-    }
-    articleBody.querySelectorAll(".obsidian-link").forEach((link) => {
-      link.onclick = (e) => {
-        const targetTitle = e.target.dataset.target.toLowerCase();
+    });
+
+    articleBody.querySelectorAll(".obsidian-link").forEach((l) => {
+      l.onclick = () => {
         const found = articles.find(
-          (a) => a.title.toLowerCase() === targetTitle,
+          (a) => a.title.toLowerCase() === l.dataset.target.toLowerCase(),
         );
         if (found) {
           currentSection = found.section;
           currentArticleId = found.id;
-          overlay
-            .querySelectorAll(".wiki-tab")
-            .forEach((t) => t.classList.remove("active"));
-          overlay
-            .querySelector(`[data-section="${currentSection}"]`)
-            .classList.add("active");
           renderSidebar();
           renderArticle(found);
-        } else {
-          alert(`"${targetTitle}" not written yet.`);
-        }
+        } else alert(`"${l.dataset.target}" not written yet.`);
       };
     });
+
+    if (canEdit)
+      articleBody.querySelector("#wiki-edit-btn").onclick = () =>
+        renderEditor(article);
+    if (articleBody.querySelector("#wiki-delete-btn"))
+      articleBody.querySelector("#wiki-delete-btn").onclick = async () => {
+        if (confirm(`Delete "${article.title}"?`)) {
+          await deleteDoc(doc(db, "wiki_articles", article.id));
+          currentArticleId = null;
+          renderSidebar();
+        }
+      };
   };
 
-  const q = query(collection(db, "wiki_articles"));
-  const unsubscribe = onSnapshot(q, (snap) => {
+  const renderEditor = (article) => {
+    const isNew = !article.id;
+    let initC = article.content || "";
+    if (initC && !initC.startsWith('<div class="rich-text-content">'))
+      initC = parseMarkdownAndLinks(initC);
+    initC = initC
+      .replace(/^<div class="rich-text-content">/, "")
+      .replace(/<\/div>$/, "");
+
+    articleBody.innerHTML = `
+      <h2 style="margin-bottom:15px; color:#004488;">${isNew ? "New Entry" : "Editing: " + article.title}</h2>
+      <div style="display:flex; gap:10px; margin-bottom:10px;">
+        <input type="text" id="edit-title" style="flex:2; padding:8px;" value="${article.title || ""}" placeholder="Title" />
+        <input type="text" id="edit-category" style="flex:1; padding:8px;" value="${(article.category || "").replace(/^\d{2}_/, "").replace(/_/g, " ")}" placeholder="Category" />
+      </div>
+      <div class="wiki-toolbar">
+        <button class="wiki-tool-btn" data-cmd="bold"><b>B</b></button>
+        <button class="wiki-tool-btn" data-cmd="italic"><i>I</i></button>
+        <button class="wiki-tool-btn" data-cmd="formatBlock" data-val="H2">H2</button>
+        <button class="wiki-tool-btn" data-cmd="formatBlock" data-val="H3">H3</button>
+        <button class="wiki-tool-btn" id="tool-link">🔗 Link</button>
+        <button class="wiki-tool-btn" id="tool-image">🖼️ Image</button>
+        <button class="wiki-tool-btn" id="tool-embed">🎬 Embed</button>
+        <button class="wiki-tool-btn" id="tool-mic">🎙️ Mic</button>
+      </div>
+      <div id="edit-content" class="wiki-editor-textarea rich-text-content" contenteditable="true">${initC}</div>
+      <div style="display:flex; gap:10px; margin-top:10px;">
+        <button class="wiki-btn" id="wiki-save-btn">Save</button>
+        <button class="wiki-btn" id="wiki-cancel-btn" style="background:#999;">Cancel</button>
+      </div>
+    `;
+
+    const ed = articleBody.querySelector("#edit-content");
+    articleBody.querySelectorAll(".wiki-tool-btn[data-cmd]").forEach((b) => {
+      b.onclick = () => {
+        document.execCommand(b.dataset.cmd, false, b.dataset.val || null);
+        ed.focus();
+      };
+    });
+
+    articleBody.querySelector("#tool-mic").onclick = async () => {
+      const mBtn = articleBody.querySelector("#tool-mic");
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+        });
+        const mr = new MediaRecorder(stream);
+        const ac = [];
+        mr.ondataavailable = (e) => ac.push(e.data);
+        mr.onstop = () => {
+          const b = new Blob(ac, { type: "audio/webm" });
+          const reader = new FileReader();
+          reader.onloadend = () =>
+            document.execCommand(
+              "insertHTML",
+              false,
+              `<audio controls src="${reader.result}"></audio><br>`,
+            );
+          reader.readAsDataURL(b);
+        };
+        mr.start();
+        mBtn.innerText = "🔴 Rec...";
+        setTimeout(() => {
+          mr.stop();
+          mBtn.innerText = "🎙️ Mic";
+        }, 5000);
+      } catch (e) {
+        alert("Mic denied.");
+      }
+    };
+
+    const iMod = overlay.querySelector("#wiki-image-modal");
+    const iCan = overlay.querySelector("#wiki-image-canvas");
+    articleBody.querySelector("#tool-image").onclick = () => {
+      iMod.style.display = "flex";
+      overlay.querySelector("#wiki-image-file").value = "";
+      iCan.style.display = "none";
+    };
+    overlay.querySelector("#wiki-image-file").onchange = (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      const r = new FileReader();
+      r.onload = (ev) => {
+        const img = new Image();
+        img.onload = () => {
+          iCan.style.display = "block";
+          iCan.width = 800;
+          iCan.height = (img.height * 800) / img.width;
+          iCan.getContext("2d").drawImage(img, 0, 0, 800, iCan.height);
+        };
+        img.src = ev.target.result;
+      };
+      r.readAsDataURL(f);
+    };
+    overlay.querySelector("#wiki-insert-image-btn").onclick = () => {
+      document.execCommand(
+        "insertImage",
+        false,
+        iCan.toDataURL("image/webp", 0.7),
+      );
+      iMod.style.display = "none";
+    };
+
+    articleBody.querySelector("#wiki-save-btn").onclick = async () => {
+      const title = articleBody.querySelector("#edit-title").value.trim();
+      const cat = articleBody.querySelector("#edit-category").value.trim();
+      const content = `<div class="rich-text-content">${ed.innerHTML}</div>`;
+      if (!title) return alert("Title required.");
+      if (isNew)
+        await addDoc(collection(db, "wiki_articles"), {
+          title,
+          category: cat,
+          content,
+          section: currentSection,
+          author: currentUsername,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      else
+        await updateDoc(doc(db, "wiki_articles", article.id), {
+          title,
+          category: cat,
+          content,
+          updatedAt: serverTimestamp(),
+        });
+      renderSidebar();
+    };
+    articleBody.querySelector("#wiki-cancel-btn").onclick = () =>
+      isNew ? renderSidebar() : renderArticle(article);
+  };
+
+  suggestBtn.onclick = () => {
+    suggestModal.style.display = "flex";
+    origPreview.innerText = currentSelectionData.text;
+    suggestText.value = currentSelectionData.text;
+    suggestBtn.style.display = "none";
+  };
+  overlay.querySelector("#wiki-submit-suggest-btn").onclick = async () => {
+    if (!suggestText.value.trim()) return;
+    await addDoc(collection(db, "wiki_suggestions"), {
+      articleId: currentArticleId,
+      suggestedBy: currentUsername,
+      originalText: currentSelectionData.text,
+      suggestedText: suggestText.value.trim(),
+      status: "pending",
+      timestamp: serverTimestamp(),
+    });
+    suggestModal.style.display = "none";
+    alert("Suggestion submitted.");
+  };
+
+  onSnapshot(collection(db, "wiki_suggestions"), (snap) => {
+    activeSuggestions = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    if (currentArticleId) {
+      const cur = articles.find((a) => a.id === currentArticleId);
+      if (cur) renderArticle(cur);
+    }
+  });
+
+  onSnapshot(query(collection(db, "wiki_articles")), (snap) => {
     articles = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     renderSidebar();
-
-    // NEW: Auto-load first article on initial data load
     if (!currentArticleId && articles.length > 0) {
       const first = articles.find((a) => a.section === currentSection);
       if (first) renderArticle(first);
@@ -953,39 +809,21 @@ function openWikiOverlay(db, currentUsername, userRole) {
       tab.classList.add("active");
       currentSection = tab.dataset.section;
       renderSidebar();
-
-      // NEW: Auto-load first article of the section
       const first = articles.find((a) => a.section === currentSection);
       if (first) renderArticle(first);
       else
-        articleBody.innerHTML = `<h2 style="color: #ccc; text-align: center; margin-top: 20%;">No entries in this section.</h2>`;
+        articleBody.innerHTML = `<h2 style="color: #ccc; text-align: center; margin-top: 20%;">No entries.</h2>`;
     };
   });
 
-  const minBtn = overlay.querySelector("#wiki-minimize");
-  minBtn.onclick = (e) => {
+  overlay.querySelector("#wiki-minimize").onclick = (e) => {
     e.stopPropagation();
     isWindowVisible = false;
     overlay.style.display = "none";
     syncWikiTaskbar();
   };
-
-  const closeBtn = overlay.querySelector("#wiki-close");
-  closeBtn.onmouseenter = () => {
-    closeBtn.style.background =
-      "linear-gradient(180deg, rgba(255,120,120,0.95) 0%, rgba(230,50,50,1) 49%, rgba(200,20,20,1) 50%, rgba(250,70,70,1) 100%)";
-    closeBtn.style.boxShadow =
-      "inset 0 1px 4px rgba(255,255,255,0.8), 0 0 8px rgba(255,50,50,0.6)";
-  };
-  closeBtn.onmouseleave = () => {
-    closeBtn.style.background =
-      "linear-gradient(180deg, rgba(230,80,80,0.85) 0%, rgba(190,30,30,0.9) 49%, rgba(150,10,10,0.95) 50%, rgba(210,40,40,0.9) 100%)";
-    closeBtn.style.boxShadow =
-      "inset 0 1px 2px rgba(255,255,255,0.6), 0 1px 3px rgba(0,0,0,0.3)";
-  };
-  closeBtn.onclick = (e) => {
+  overlay.querySelector("#wiki-close").onclick = (e) => {
     e.stopPropagation();
-    unsubscribe();
     overlay.remove();
     wikiWindowRef = null;
     isAppRunning = false;
