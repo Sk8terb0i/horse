@@ -7,7 +7,9 @@ import {
   updateDoc,
   addDoc,
   serverTimestamp,
-  getDoc, // <-- ADD THIS
+  getDoc,
+  where, // NEWLY ADDED
+  orderBy, // NEWLY ADDED
 } from "firebase/firestore";
 
 let wikiWindowRef = null;
@@ -518,10 +520,11 @@ function openWikiOverlay(db, currentUsername, userRole) {
 
   const renderArticle = (article) => {
     currentArticleId = article.id;
-    const isReference = article.section === "references";
+    renderSidebar();
+
     let articleContent = article.content;
 
-    // INJECT SUGGESTION HIGHLIGHTS
+    // Inject Suggestion Highlights
     activeSuggestions
       .filter((s) => s.articleId === article.id && s.status === "pending")
       .forEach((s) => {
@@ -530,7 +533,9 @@ function openWikiOverlay(db, currentUsername, userRole) {
       });
 
     let html = "";
-    if (isReference) {
+    const isRef = article.section === "references";
+
+    if (isRef) {
       const segments = articleContent.split(/(?=^### )/gm);
       html = segments
         .map((seg) => {
@@ -543,7 +548,7 @@ function openWikiOverlay(db, currentUsername, userRole) {
               return `<div class="reference-card"><div class="ref-card-header">${parseMarkdownAndLinks(p ? p[1] : "Source")}</div><div class="ref-card-body">${parseMarkdownAndLinks(p ? p[2] : b)}</div></div>`;
             })
             .join("");
-          return `<div class="ref-section-container"><div class="ref-section-header" onclick="this.parentElement.classList.toggle('collapsed')"><span>📂 ${theme}</span><span class="ref-count">${bullets.length} Sources</span></div><div class="ref-grid">${cards}</div></div>`;
+          return `<div class="ref-section-container"><div class="ref-section-header" onclick="this.parentElement.classList.toggle('collapsed')"><span>📂 ${theme}</span><span class="ref-count">${bullets.length} Sources</span></div><div class="ref-section-content"><div class="ref-grid">${cards}</div></div></div>`;
         })
         .join("");
     } else {
@@ -555,6 +560,18 @@ function openWikiOverlay(db, currentUsername, userRole) {
     const canEdit = isAdmin || (article.section === "community" && isAuthor);
 
     articleBody.innerHTML = `
+      <style>
+        .comment-block { background: #fdfdfd; border: 1px solid #eee; border-radius: 6px; padding: 12px; margin-bottom: 10px; position: relative; }
+        .comment-reply { margin-left: 30px; border-left: 2px solid #0072ff; background: #f9f9fb; }
+        .comment-header { font-size: 11px; color: #777; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center; }
+        .comment-text { font-size: 13px; color: #333; line-height: 1.4; }
+        .comment-actions { display: flex; gap: 10px; align-items: center; margin-top: 8px; }
+        .reply-link { font-size: 11px; color: #0072ff; cursor: pointer; font-weight: bold; }
+        .delete-comment-link { font-size: 11px; color: #cc0000; cursor: pointer; font-weight: bold; }
+        .comment-input-area { margin-top: 20px; border-top: 1px dashed #ccc; padding-top: 15px; }
+        .comment-box { width: 100%; border: 1px solid #ccc; border-radius: 4px; padding: 8px; font-family: sans-serif; font-size: 13px; resize: none; min-height: 60px; margin-bottom: 8px; }
+      </style>
+
       <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:5px;">
         <h1 style="color:#002244; margin:0; font-size:28px;">${article.title}</h1>
         <div style="display:flex;">
@@ -562,12 +579,137 @@ function openWikiOverlay(db, currentUsername, userRole) {
           ${isAdmin || (isAuthor && article.section === "community") ? `<button class="wiki-action-btn" id="wiki-delete-btn" style="color:red;">Delete</button>` : ""}
         </div>
       </div>
-      <div style="font-size:12px; color:#666; margin-bottom:20px; border-bottom: 1px solid #eee; padding-bottom: 10px;">By: <strong>${article.author}</strong> | Section: ${article.section}</div>
+      <div style="font-size:12px; color:#666; margin-bottom:20px; border-bottom: 1px solid #eee; padding-bottom: 10px;">By: <strong>${article.author}</strong> | Section: <span style="text-transform: capitalize;">${article.section}</span></div>
+      
       <div class="wiki-text-content">${html}</div>
+
+      <hr style="margin-top: 50px; border: 0; border-top: 1px dashed #ccc;">
+      <h3 style="color: #555; margin-top: 20px;">Community Discussion</h3>
+      <div id="wiki-comments-container">Loading conversation...</div>
+
+      <div class="comment-input-area">
+        <textarea id="main-comment-input" class="comment-box" placeholder="Share your thoughts with the herd..."></textarea>
+        <button class="wiki-btn" id="submit-main-comment" style="width: auto;">Post Comment</button>
+      </div>
     `;
 
-    // Highlight Suggest Listener
+    const loadComments = () => {
+      const comContainer = articleBody.querySelector(
+        "#wiki-comments-container",
+      );
+      const qCom = query(
+        collection(db, "wiki_comments"),
+        where("articleId", "==", article.id),
+        orderBy("timestamp", "asc"),
+      );
 
+      onSnapshot(qCom, (snap) => {
+        const allComs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        comContainer.innerHTML =
+          allComs.length === 0
+            ? '<p style="color:#999; font-style:italic; font-size:13px;">No comments yet.</p>'
+            : "";
+
+        const topLevel = allComs.filter((c) => !c.parentId);
+        topLevel.forEach((parent) => {
+          const parentEl = document.createElement("div");
+          parentEl.className = "comment-block";
+          parentEl.innerHTML = `
+            <div class="comment-header">
+                <strong>${parent.author}</strong> 
+                <div>
+                  ${isAdmin ? `<span class="delete-comment-link" data-id="${parent.id}">Delete</span>` : ""}
+                  <span style="margin-left:8px;">${parent.timestamp?.toDate().toLocaleString() || "just now"}</span>
+                </div>
+            </div>
+            <div class="comment-text">${parent.text}</div>
+            <div class="comment-actions">
+              <div class="reply-link" data-id="${parent.id}">↳ Reply</div>
+            </div>
+            <div id="replies-to-${parent.id}"></div>
+            <div id="input-for-${parent.id}" style="display:none; margin-top:10px;">
+              <textarea class="comment-box" id="reply-text-${parent.id}" placeholder="Replying..."></textarea>
+              <button class="wiki-btn" style="width:auto; font-size:11px;" id="send-reply-${parent.id}">Post Reply</button>
+            </div>
+          `;
+          comContainer.appendChild(parentEl);
+
+          // Handle Top-Level Deletion
+          if (isAdmin) {
+            parentEl.querySelector(".delete-comment-link").onclick =
+              async () => {
+                if (confirm("Delete this comment?"))
+                  await deleteDoc(doc(db, "wiki_comments", parent.id));
+              };
+          }
+
+          const replies = allComs.filter((c) => c.parentId === parent.id);
+          const replyBox = parentEl.querySelector(`#replies-to-${parent.id}`);
+          replies.forEach((rep) => {
+            const repEl = document.createElement("div");
+            repEl.className = "comment-block comment-reply";
+            repEl.innerHTML = `
+              <div class="comment-header">
+                <strong>${rep.author}</strong> 
+                <div>
+                  ${isAdmin ? `<span class="delete-comment-link" data-id="${rep.id}">Delete</span>` : ""}
+                  <span style="margin-left:8px;">${rep.timestamp?.toDate().toLocaleString() || "now"}</span>
+                </div>
+              </div>
+              <div class="comment-text">${rep.text}</div>
+            `;
+            replyBox.appendChild(repEl);
+
+            // Handle Reply Deletion
+            if (isAdmin) {
+              repEl.querySelector(".delete-comment-link").onclick =
+                async () => {
+                  if (confirm("Delete this reply?"))
+                    await deleteDoc(doc(db, "wiki_comments", rep.id));
+                };
+            }
+          });
+
+          parentEl.querySelector(".reply-link").onclick = () => {
+            const ui = parentEl.querySelector(`#input-for-${parent.id}`);
+            ui.style.display = ui.style.display === "none" ? "block" : "none";
+          };
+
+          parentEl.querySelector(`#send-reply-${parent.id}`).onclick =
+            async () => {
+              const txt = parentEl
+                .querySelector(`#reply-text-${parent.id}`)
+                .value.trim();
+              if (!txt) return;
+              await addDoc(collection(db, "wiki_comments"), {
+                articleId: article.id,
+                parentId: parent.id,
+                author: currentUsername,
+                text: txt,
+                timestamp: serverTimestamp(),
+              });
+            };
+        });
+      });
+    };
+
+    loadComments();
+
+    articleBody.querySelector("#submit-main-comment").onclick = async () => {
+      const input = articleBody.querySelector("#main-comment-input");
+      const txt = input.value.trim();
+      if (!txt) return;
+      await addDoc(collection(db, "wiki_comments"), {
+        articleId: article.id,
+        parentId: null,
+        author: currentUsername,
+        text: txt,
+        timestamp: serverTimestamp(),
+      });
+      input.value = "";
+    };
+
+    // Article Interactions
     articleBody.onmouseup = (e) => {
       const sel = window.getSelection();
       if (
@@ -580,13 +722,10 @@ function openWikiOverlay(db, currentUsername, userRole) {
         const contentRect = overlay
           .querySelector(".wiki-content")
           .getBoundingClientRect();
-
         currentSelectionData = {
           text: sel.toString().trim(),
           articleId: currentArticleId,
         };
-
-        // Use contentRect as the anchor for absolute positioning
         suggestBtn.style.left = `${rect.left - contentRect.left + rect.width / 2 - 45}px`;
         suggestBtn.style.top = `${rect.top - contentRect.top - 40}px`;
         suggestBtn.style.display = "block";
@@ -623,7 +762,7 @@ function openWikiOverlay(db, currentUsername, userRole) {
     if (canEdit)
       articleBody.querySelector("#wiki-edit-btn").onclick = () =>
         renderEditor(article);
-    if (articleBody.querySelector("#wiki-delete-btn"))
+    if (articleBody.querySelector("#wiki-delete-btn")) {
       articleBody.querySelector("#wiki-delete-btn").onclick = async () => {
         if (confirm(`Delete "${article.title}"?`)) {
           await deleteDoc(doc(db, "wiki_articles", article.id));
@@ -631,6 +770,7 @@ function openWikiOverlay(db, currentUsername, userRole) {
           renderSidebar();
         }
       };
+    }
   };
 
   const renderEditor = (article) => {
