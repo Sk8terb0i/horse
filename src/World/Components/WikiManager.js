@@ -18,7 +18,7 @@ function syncWikiTaskbar() {
   if (window.TaskbarAPI) {
     window.TaskbarAPI.updateApp(
       "wiki-kb",
-      "Knowledge Base",
+      "Horse Knowledge Base",
       "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='4' y='4' width='24' height='24' rx='3' fill='%230072ff'/%3E%3Crect x='4' y='4' width='8' height='24' rx='3' fill='%2300fbff' opacity='0.5'/%3E%3Cpath stroke='%23fff' stroke-width='2' stroke-linecap='round' d='M16 12h6M16 16h6M16 20h6'/%3E%3C/svg%3E",
       isAppRunning,
       isWindowVisible,
@@ -71,8 +71,9 @@ function openWikiOverlay(db, currentUsername, userRole) {
   const overlay = document.createElement("div");
   overlay.id = "wiki-overlay";
   overlay.style.cssText = `
-    position: fixed; inset: 0; pointer-events: none;
+    position: fixed; inset: 0; pointer-events: auto;
     z-index: 10000; display: block; font-family: 'Segoe UI', Tahoma, sans-serif;
+    background: rgba(0,0,0,0.01); /* Invisible block to stop clicks behind window */
   `;
   wikiWindowRef = overlay;
 
@@ -118,22 +119,35 @@ function openWikiOverlay(db, currentUsername, userRole) {
       .sidebar-item:hover { background: #e6f2ff; color: #004488; }
       .sidebar-item.active-item { background: linear-gradient(90deg, #0072ff, #0099ff); color: white; font-weight: 600; box-shadow: 0 2px 4px rgba(0,0,0,0.2); border-bottom: none; }
       
-      .wiki-action-btn { background: transparent; border: 1px solid #ccc; border-radius: 3px; padding: 3px 8px; cursor: pointer; font-size: 12px; color: #555; transition: all 0.2s; margin-left: 8px; }
-      .wiki-action-btn:hover { background: #f0f0f0; color: #000; }
-      .wiki-action-btn.delete:hover { background: #ffe6e6; color: #cc0000; border-color: #cc0000; }
-      
-      /* NEW EDITOR STYLES */
-      .wiki-editor-input { width: 100%; border: 1px solid #ccc; border-radius: 4px; padding: 8px; margin-bottom: 10px; font-family: 'Segoe UI', Tahoma, sans-serif; font-size: 14px; box-sizing: border-box; }
+      /* REFERENCE CARD STYLES */
+      .ref-section-container { margin-bottom: 10px; border: 1px solid #ddd; border-radius: 6px; overflow: hidden; background: #fff; transition: all 0.3s; }
+      .ref-section-header { 
+        background: linear-gradient(to bottom, #f9f9f9, #ececec); padding: 10px 15px; 
+        cursor: pointer; display: flex; justify-content: space-between; align-items: center;
+        font-weight: bold; color: #004488; border-bottom: 1px solid #ddd;
+      }
+      .ref-section-header:hover { background: #eef6ff; }
+      .ref-count { font-size: 10px; background: #0072ff; color: white; padding: 2px 8px; border-radius: 10px; opacity: 0.8; }
+      .ref-section-content { padding: 20px; display: block; }
+      .collapsed .ref-section-content { display: none; }
+      .collapsed .ref-section-header { border-bottom: none; }
+      .ref-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px; }
+      .reference-card { 
+        background: rgba(255,255,255,0.9); border: 1px solid #ccc; border-radius: 4px; 
+        padding: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); transition: transform 0.2s;
+        border-left: 4px solid #0072ff;
+      }
+      .reference-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-color: #0072ff; }
+      .ref-card-header { font-weight: 700; color: #111; margin-bottom: 8px; font-size: 14px; line-height: 1.3; }
+      .ref-card-body { font-size: 13px; color: #444; line-height: 1.5; }
+
       .wiki-toolbar { display: flex; gap: 5px; padding: 8px; background: #f0f4f8; border: 1px solid #ccc; border-bottom: none; border-radius: 4px 4px 0 0; flex-wrap: wrap; align-items: center; }
       .wiki-tool-btn { background: white; border: 1px solid #ccc; border-radius: 3px; padding: 4px 10px; cursor: pointer; font-size: 14px; font-weight: bold; color: #333; transition: 0.2s; }
       .wiki-tool-btn:hover { background: #e6f2ff; border-color: #0072ff; color: #0072ff; }
       .wiki-editor-textarea { flex-grow: 1; border: 1px solid #ccc; border-radius: 0 0 4px 4px; padding: 15px; font-family: 'Segoe UI', Tahoma, sans-serif; font-size: 15px; line-height: 1.6; overflow-y: auto; background: white; outline: none; margin-bottom: 10px; }
-      .wiki-editor-textarea:focus { border-color: #0072ff; box-shadow: inset 0 0 5px rgba(0,114,255,0.1); }
       
-      /* MODAL STYLES */
       .wiki-tool-modal { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); padding: 20px; border-radius: 8px; border: 1px solid #999; box-shadow: 0 15px 40px rgba(0,0,0,0.5); z-index: 10001; display: none; flex-direction: column; width: 350px; }
       .wiki-modal-close { position: absolute; top: 10px; right: 10px; cursor: pointer; font-weight: bold; color: #888; }
-      .wiki-modal-close:hover { color: red; }
       
       .vista-resize-handle { position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize; z-index: 100; background: linear-gradient(135deg, transparent 50%, rgba(0,0,0,0.2) 50%); border-bottom-right-radius: 8px; }
     </style>
@@ -156,9 +170,7 @@ function openWikiOverlay(db, currentUsername, userRole) {
       </div>
       <div class="wiki-content">
         <div class="wiki-sidebar" id="wiki-article-list"></div>
-        <div class="wiki-article-view" id="wiki-article-body">
-          <h2 style="color: #ccc; text-align: center; margin-top: 20%;">Select an article to begin.</h2>
-        </div>
+        <div class="wiki-article-view" id="wiki-article-body"></div>
         
         <div id="wiki-link-modal" class="wiki-tool-modal">
           <div class="wiki-modal-close" onclick="this.parentElement.style.display='none'">X</div>
@@ -183,7 +195,6 @@ function openWikiOverlay(db, currentUsername, userRole) {
         <div id="wiki-embed-modal" class="wiki-tool-modal">
           <div class="wiki-modal-close" onclick="this.parentElement.style.display='none'">X</div>
           <h3 style="margin:0 0 10px 0; color:#004488;">Embed Media</h3>
-          <p style="font-size:12px; color:#666; margin:0 0 10px 0;">Paste a YouTube URL, or a direct link to an MP3/MP4.</p>
           <input type="text" id="wiki-embed-url" class="wiki-editor-input" placeholder="https://..." />
           <button class="wiki-btn" id="wiki-insert-embed-btn">Embed</button>
         </div>
@@ -337,12 +348,9 @@ function openWikiOverlay(db, currentUsername, userRole) {
     return "📁";
   };
 
-  // Convert old Markdown to HTML for the WYSIWYG or Viewer
   const parseMarkdownAndLinks = (text) => {
     if (!text) return "";
-    // If it's already generated by the WYSIWYG, just return it
     if (text.trim().startsWith('<div class="rich-text-content">')) return text;
-
     let parsed = text.replace(/\[\[(.*?)\]\]/g, (match, inner) => {
       const parts = inner.split("|");
       const target = parts[0];
@@ -377,8 +385,6 @@ function openWikiOverlay(db, currentUsername, userRole) {
       })
       .join("");
     if (inList) parsed += "</ul>";
-
-    // Wrap old conversions so they format nicely
     return `<div class="rich-text-content">${parsed}</div>`;
   };
 
@@ -401,7 +407,6 @@ function openWikiOverlay(db, currentUsername, userRole) {
         else if (currentSection === "references") rawCat = "Literature";
         else rawCat = "Community Submissions";
       }
-
       if (rawCat === "01_The_Apparatus") rawCat = "03_The_Apparatus";
       if (rawCat === "02_The_Essence") rawCat = "01_The_Essence";
       if (rawCat === "03_The_Solvents") rawCat = "02_The_Solvents";
@@ -428,7 +433,6 @@ function openWikiOverlay(db, currentUsername, userRole) {
         const item = document.createElement("div");
         item.className = "sidebar-item";
         if (article.id === currentArticleId) item.classList.add("active-item");
-
         item.innerText = article.title;
         item.onclick = () => {
           currentArticleId = article.id;
@@ -458,7 +462,6 @@ function openWikiOverlay(db, currentUsername, userRole) {
 
   const renderEditor = (article) => {
     const isNew = !article.id;
-
     const uniqueCleanCategories = [
       ...new Set(
         articles.map((a) => {
@@ -482,7 +485,6 @@ function openWikiOverlay(db, currentUsername, userRole) {
           .trim()
       : "";
 
-    // Convert old text to HTML if needed so it displays perfectly in the WYSIWYG
     let initContent = article.content || "";
     if (
       initContent &&
@@ -490,21 +492,17 @@ function openWikiOverlay(db, currentUsername, userRole) {
     ) {
       initContent = parseMarkdownAndLinks(initContent);
     }
-    // Strip the outer wrapper just for the editor window
     initContent = initContent
       .replace(/^<div class="rich-text-content">/, "")
       .replace(/<\/div>$/, "");
 
     articleBody.innerHTML = `
       <h2 style="color: #004488; margin-bottom: 15px;">${isNew ? "Create New Entry" : "Editing: " + article.title}</h2>
-      
       <div style="display:flex; gap:10px;">
         <input type="text" id="edit-title" class="wiki-editor-input" style="flex:2;" value="${article.title ? article.title.replace(/"/g, "&quot;") : ""}" placeholder="Article Title" />
         <input type="text" id="edit-category" list="category-options" class="wiki-editor-input" style="flex:1;" value="${displayCategory}" placeholder="Category" />
       </div>
-      
       <input type="text" id="edit-tags" class="wiki-editor-input" value="${article.tags ? article.tags.join(", ") : ""}" placeholder="Tags (comma separated)" />
-      
       <div class="wiki-toolbar">
         <button class="wiki-tool-btn" data-cmd="bold" title="Bold">🅱️</button>
         <button class="wiki-tool-btn" data-cmd="italic" title="Italic">ℹ️</button>
@@ -518,11 +516,8 @@ function openWikiOverlay(db, currentUsername, userRole) {
         <button class="wiki-tool-btn" id="tool-embed" title="Embed Video/Audio">🎬 Embed</button>
         <button class="wiki-tool-btn" id="tool-mic" title="Record Audio">🎙️ Mic</button>
       </div>
-      
       <div id="edit-content" class="wiki-editor-textarea rich-text-content" contenteditable="true">${initContent}</div>
-      
       ${dataListHTML}
-      
       <div style="display: flex; gap: 10px; flex-shrink: 0;">
         <button class="wiki-btn" id="wiki-save-btn" style="width: auto;">Save Entry</button>
         <button class="wiki-btn" id="wiki-cancel-btn" style="width: auto; background: linear-gradient(to bottom, #999, #666); border-color: #555;">Cancel</button>
@@ -530,8 +525,6 @@ function openWikiOverlay(db, currentUsername, userRole) {
     `;
 
     const editorDiv = articleBody.querySelector("#edit-content");
-
-    // --- TOOLBAR LOGIC ---
     let savedRange = null;
     const saveSelection = () => {
       const sel = window.getSelection();
@@ -555,7 +548,7 @@ function openWikiOverlay(db, currentUsername, userRole) {
       };
     });
 
-    // 1. LINK LOGIC
+    // Modals
     const linkModal = overlay.querySelector("#wiki-link-modal");
     const linkSearch = overlay.querySelector("#wiki-link-search");
     const linkResults = overlay.querySelector("#wiki-link-results");
@@ -590,27 +583,23 @@ function openWikiOverlay(db, currentUsername, userRole) {
           span.innerText = savedRange.toString();
           savedRange.deleteContents();
           savedRange.insertNode(span);
-
-          // Move cursor after link
           savedRange.setStartAfter(span);
           savedRange.collapse(true);
           const sel = window.getSelection();
           sel.removeAllRanges();
           sel.addRange(savedRange);
-
           linkModal.style.display = "none";
         };
         linkResults.appendChild(div);
       });
     };
 
-    // 2. IMAGE LOGIC (Crop & Compress to WebP Base64)
     const imgModal = overlay.querySelector("#wiki-image-modal");
     const imgFile = overlay.querySelector("#wiki-image-file");
     const imgCanvas = overlay.querySelector("#wiki-image-canvas");
     const ctx = imgCanvas.getContext("2d");
     let currentImage = null;
-    let cropMode = "orig"; // orig, sq, wide
+    let cropMode = "orig";
 
     articleBody.querySelector("#tool-image").onclick = () => {
       saveSelection();
@@ -622,17 +611,13 @@ function openWikiOverlay(db, currentUsername, userRole) {
     const drawImage = () => {
       if (!currentImage) return;
       imgCanvas.style.display = "block";
-
       const MAX_WIDTH = 800;
       let width = currentImage.width;
       let height = currentImage.height;
-
-      // Calculate Crop Target
       let sourceX = 0,
         sourceY = 0,
         sourceW = width,
         sourceH = height;
-
       if (cropMode === "sq") {
         const min = Math.min(width, height);
         sourceX = (width - min) / 2;
@@ -643,24 +628,19 @@ function openWikiOverlay(db, currentUsername, userRole) {
         const targetRatio = 16 / 9;
         const currentRatio = width / height;
         if (currentRatio > targetRatio) {
-          // Image is wider than 16:9
           sourceW = height * targetRatio;
           sourceX = (width - sourceW) / 2;
         } else {
-          // Image is taller than 16:9
           sourceH = width / targetRatio;
           sourceY = (height - sourceH) / 2;
         }
       }
-
-      // Scale down for compression
       let targetW = sourceW,
         targetH = sourceH;
       if (targetW > MAX_WIDTH) {
         targetH = Math.round((targetH * MAX_WIDTH) / targetW);
         targetW = MAX_WIDTH;
       }
-
       imgCanvas.width = targetW;
       imgCanvas.height = targetH;
       ctx.drawImage(
@@ -704,53 +684,41 @@ function openWikiOverlay(db, currentUsername, userRole) {
     overlay.querySelector("#wiki-insert-image-btn").onclick = () => {
       if (!currentImage) return alert("Select an image first.");
       restoreSelection();
-      // Compress aggressively to lightweight WebP
       const dataUrl = imgCanvas.toDataURL("image/webp", 0.7);
       document.execCommand("insertImage", false, dataUrl);
       imgModal.style.display = "none";
     };
 
-    // 3. EMBED LOGIC
     const embedModal = overlay.querySelector("#wiki-embed-modal");
     const embedUrl = overlay.querySelector("#wiki-embed-url");
-
     articleBody.querySelector("#tool-embed").onclick = () => {
       saveSelection();
       embedModal.style.display = "flex";
       embedUrl.value = "";
     };
-
     overlay.querySelector("#wiki-insert-embed-btn").onclick = () => {
       const url = embedUrl.value.trim();
       if (!url) return;
       restoreSelection();
-
       let html = "";
       if (url.includes("youtube.com") || url.includes("youtu.be")) {
         const vidId =
           url.split("v=")[1]?.split("&")[0] ||
           url.split("youtu.be/")[1]?.split("?")[0];
-        if (vidId) {
+        if (vidId)
           html = `<iframe width="100%" height="315" src="https://www.youtube.com/embed/${vidId}" frameborder="0" allowfullscreen></iframe><br>`;
-        }
-      } else if (url.match(/\.(mp3|wav|ogg)$/i)) {
+      } else if (url.match(/\.(mp3|wav|ogg)$/i))
         html = `<audio controls src="${url}"></audio><br>`;
-      } else if (url.match(/\.(mp4|webm)$/i)) {
+      else if (url.match(/\.(mp4|webm)$/i))
         html = `<video controls src="${url}" style="width:100%; max-width:600px;"></video><br>`;
-      } else {
-        // Fallback generic link
-        html = `<a href="${url}" target="_blank">${url}</a>`;
-      }
-
+      else html = `<a href="${url}" target="_blank">${url}</a>`;
       document.execCommand("insertHTML", false, html);
       embedModal.style.display = "none";
     };
 
-    // 4. LIVE MIC RECORDING LOGIC
     let mediaRecorder;
     let audioChunks = [];
     const micBtn = articleBody.querySelector("#tool-mic");
-
     micBtn.onclick = async () => {
       if (mediaRecorder && mediaRecorder.state === "recording") {
         mediaRecorder.stop();
@@ -763,9 +731,7 @@ function openWikiOverlay(db, currentUsername, userRole) {
             audio: true,
           });
           mediaRecorder = new MediaRecorder(stream);
-
           mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
-
           mediaRecorder.onstop = () => {
             const blob = new Blob(audioChunks, { type: "audio/webm" });
             audioChunks = [];
@@ -780,24 +746,12 @@ function openWikiOverlay(db, currentUsername, userRole) {
             };
             reader.readAsDataURL(blob);
           };
-
           mediaRecorder.start();
           micBtn.style.color = "red";
           micBtn.innerHTML = "🔴 Rec...";
         } catch (e) {
-          alert("Microphone access denied or unavailable.");
+          alert("Microphone access denied.");
         }
-      }
-    };
-
-    // --- SAVE LOGIC ---
-    articleBody.querySelector("#wiki-cancel-btn").onclick = () => {
-      if (isNew) {
-        currentArticleId = null;
-        articleBody.innerHTML = `<h2 style="color: #ccc; text-align: center; margin-top: 20%;">Select an article to begin.</h2>`;
-        renderSidebar();
-      } else {
-        renderArticle(article);
       }
     };
 
@@ -807,17 +761,13 @@ function openWikiOverlay(db, currentUsername, userRole) {
         .querySelector("#edit-category")
         .value.trim();
       const newTagsStr = articleBody.querySelector("#edit-tags").value.trim();
-
-      // Pull HTML directly from the WYSIWYG box
       const rawHTML = articleBody.querySelector("#edit-content").innerHTML;
       const newContent = `<div class="rich-text-content">${rawHTML}</div>`;
-
       const newTags = newTagsStr
         .split(",")
         .map((t) => t.trim())
         .filter((t) => t);
-
-      if (!newTitle) return alert("Title is required to save an entry!");
+      if (!newTitle) return alert("Title is required!");
 
       let finalCategory = newCatStr || "Uncategorized";
       const matchingArticle = articles.find((a) => {
@@ -833,7 +783,6 @@ function openWikiOverlay(db, currentUsername, userRole) {
             .toLowerCase() === newCatStr.toLowerCase()
         );
       });
-
       if (matchingArticle) {
         finalCategory =
           matchingArticle.category ||
@@ -860,7 +809,6 @@ function openWikiOverlay(db, currentUsername, userRole) {
             updatedAt: serverTimestamp(),
           });
           currentArticleId = docRef.id;
-          articleBody.innerHTML = `<h2 style="color: #ccc; text-align: center; margin-top: 20%;">Article created! Select it from the sidebar.</h2>`;
         } else {
           await updateDoc(doc(db, "wiki_articles", article.id), {
             title: newTitle,
@@ -878,18 +826,45 @@ function openWikiOverlay(db, currentUsername, userRole) {
           });
         }
       } catch (err) {
-        console.error(err);
-        alert("Error saving article. Check console.");
+        alert("Error saving article.");
       }
     };
   };
 
   const renderArticle = (article) => {
     currentArticleId = article.id;
-    const formattedContent = parseMarkdownAndLinks(article.content);
+    const isReference = article.section === "references";
+    let formattedContent = "";
+
+    if (isReference) {
+      const segments = article.content.split(/(?=^### )/gm);
+      formattedContent = segments
+        .map((segment) => {
+          if (!segment.trim()) return "";
+          const themeMatch = segment.match(/^### (.*$)/m);
+          const themeTitle = themeMatch ? themeMatch[1] : "General References";
+          const bullets = segment.split(/\n- /g).slice(1);
+          const introText = segment
+            .split(/\n- /g)[0]
+            .replace(/^### .*$/m, "")
+            .trim();
+          const cardsHTML = bullets
+            .map((bullet) => {
+              const parts = bullet.match(/^\*\*(.*?)\*\*:(.*)/s);
+              const header = parts ? parts[1] : "Source";
+              const body = parts ? parts[2] : bullet;
+              return `<div class="reference-card"><div class="ref-card-header">${parseMarkdownAndLinks(header)}</div><div class="ref-card-body">${parseMarkdownAndLinks(body)}</div></div>`;
+            })
+            .join("");
+          return `<div class="ref-section-container"><div class="ref-section-header" onclick="this.parentElement.classList.toggle('collapsed')"><span>📂 ${themeTitle}</span><span class="ref-count">${bullets.length} Sources</span></div><div class="ref-section-content">${introText ? `<p style="margin-bottom:15px; font-style:italic; color:#555;">${parseMarkdownAndLinks(introText)}</p>` : ""}<div class="ref-grid">${cardsHTML}</div></div></div>`;
+        })
+        .join("");
+    } else {
+      formattedContent = parseMarkdownAndLinks(article.content);
+    }
+
     const canEdit = userRole === "admin" || article.section === "community";
     const canDelete = userRole === "admin";
-
     let actionButtonsHTML = "";
     if (canEdit)
       actionButtonsHTML += `<button class="wiki-action-btn" id="wiki-edit-btn">Edit</button>`;
@@ -907,36 +882,25 @@ function openWikiOverlay(db, currentUsername, userRole) {
       <div class="wiki-text-content">${formattedContent}</div>
       <hr style="margin-top: 50px; border: 0; border-top: 1px dashed #ccc;">
       <h3 style="color: #555; margin-top: 20px;">Community Suggestions & Comments</h3>
-      <div id="wiki-comments-section" style="font-style: italic; color: #888; background: #f9f9f9; padding: 15px; border-radius: 4px; border: 1px solid #ddd;">
-        (Commenting & highlight-suggestions coming online soon...)
-      </div>
+      <div id="wiki-comments-section" style="font-style: italic; color: #888; background: #f9f9f9; padding: 15px; border-radius: 4px; border: 1px solid #ddd;">(Commenting coming online soon...)</div>
     `;
 
     if (canEdit)
       articleBody.querySelector("#wiki-edit-btn").onclick = () =>
         renderEditor(article);
-
     if (canDelete) {
       articleBody.querySelector("#wiki-delete-btn").onclick = async () => {
-        if (
-          confirm(
-            `Are you sure you want to permanently delete "${article.title}"?`,
-          )
-        ) {
+        if (confirm(`Delete "${article.title}"?`)) {
           try {
             await deleteDoc(doc(db, "wiki_articles", article.id));
             currentArticleId = null;
-            articleBody.innerHTML = `<h2 style="color: #ccc; text-align: center; margin-top: 20%;">Entry deleted.</h2>`;
             renderSidebar();
           } catch (err) {
-            console.error(err);
-            alert("Error deleting article.");
+            alert("Error deleting.");
           }
         }
       };
     }
-
-    // Attach click listeners to the interactive links in the article view
     articleBody.querySelectorAll(".obsidian-link").forEach((link) => {
       link.onclick = (e) => {
         const targetTitle = e.target.dataset.target.toLowerCase();
@@ -955,7 +919,7 @@ function openWikiOverlay(db, currentUsername, userRole) {
           renderSidebar();
           renderArticle(found);
         } else {
-          alert(`The article "${targetTitle}" has not been written yet.`);
+          alert(`"${targetTitle}" not written yet.`);
         }
       };
     });
@@ -965,6 +929,12 @@ function openWikiOverlay(db, currentUsername, userRole) {
   const unsubscribe = onSnapshot(q, (snap) => {
     articles = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     renderSidebar();
+
+    // NEW: Auto-load first article on initial data load
+    if (!currentArticleId && articles.length > 0) {
+      const first = articles.find((a) => a.section === currentSection);
+      if (first) renderArticle(first);
+    }
   });
 
   overlay.querySelectorAll(".wiki-tab").forEach((tab) => {
@@ -974,19 +944,17 @@ function openWikiOverlay(db, currentUsername, userRole) {
         .forEach((t) => t.classList.remove("active"));
       tab.classList.add("active");
       currentSection = tab.dataset.section;
-      currentArticleId = null;
-      articleBody.innerHTML = `<h2 style="color: #ccc; text-align: center; margin-top: 20%;">Select an article to begin.</h2>`;
       renderSidebar();
+
+      // NEW: Auto-load first article of the section
+      const first = articles.find((a) => a.section === currentSection);
+      if (first) renderArticle(first);
+      else
+        articleBody.innerHTML = `<h2 style="color: #ccc; text-align: center; margin-top: 20%;">No entries in this section.</h2>`;
     };
   });
 
   const minBtn = overlay.querySelector("#wiki-minimize");
-  minBtn.onmouseenter = () =>
-    (minBtn.style.background =
-      "linear-gradient(180deg, rgba(255,255,255,0.6), rgba(255,255,255,0.2))");
-  minBtn.onmouseleave = () =>
-    (minBtn.style.background =
-      "linear-gradient(180deg, rgba(255,255,255,0.3), rgba(255,255,255,0.05))");
   minBtn.onclick = (e) => {
     e.stopPropagation();
     isWindowVisible = false;
