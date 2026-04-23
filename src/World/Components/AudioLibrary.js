@@ -26,8 +26,33 @@ export function createAudioLibrary(currentUsername) {
     flex-direction: column; align-items: center; transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   `;
   icon.innerHTML = `
-    <img src="${ASSET_PATH}audio.png" style="width: 60px; height: auto; filter: drop-shadow(2px 4px 6px rgba(0,0,0,0.3)); pointer-events: none;">
-    <span style="font-family: serif; font-size: 14px; color: white; text-shadow: 1px 1px 3px black; margin-top: 5px; pointer-events: none;">Audio</span>
+    <div style="display: flex; flex-direction: column; align-items: center; pointer-events: none;">
+      <div style="width: 55px; height: 55px; filter: drop-shadow(2px 4px 6px rgba(0,0,0,0.4));">
+        <svg viewBox="0 0 100 100" width="100%" height="100%">
+          <defs>
+            <linearGradient id="headphone-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#5cb3ff" />
+              <stop offset="100%" stop-color="#0059b3" />
+            </linearGradient>
+            <linearGradient id="glass-shine" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#ffffff" stop-opacity="0.8" />
+              <stop offset="50%" stop-color="#ffffff" stop-opacity="0" />
+            </linearGradient>
+          </defs>
+          <path d="M15,55 A35,35 0 0,1 85,55" fill="none" stroke="#e0e0e0" stroke-width="8" stroke-linecap="round" />
+          <path d="M15,55 A35,35 0 0,1 85,55" fill="none" stroke="#888" stroke-width="2" stroke-linecap="round" opacity="0.3" />
+          
+          <rect x="10" y="50" width="18" height="30" rx="6" fill="url(#headphone-grad)" />
+          <rect x="12" y="52" width="6" height="26" rx="2" fill="url(#glass-shine)" />
+          
+          <rect x="72" y="50" width="18" height="30" rx="6" fill="url(#headphone-grad)" />
+          <rect x="74" y="52" width="6" height="26" rx="2" fill="url(#glass-shine)" />
+          
+          <path d="M45,45 L60,55 L45,65 Z" fill="#ffffff" opacity="0.9" />
+        </svg>
+      </div>
+      <span style="font-family: serif; font-size: 14px; color: white; text-shadow: 1px 1px 3px black; margin-top: 5px; pointer-events: none;">Audio</span>
+    </div>
   `;
 
   icon.onmouseenter = () => (icon.style.transform = "scale(1.15)");
@@ -92,12 +117,21 @@ export function createAudioLibrary(currentUsername) {
   };
   windowEl.addEventListener("mousedown", bringToFront);
 
+  const audioIconSVG = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+      <path d="M15,55 A35,35 0 0,1 85,55" fill="none" stroke="%23cccccc" stroke-width="10" stroke-linecap="round" />
+      <rect x="10" y="50" width="20" height="35" rx="6" fill="%230059b3" />
+      <rect x="70" y="50" width="20" height="35" rx="6" fill="%230059b3" />
+      <path d="M45,45 L60,55 L45,65 Z" fill="white" />
+    </svg>
+  `)}`;
+
   const syncTaskbar = () => {
     if (window.TaskbarAPI) {
       window.TaskbarAPI.updateApp(
         "audio-library",
         "Media Player",
-        `${ASSET_PATH}audio.png`,
+        audioIconSVG,
         isAppRunning,
         isWindowVisible,
         () => {

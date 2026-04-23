@@ -23,8 +23,27 @@ export function initGlueShelf(currentUsername, showMemory, onToggle) {
   `;
   folderIcon.innerHTML = `
     <div style="display: flex; flex-direction: column; align-items: center; pointer-events: none;">
-      <img src="${ASSET_PATH}folder.png" style="width: 70px; height: auto; filter: sepia(1) saturate(10) hue-rotate(245deg) brightness(0.9) drop-shadow(2px 4px 6px rgba(0,0,0,0.3));">
-      <span style="font-family: serif; font-size: 14px; color: white; text-shadow: 1px 1px 3px black; margin-top: 0px;">Glue</span>
+      <div style="width: 55px; height: 65px; filter: drop-shadow(2px 4px 6px rgba(0,0,0,0.4));">
+        <svg viewBox="0 0 100 120" width="100%" height="100%">
+          <defs>
+            <linearGradient id="bottle-body" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#ffffff" stop-opacity="0.9" />
+              <stop offset="50%" stop-color="#e0e0e0" stop-opacity="0.8" />
+              <stop offset="100%" stop-color="#ffffff" stop-opacity="0.9" />
+            </linearGradient>
+            <linearGradient id="glue-cap" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#ff9900" />
+              <stop offset="100%" stop-color="#cc3300" />
+            </linearGradient>
+          </defs>
+          <path d="M40,20 L60,20 L55,5 L45,5 Z" fill="#ffffff" stroke="#ccc" stroke-width="1"/>
+          <rect x="35" y="20" width="30" height="15" rx="2" fill="url(#glue-cap)" />
+          <path d="M30,35 L70,35 Q85,35 85,50 L85,100 Q85,115 70,115 L30,115 Q15,115 15,100 L15,50 Q15,35 30,35 Z" fill="url(#bottle-body)" stroke="rgba(255,255,255,0.5)" stroke-width="1" />
+          <path d="M25,50 L25,100" stroke="#fff" stroke-width="4" stroke-linecap="round" opacity="0.6" />
+          <rect x="25" y="60" width="50" height="30" rx="2" fill="rgba(0,114,255,0.15)" stroke="rgba(0,114,255,0.3)" />
+        </svg>
+      </div>
+      <span style="font-family: serif; font-size: 14px; color: white; text-shadow: 1px 1px 3px black; margin-top: 2px;">Glue</span>
     </div>
   `;
 
@@ -71,12 +90,20 @@ export function initGlueShelf(currentUsername, showMemory, onToggle) {
   };
   vistaWindow.addEventListener("mousedown", bringToFront);
 
+  const glueIconSVG = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 120">
+      <rect x="35" y="20" width="30" height="15" rx="2" fill="%23ff9900" />
+      <path d="M30,35 L70,35 Q85,35 85,50 L85,100 Q85,115 70,115 L30,115 Q15,115 15,100 L15,50 Q15,35 30,35 Z" fill="%23ffffff" />
+      <rect x="25" y="60" width="50" height="30" rx="2" fill="%230072ff" opacity="0.2" />
+    </svg>
+  `)}`;
+
   const syncTaskbar = () => {
     if (window.TaskbarAPI) {
       window.TaskbarAPI.updateApp(
         "glue-shelf",
         "Glue Shelf",
-        `${ASSET_PATH}folder.png`,
+        glueIconSVG,
         isAppRunning,
         isWindowVisible,
         () => {
