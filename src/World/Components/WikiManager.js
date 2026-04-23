@@ -43,6 +43,7 @@ function syncWikiTaskbar() {
 function openWikiOverlay(db, currentUsername, userRole) {
   isAppRunning = true;
   isWindowVisible = true;
+  localStorage.setItem("wiki_is_open", "true");
   syncWikiTaskbar();
 
   if (wikiWindowRef) {
@@ -52,11 +53,12 @@ function openWikiOverlay(db, currentUsername, userRole) {
     return;
   }
 
-  let currentSection = "lore";
+  // PERSISTENCE: Load last active section and article
+  let currentSection = localStorage.getItem("wiki_last_section") || "lore";
+  let currentArticleId = localStorage.getItem("wiki_last_article_id") || null;
   let articles = [];
-  let activeSuggestions = []; // NEW: Local cache for suggestions
-  let currentArticleId = null;
-  let currentSelectionData = null; // NEW: Stores highlighted text for suggestion
+  let activeSuggestions = [];
+  let currentSelectionData = null;
 
   const savedWindowPos = JSON.parse(
     localStorage.getItem("wiki_window_pos"),
@@ -520,6 +522,7 @@ function openWikiOverlay(db, currentUsername, userRole) {
 
   const renderArticle = (article) => {
     currentArticleId = article.id;
+    localStorage.setItem("wiki_last_article_id", article.id);
     renderSidebar();
 
     let articleContent = article.content;
@@ -767,6 +770,7 @@ function openWikiOverlay(db, currentUsername, userRole) {
         if (confirm(`Delete "${article.title}"?`)) {
           await deleteDoc(doc(db, "wiki_articles", article.id));
           currentArticleId = null;
+          localStorage.removeItem("wiki_last_article_id");
           renderSidebar();
         }
       };
@@ -880,25 +884,45 @@ function openWikiOverlay(db, currentUsername, userRole) {
       const title = articleBody.querySelector("#edit-title").value.trim();
       const cat = articleBody.querySelector("#edit-category").value.trim();
       const content = `<div class="rich-text-content">${ed.innerHTML}</div>`;
+
       if (!title) return alert("Title required.");
-      if (isNew)
-        await addDoc(collection(db, "wiki_articles"), {
-          title,
-          category: cat,
-          content,
-          section: currentSection,
-          author: currentUsername,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-      else
-        await updateDoc(doc(db, "wiki_articles", article.id), {
-          title,
-          category: cat,
-          content,
-          updatedAt: serverTimestamp(),
-        });
-      renderSidebar();
+
+      try {
+        if (isNew) {
+          const docRef = await addDoc(collection(db, "wiki_articles"), {
+            title,
+            category: cat,
+            content,
+            section: currentSection,
+            author: currentUsername,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+          currentArticleId = docRef.id;
+          // Immediately render the new article view
+          renderArticle({
+            id: docRef.id,
+            title,
+            category: cat,
+            content,
+            author: currentUsername,
+            section: currentSection,
+          });
+        } else {
+          await updateDoc(doc(db, "wiki_articles", article.id), {
+            title,
+            category: cat,
+            content,
+            updatedAt: serverTimestamp(),
+          });
+          // Immediately render the updated article view
+          renderArticle({ ...article, title, category: cat, content });
+        }
+        renderSidebar();
+      } catch (err) {
+        console.error("Save failed:", err);
+        alert("Error saving article.");
+      }
     };
     articleBody.querySelector("#wiki-cancel-btn").onclick = () =>
       isNew ? renderSidebar() : renderArticle(article);
@@ -933,9 +957,22 @@ function openWikiOverlay(db, currentUsername, userRole) {
   });
 
   onSnapshot(query(collection(db, "wiki_articles")), (snap) => {
-    articles = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    // FIXED: Explicitly sort articles by title for consistency
+    articles = snap.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() }))
+      .sort((a, b) => a.title.localeCompare(b.title));
+
     renderSidebar();
-    if (!currentArticleId && articles.length > 0) {
+
+    // If an article ID was restored from localStorage, find and show it
+    if (currentArticleId) {
+      const restored = articles.find((a) => a.id === currentArticleId);
+      const isEditing = !!articleBody.querySelector("#edit-content");
+      if (restored && !isEditing) {
+        renderArticle(restored);
+      }
+    } else if (articles.length > 0) {
+      // Otherwise, auto-load the first article of the current section
       const first = articles.find((a) => a.section === currentSection);
       if (first) renderArticle(first);
     }
@@ -948,6 +985,7 @@ function openWikiOverlay(db, currentUsername, userRole) {
         .forEach((t) => t.classList.remove("active"));
       tab.classList.add("active");
       currentSection = tab.dataset.section;
+      localStorage.setItem("wiki_last_section", currentSection);
       renderSidebar();
       const first = articles.find((a) => a.section === currentSection);
       if (first) renderArticle(first);
@@ -964,6 +1002,7 @@ function openWikiOverlay(db, currentUsername, userRole) {
   };
   overlay.querySelector("#wiki-close").onclick = (e) => {
     e.stopPropagation();
+    localStorage.setItem("wiki_is_open", "false");
     overlay.remove();
     wikiWindowRef = null;
     isAppRunning = false;
@@ -1023,10 +1062,8 @@ export function initWiki(db, currentUsername, userRole) {
     wikiIcon.style.filter = "none";
   };
 
-  wikiIcon.onclick = async (e) => {
-    e.stopPropagation();
-
-    // FIX: Fetch the live role from the database to bypass the load-time race condition
+  // Define launch here so it can be used for both click and auto-restore
+  const launch = async () => {
     let activeRole = userRole;
     try {
       const userSnap = await getDoc(doc(db, "users", currentUsername));
@@ -1036,9 +1073,18 @@ export function initWiki(db, currentUsername, userRole) {
     } catch (err) {
       console.warn("Could not verify role:", err);
     }
-
     openWikiOverlay(db, currentUsername, activeRole);
   };
 
+  wikiIcon.onclick = (e) => {
+    e.stopPropagation();
+    launch();
+  };
+
   document.body.appendChild(wikiIcon);
+
+  // Restore window if it was left open
+  if (localStorage.getItem("wiki_is_open") === "true") {
+    launch();
+  }
 }
