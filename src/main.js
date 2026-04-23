@@ -13,6 +13,8 @@ import { initGlueShelf } from "./World/Components/GlueShelf.js";
 import { createMemoryModal } from "./World/Components/MemoryModal.js";
 import { createXPLoader } from "./World/Components/XPLoader.js";
 import { createVoidManager } from "./World/Components/VoidManager.js";
+import { initWiki } from "./World/Components/WikiManager.js";
+import { runWikiSeeder } from "./World/Components/seedWiki.js";
 import { initializeApp } from "firebase/app";
 import {
   getFirestore,
@@ -306,8 +308,13 @@ async function init() {
       });
       return;
     }
+
+    // --- DATA IS NOW READY ---
     initialSync = false;
     globalUsersData.forEach((userData) => addUserToScene(userData));
+
+    // NEW: Trigger startup check now that we have your DB info
+    handleStartup();
   });
 
   function addUserToScene(data) {
@@ -456,34 +463,65 @@ async function init() {
     },
   );
 
+  // Improved startup that waits for database data
   const startApp = () => {
     if (currentUsername) {
+      const currentUserData = globalUsersData.find(
+        (u) => u.username === currentUsername,
+      );
+
+      // Show UI elements
       overlay.showMainUI();
       taskbar.style.display = "flex";
+      const ui = document.getElementById("logged-in-ui");
+      if (ui) ui.style.display = "block";
+
+      // Initialize Wiki with correct role
+      const userRole = currentUserData ? currentUserData.role : "user";
+      initWiki(db, currentUsername, userRole);
     }
   };
 
-  const policyAgreed = localStorage.getItem(`policy_agreed_${currentUsername}`);
-  if (!policyAgreed && currentUsername && window.location.hash !== "#/ritual") {
-    taskbar.style.display = "none";
-    const ui = document.getElementById("logged-in-ui");
-    if (ui) ui.style.display = "none";
+  // NEW: Robust startup that checks DB first, then local fallback
+  const handleStartup = async () => {
+    if (!currentUsername || window.location.hash === "#/ritual") {
+      startApp();
+      return;
+    }
 
-    import("./World/Components/PolicyManager.js").then((module) => {
-      module.createPolicyManager(db, currentUsername, () => {
-        if (ui) ui.style.display = "block";
+    // Check the database for the permanent flag
+    const userData = globalUsersData.find(
+      (u) => u.username.toLowerCase() === currentUsername.toLowerCase(),
+    );
+    const hasAgreedDB = userData && userData.policyAgreed === true;
+    const hasAgreedLocal = localStorage.getItem(
+      `policy_agreed_${currentUsername}`,
+    );
+
+    // If both are missing, show the policy
+    if (!hasAgreedDB && !hasAgreedLocal) {
+      taskbar.style.display = "none";
+      const ui = document.getElementById("logged-in-ui");
+      if (ui) ui.style.display = "none";
+
+      const module = await import("./World/Components/PolicyManager.js");
+      // This will now internally check signatures too
+      await module.createPolicyManager(db, currentUsername, () => {
         startApp();
       });
-    });
-  } else {
-    startApp();
-  }
+    } else {
+      // User is already cleared in DB or LocalStorage
+      startApp();
+    }
+  };
 
   // SIGNATURE SYNC
   onSnapshot(collection(db, "policy_signatures"), (snap) => {
     globalSignatures = snap.docs.map((doc) => doc.data());
     signatureUI.updateSignatures(globalSignatures);
   });
+
+  //runWikiSeeder(db);
 }
 
 init();

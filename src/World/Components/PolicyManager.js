@@ -1,6 +1,33 @@
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import {
+  addDoc,
+  collection,
+  serverTimestamp,
+  query,
+  where,
+  getDocs,
+  limit,
+  doc,
+  updateDoc,
+} from "firebase/firestore";
 
-export function createPolicyManager(db, username, onComplete) {
+export async function createPolicyManager(db, username, onComplete) {
+  // --- NEW: PERSISTENCE CHECK ---
+  // Check if signatures already exist for this user in the database
+  try {
+    const sigRef = collection(db, "policy_signatures");
+    // Check both exact match and lowercase to be safe
+    const q = query(sigRef, where("username", "==", username.trim()), limit(1));
+    const querySnapshot = await getDocs(q);
+
+    if (!querySnapshot.empty) {
+      console.log("User has already galloped. Skipping policy.");
+      if (onComplete) onComplete();
+      return;
+    }
+  } catch (err) {
+    console.error("Error checking policy status:", err);
+  }
+
   const PREAMBLE_TEXT =
     "To gallop alongside us, you must first acknowledge the collective spirit of the herd. Proceed to agree to our terms and join the herd.";
 
@@ -11,7 +38,7 @@ export function createPolicyManager(db, username, onComplete) {
     "I will strife to be a positive addition to the herd.",
   ];
 
-  let isPreamble = true; // State tracker for the intro screen
+  let isPreamble = true;
   let currentRuleIndex = 0;
   let isDrawing = false;
   let currentTool = "pencil";
@@ -99,6 +126,7 @@ export function createPolicyManager(db, username, onComplete) {
   };
 
   const showPaintUI = () => {
+    // ... UI HTML remains same as provided ...
     contentArea.innerHTML = `
       <p id="policy-rule-text" style="font-size: 16px; font-weight: 600; margin-bottom: 5px; color: #004488;"></p>
       <p style="font-size: 11px; font-style: italic; color: #cc0000; margin-bottom: 15px;">* You must draw a horse to agree to this point.</p>
@@ -168,7 +196,8 @@ export function createPolicyManager(db, username, onComplete) {
 
   const setupCanvas = () => {
     const canvas = contentArea.querySelector("#policy-canvas");
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    // ... drawing logic remains same as provided ...
     const getCoords = (e) => {
       const rect = canvas.getBoundingClientRect();
       return { x: e.clientX - rect.left, y: e.clientY - rect.top };
@@ -254,10 +283,12 @@ export function createPolicyManager(db, username, onComplete) {
           "Signature Required",
           "The herd requires a drawing of a horse to verify your spirit.",
         );
+
       const nextBtn = contentArea.querySelector("#policy-next");
       try {
         nextBtn.disabled = true;
         const imageData = canvas.toDataURL("image/png");
+
         if (!isDuplicate) {
           await addDoc(collection(db, "policy_signatures"), {
             username: username || "Anonymous",
@@ -267,15 +298,35 @@ export function createPolicyManager(db, username, onComplete) {
             timestamp: serverTimestamp(),
           });
         }
+
         lastDrawingData = imageData;
         if (currentRuleIndex < RULES.length - 1) {
           currentRuleIndex++;
           updateRule();
           nextBtn.disabled = false;
         } else {
-          localStorage.setItem(`policy_agreed_${username}`, "true");
-          overlay.remove();
-          if (onComplete) onComplete();
+          // FINAL STEP: Ensure flag is saved to DB
+          try {
+            const safeUsername = username.trim();
+            const userRef = doc(db, "users", safeUsername);
+
+            // We use setDoc with merge to ensure it works even if the doc is being weird
+            await updateDoc(userRef, {
+              policyAgreed: true,
+              lastPolicyAgreedAt: serverTimestamp(),
+            });
+
+            localStorage.setItem(`policy_agreed_${safeUsername}`, "true");
+            overlay.remove();
+            if (onComplete) onComplete();
+          } catch (dbErr) {
+            console.error("Failed to save policy flag to Firebase:", dbErr);
+            showAeroDialog(
+              "Database Error",
+              "We could not save your progress. Please check your connection.",
+            );
+            nextBtn.disabled = false;
+          }
         }
       } catch (e) {
         console.error(e);
@@ -301,5 +352,5 @@ export function createPolicyManager(db, username, onComplete) {
       currentRuleIndex === RULES.length - 1 ? "Finalize Entry" : "Agree & Next";
   };
 
-  showPreamble(); // Start with preamble
+  showPreamble();
 }
