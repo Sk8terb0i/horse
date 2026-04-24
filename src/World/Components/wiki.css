@@ -149,7 +149,7 @@
 .wiki-nav {
   display: flex;
   background: #f6f6f6;
-  padding-left: 154px; /* Matches sidebar width */
+  padding-left: 174px; /* Matches exact sidebar width (154 + paddings) to prevent overlap */
   padding-top: 8px;
   flex-shrink: 0;
   z-index: 2;
@@ -191,7 +191,8 @@
 }
 
 .wiki-sidebar {
-  width: 154px;
+  width: 174px; /* Strictly defined to encapsulate 154 width + padding */
+  box-sizing: border-box;
   background: #f6f6f6;
   border-right: none;
   overflow-y: auto;
@@ -366,7 +367,41 @@
   text-decoration: underline;
 }
 
-/* --- REFERENCES --- */
+/* --- WIKIPEDIA STYLE REFERENCES SECTION --- */
+.wiki-references-block {
+  margin-top: 30px;
+  border-top: 1px solid #aaaaaa;
+  padding-top: 15px;
+  background: transparent;
+}
+
+.wiki-references-heading {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 1.2em;
+  font-weight: bold;
+  margin: 0 0 10px 0;
+  color: #000;
+}
+
+.wiki-references-list {
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.wiki-references-list ul, .wiki-references-list ol {
+  margin: 0;
+  padding-left: 25px;
+}
+
+.wiki-references-list li {
+  margin-bottom: 4px;
+}
+
+/* --- RESTORED LEGACY REFERENCES --- */
+.legacy-ref-text {
+  margin-bottom: 10px;
+}
+
 .ref-section-container {
   margin-bottom: 15px;
   border: 1px solid #aaaaaa;
@@ -380,6 +415,8 @@
   color: #000;
   font-weight: bold;
   border-bottom: 1px solid #aaaaaa;
+  display: flex;
+  justify-content: space-between;
 }
 
 .ref-count {
@@ -599,6 +636,21 @@
   overflow-y: auto;
 }
 
+.wiki-editor-subheader {
+  font-size: 13px;
+  font-weight: bold;
+  margin: 15px 0 5px 0;
+  color: #000;
+}
+
+.wiki-references-input {
+  min-height: 80px;
+  border-top: 1px solid #aaaaaa;
+  font-family: monospace !important;
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .wiki-editor-actions {
   display: flex;
   gap: 10px;
@@ -655,8 +707,8 @@
 }
 
 .wiki-desktop-icon-svg-wrapper {
-  width: 32px;
-  height: 32px;
+  width: 48px;
+  height: 48px;
   margin-bottom: 4px;
   filter: none;
 }

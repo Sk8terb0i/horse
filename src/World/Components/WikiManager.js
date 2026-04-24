@@ -55,8 +55,8 @@ function openWikiOverlay(db, currentUsername, userRole) {
     return;
   }
 
-  // PERSISTENCE: Load last active section and article
-  let currentSection = localStorage.getItem("wiki_last_section") || "lore";
+  // PERSISTENCE: Load last active article
+  let currentSection = "lore"; // Defaulting to lore since references tab is gone
   let currentArticleId = localStorage.getItem("wiki_last_article_id") || null;
   let articles = [];
   let activeSuggestions = [];
@@ -96,7 +96,6 @@ function openWikiOverlay(db, currentUsername, userRole) {
       </div>
       <div class="wiki-nav">
         <div class="wiki-tab active" data-section="lore">Horse Knowledge</div>
-        <div class="wiki-tab" data-section="references">References</div>
       </div>
       <div class="wiki-content">
         <div class="wiki-sidebar" id="wiki-article-list"></div>
@@ -317,9 +316,11 @@ function openWikiOverlay(db, currentUsername, userRole) {
       .replace(/^## (.*$)/gim, "<h2>$1</h2>")
       .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
     let inList = false;
+    let inOrderedList = false;
     parsed = parsed
       .split("\n")
       .map((line) => {
+        // Unordered List parsing
         if (line.trim().startsWith("- ")) {
           const item = `<li>${line.substring(2)}</li>`;
           if (!inList) {
@@ -331,10 +332,25 @@ function openWikiOverlay(db, currentUsername, userRole) {
           inList = false;
           line = `</ul>${line}`;
         }
+
+        // Ordered List parsing
+        if (/^\d+\.\s/.test(line.trim())) {
+          const item = `<li>${line.replace(/^\d+\.\s/, "")}</li>`;
+          if (!inOrderedList) {
+            inOrderedList = true;
+            return `<ol>${item}`;
+          }
+          return item;
+        } else if (inOrderedList) {
+          inOrderedList = false;
+          line = `</ol>${line}`;
+        }
+
         return line.trim() === "" ? "<br>" : `${line}<br>`;
       })
       .join("");
     if (inList) parsed += "</ul>";
+    if (inOrderedList) parsed += "</ol>";
     return `<div class="rich-text-content">${parsed}</div>`;
   };
 
@@ -405,7 +421,6 @@ function openWikiOverlay(db, currentUsername, userRole) {
       if (!rawCat) {
         if (currentSection === "lore")
           rawCat = categoryMap[article.title] || "04_Uncategorized";
-        else if (currentSection === "references") rawCat = "Literature";
       }
       if (rawCat === "01_The_Apparatus") rawCat = "03_The_Apparatus";
       if (rawCat === "02_The_Essence") rawCat = "01_The_Essence";
@@ -448,6 +463,7 @@ function openWikiOverlay(db, currentUsername, userRole) {
           tags: [],
           category: "",
           content: "",
+          references: "",
           section: currentSection,
           author: currentUsername,
         });
@@ -467,16 +483,29 @@ function openWikiOverlay(db, currentUsername, userRole) {
         articleContent = articleContent.replace(s.originalText, highlight);
       });
 
-    let html = "";
-    const isRef = article.section === "references";
+    let html = parseMarkdownAndLinks(articleContent);
 
-    if (isRef) {
-      const segments = articleContent.split(/(?=^### )/gm);
-      html = segments
+    let refsSection = "";
+
+    // 1. Recover and display legacy sources formatted dynamically
+    const legacyRef = articles.find(
+      (a) =>
+        a.section === "references" &&
+        a.title.toLowerCase() === article.title.toLowerCase(),
+    );
+    let legacyHtml = "";
+    if (legacyRef && legacyRef.content) {
+      let rawContent = legacyRef.content
+        .replace(/^<div class="rich-text-content">/, "")
+        .replace(/<\/div>$/, "");
+      const segments = rawContent.split(/(?=^### )/gm);
+      legacyHtml = segments
         .map((seg) => {
           if (!seg.trim()) return "";
           const theme = (seg.match(/^### (.*$)/m) || [])[1] || "General";
           const bullets = seg.split(/\n- /g).slice(1);
+          if (bullets.length === 0)
+            return `<div class="legacy-ref-text">${parseMarkdownAndLinks(seg)}</div>`;
           const cards = bullets
             .map((b) => {
               const p = b.match(/^\*\*(.*?)\*\*:(.*)/s);
@@ -486,8 +515,23 @@ function openWikiOverlay(db, currentUsername, userRole) {
           return `<div class="ref-section-container"><div class="ref-section-header" onclick="this.parentElement.classList.toggle('collapsed')"><span>📂 ${theme}</span><span class="ref-count">${bullets.length} Sources</span></div><div class="ref-section-content"><div class="ref-grid">${cards}</div></div></div>`;
         })
         .join("");
-    } else {
-      html = parseMarkdownAndLinks(articleContent);
+    }
+
+    // 2. Add any newly entered sources from the text area
+    let newHtml = "";
+    if (article.references && article.references.trim().length > 0) {
+      newHtml = `<div class="wiki-references-list">${parseMarkdownAndLinks(article.references)}</div>`;
+    }
+
+    // Output unified reference block if either format exists
+    if (legacyHtml || newHtml) {
+      refsSection = `
+        <div class="wiki-references-block">
+          <h3 class="wiki-references-heading">Sources / References</h3>
+          ${legacyHtml}
+          ${newHtml}
+        </div>
+      `;
     }
 
     const isAdmin = userRole === "admin";
@@ -505,6 +549,8 @@ function openWikiOverlay(db, currentUsername, userRole) {
       <div class="wiki-article-meta">By: <strong>${article.author}</strong> | Section: <span>${article.section}</span></div>
       
       <div class="wiki-text-content">${html}</div>
+      
+      ${refsSection}
 
       <hr class="wiki-article-divider">
       <h3 class="wiki-discussion-title">Community Discussion</h3>
@@ -720,6 +766,10 @@ function openWikiOverlay(db, currentUsername, userRole) {
         <button class="wiki-tool-btn" id="tool-mic">🎙️ Mic</button>
       </div>
       <div id="edit-content" class="wiki-editor-textarea rich-text-content" contenteditable="true">${initC}</div>
+      
+      <h3 class="wiki-editor-subheader">Sources / References</h3>
+      <textarea id="edit-references" class="wiki-editor-input wiki-references-input" placeholder="e.g. 1. [Source link], Author...">${article.references || ""}</textarea>
+
       <div class="wiki-editor-actions">
         <button class="wiki-btn" id="wiki-save-btn">Save</button>
         <button class="wiki-btn wiki-cancel-btn" id="wiki-cancel-btn">Cancel</button>
@@ -801,6 +851,9 @@ function openWikiOverlay(db, currentUsername, userRole) {
       const title = articleBody.querySelector("#edit-title").value.trim();
       const cat = articleBody.querySelector("#edit-category").value.trim();
       const content = `<div class="rich-text-content">${ed.innerHTML}</div>`;
+      const references = articleBody
+        .querySelector("#edit-references")
+        .value.trim();
 
       if (!title) return alert("Title required.");
 
@@ -810,6 +863,7 @@ function openWikiOverlay(db, currentUsername, userRole) {
             title,
             category: cat,
             content,
+            references,
             section: currentSection,
             author: currentUsername,
             createdAt: serverTimestamp(),
@@ -821,6 +875,7 @@ function openWikiOverlay(db, currentUsername, userRole) {
             title,
             category: cat,
             content,
+            references,
             author: currentUsername,
             section: currentSection,
           });
@@ -829,9 +884,16 @@ function openWikiOverlay(db, currentUsername, userRole) {
             title,
             category: cat,
             content,
+            references,
             updatedAt: serverTimestamp(),
           });
-          renderArticle({ ...article, title, category: cat, content });
+          renderArticle({
+            ...article,
+            title,
+            category: cat,
+            content,
+            references,
+          });
         }
         renderSidebar();
       } catch (err) {
@@ -933,22 +995,26 @@ export function initWiki(db, currentUsername, userRole) {
   wikiIcon.innerHTML = `
     <div class="wiki-desktop-icon-svg-wrapper">
       <svg viewBox="0 0 100 100" width="100%" height="100%">
-        <defs>
-          <linearGradient id="pistachio-grad" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stop-color="#e2f5c8" />
-            <stop offset="50%" stop-color="#b5ce27" /> <stop offset="100%" stop-color="#8a9e1e" />
-          </linearGradient>
-          <linearGradient id="pistachio-dark" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stop-color="#b5ce27" />
-            <stop offset="100%" stop-color="#6b7a17" />
-          </linearGradient>
-        </defs>
-        <path d="M10,25 L35,25 L45,35 L90,35 L90,85 L10,85 Z" fill="url(#pistachio-dark)" />
-        <path d="M15,30 L85,30 L85,45 L15,45 Z" fill="#ffffff" opacity="0.8"/>
-        <path d="M10,40 L90,40 L90,85 L10,85 Z" fill="url(#pistachio-grad)" opacity="0.95"/>
+        <circle cx="50" cy="50" r="45" fill="#f8f9fa" stroke="#a2a9b1" stroke-width="2"/>
+        
+        <path d="M 15,25 C 30,35 40,20 50,25 C 60,30 70,15 85,25" fill="none" stroke="#c8ccd1" stroke-width="1.5"/>
+        <path d="M 5,50 C 25,50 35,40 50,50 C 65,60 75,50 95,50" fill="none" stroke="#c8ccd1" stroke-width="1.5"/>
+        <path d="M 15,75 C 30,65 40,80 50,75 C 60,70 70,85 85,75" fill="none" stroke="#c8ccd1" stroke-width="1.5"/>
+        
+        <path d="M 25,15 C 35,30 20,40 25,50 C 30,60 15,70 25,85" fill="none" stroke="#c8ccd1" stroke-width="1.5"/>
+        <path d="M 50,5 C 50,25 40,35 50,50 C 60,65 40,75 50,95" fill="none" stroke="#c8ccd1" stroke-width="1.5"/>
+        <path d="M 75,15 C 65,30 80,40 75,50 C 70,60 85,70 75,85" fill="none" stroke="#c8ccd1" stroke-width="1.5"/>
+
+        <path d="M 15,10 C 25,5 35,8 45,10 C 40,15 35,25 25,25 C 15,20 10,15 15,10 Z" fill="#e8ecef" stroke="#a2a9b1" stroke-width="1.5"/>
+
+        <svg x="6" y="6" width="120" height="120" viewBox="-1000 -1000 14500 14500" preserveAspectRatio="xMidYMid meet">
+          <g transform="translate(12500, 12000) scale(-1, -1)">
+            <path d="M10630 11425 c-110 -31 -227 -113 -355 -246 -72 -76 -100 -110 -188 -231 -35 -48 -182 -165 -390 -312 l-169 -118 -81 21 c-448 112 -1127 54 -1968 -169 -1070 -284 -2300 -825 -2794 -1231 -38 -31 -131 -112 -205 -179 -442 -399 -518 -464 -713 -604 -344 -248 -755 -443 -1182 -560 -49 -13 -178 -41 -285 -61 -461 -85 -765 -170 -1120 -313 -432 -173 -1035 -513 -1111 -627 -84 -124 -87 -363 -7 -655 111 -407 391 -1007 791 -1695 964 -1657 2575 -3762 3298 -4309 156 -119 248 -153 324 -122 118 50 308 210 428 362 335 426 599 1162 743 2074 22 142 26 202 29 430 1 146 8 310 14 365 43 381 134 695 293 1010 78 154 107 197 307 445 287 359 591 776 881 1210 289 434 427 618 575 766 217 219 486 363 825 440 153 35 149 36 189 -43 42 -81 124 -185 187 -237 118 -98 294 -177 464 -207 36 -6 155 -12 265 -14 277 -4 482 -37 700 -112 325 -113 566 -305 687 -549 45 -92 76 -121 232 -228 264 -179 566 -238 747 -146 35 18 36 18 85 -6 195 -96 365 -7 449 235 14 39 25 76 25 83 0 6 18 39 40 72 52 82 104 196 132 292 29 103 31 285 4 384 -36 131 -70 183 -237 360 -407 432 -638 717 -810 1001 -138 229 -202 402 -245 663 -47 294 -80 359 -267 543 -133 130 -193 214 -255 361 -40 94 -44 111 -39 162 7 81 45 149 119 212 167 141 264 259 341 413 87 174 128 350 128 547 0 204 -37 298 -117 298 -47 0 -77 -31 -193 -196 -108 -153 -275 -320 -386 -386 -97 -58 -245 -115 -245 -94 0 25 47 139 114 276 95 193 175 454 176 568 0 37 -3 44 -27 53 -47 18 -144 20 -203 4z" fill="#002bb8"/>
+          </g>
+        </svg>
       </svg>
     </div>
-    <div class="wiki-desktop-icon-text">Wiki</div>
+    <div class="wiki-desktop-icon-text">Hors[p]e[dia]</div>
   `;
 
   const launch = async () => {
