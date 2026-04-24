@@ -194,14 +194,53 @@ async function init() {
     zoomToUserDot,
   );
 
+  // --- NEW: Helper to check if any BLOCKING window is actively visible ---
+  const isBlockingWindowOpen = () => {
+    let isBlocked = false;
+
+    // 1. Check Wiki (Paused only if visible)
+    const wiki = document.getElementById("wiki-overlay");
+    if (wiki && wiki.style.display !== "none") isBlocked = true;
+
+    // 2. Check Disc:Horse (Paused only if visible)
+    const forum = document.getElementById("dischorse-overlay");
+    if (forum && forum.style.display !== "none") isBlocked = true;
+
+    // 3. Check Audio Library (Paused only if visible)
+    const audioWindows = document.querySelectorAll(".vista-window");
+    for (let i = 0; i < audioWindows.length; i++) {
+      if (
+        audioWindows[i].innerHTML.includes("Media Player") &&
+        audioWindows[i].style.display !== "none"
+      ) {
+        isBlocked = true;
+        break;
+      }
+    }
+
+    // NOTE: GlueShelf is intentionally EXCLUDED from this check so it never pauses the animation!
+    return isBlocked;
+  };
+
+  const toggleDesktopIcons = (show) => {
+    const icons = [
+      document.getElementById("wiki-desktop-icon"),
+      document.getElementById("dischorse-icon"),
+      document.getElementById("audio-library-standalone"),
+      glueShelf.folderIcon,
+    ];
+    icons.forEach((icon) => {
+      if (icon) icon.style.display = show ? "flex" : "none";
+    });
+  };
+
   const handleThemeChange = (themeId) => {
     if (themeId === "void") {
       isVoidMode = true;
       renderer.domElement.style.display = "none";
       lDom.style.display = "none";
+      toggleDesktopIcons(false); // Hide icons in the void
       if (glueShelf.wrapper) glueShelf.wrapper.style.display = "none";
-      if (glueShelf.folderIcon) glueShelf.folderIcon.style.display = "none";
-      audioLibrary.setDisplay(false);
       const ui = document.getElementById("logged-in-ui");
       if (ui) ui.style.display = "none";
       voidMgr.start(getManifestations(), globalVoidMessages);
@@ -212,13 +251,11 @@ async function init() {
         renderer.domElement.style.display = "block";
         lDom.style.display = "block";
         if (currentUsername) {
+          toggleDesktopIcons(true); // Restore icons
           if (glueShelf.wrapper)
             glueShelf.wrapper.style.display = glueShelf.isExpanded()
               ? "flex"
               : "none";
-          if (glueShelf.folderIcon)
-            glueShelf.folderIcon.style.display = "block";
-          audioLibrary.setDisplay(true);
           const ui = document.getElementById("logged-in-ui");
           if (ui) ui.style.display = "block";
         }
@@ -239,9 +276,9 @@ async function init() {
         voidMgr.stop();
         renderer.domElement.style.display = "none";
         lDom.style.display = "none";
+        toggleDesktopIcons(false); // Hide icons during ritual
         if (glueShelf.wrapper) glueShelf.wrapper.style.display = "none";
         taskbar.style.display = "none";
-        audioLibrary.setDisplay(false);
         applyShelfState(false, false);
         const ui = document.getElementById("logged-in-ui");
         if (ui) ui.style.display = "none";
@@ -255,18 +292,19 @@ async function init() {
           renderer.domElement.style.display = "none";
           lDom.style.display = "none";
           taskbar.style.display = "flex";
+          toggleDesktopIcons(false); // Ensure hidden in void
           voidMgr.start(getManifestations(), globalVoidMessages);
         } else {
           isVoidMode = false;
           renderer.domElement.style.display = "block";
           lDom.style.display = "block";
           if (currentUsername) {
+            toggleDesktopIcons(true); // Restore icons
             if (glueShelf.wrapper)
               glueShelf.wrapper.style.display = glueShelf.isExpanded()
                 ? "flex"
                 : "none";
             taskbar.style.display = "flex";
-            audioLibrary.setDisplay(true);
             applyShelfState(glueShelf.isExpanded(), false);
             const ui = document.getElementById("logged-in-ui");
             if (ui) ui.style.display = "block";
@@ -431,10 +469,16 @@ async function init() {
       0,
       1,
     );
-    if (interactions.getIsPaused()) {
+
+    // Force timescale to 0 (pause) if a blocking window is visibly open or if paused by sphere hover
+    if (interactions.getIsPaused() || isBlockingWindowOpen()) {
       timeScale = 0;
-      if (camDistFromOrigin >= FULL_SPEED_DIST) interactions.setIsPaused(false);
+      // Resume interactions if we zoom out and no blocking windows are open
+      if (camDistFromOrigin >= FULL_SPEED_DIST && !isBlockingWindowOpen()) {
+        interactions.setIsPaused(false);
+      }
     }
+
     if (horseUpdater) horseUpdater(delta * timeScale, camera);
 
     renderer.render(scene, camera);
