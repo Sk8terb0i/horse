@@ -15,6 +15,7 @@ import { createXPLoader } from "./World/Components/XPLoader.js";
 import { createVoidManager } from "./World/Components/VoidManager.js";
 import { initWiki } from "./World/Components/WikiManager.js";
 import { runWikiSeeder } from "./World/Components/seedWiki.js";
+import { initDiscHorse } from "./World/Components/DiscHorse.js";
 import { initializeApp } from "firebase/app";
 import {
   getFirestore,
@@ -479,6 +480,7 @@ async function init() {
       // Initialize Wiki with correct role
       const userRole = currentUserData ? currentUserData.role : "user";
       initWiki(db, currentUsername, userRole);
+      initDiscHorse(db, currentUsername, userRole);
     }
   };
 

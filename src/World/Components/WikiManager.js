@@ -77,23 +77,21 @@ function openWikiOverlay(db, currentUsername, userRole) {
   const overlay = document.createElement("div");
   overlay.id = "wiki-overlay";
   overlay.style.cssText = `
-    position: fixed; inset: 0; pointer-events: auto;
+    position: fixed; inset: 0; pointer-events: none;
     z-index: 10000; display: block; font-family: 'Segoe UI', Tahoma, sans-serif;
-    background: rgba(0,0,0,0.01);
   `;
   wikiWindowRef = overlay;
 
   overlay.innerHTML = `
     <style>
       .wiki-window {
-        position: fixed; top: ${savedWindowPos.top}px; left: ${savedWindowPos.left}px;
-        width: ${savedWindowSize.width}; height: ${savedWindowSize.height};
-        min-width: 500px; min-height: 400px; max-width: 100vw; max-height: 100vh;
+        position: fixed; top: 50px; left: 50px;
+        width: 850px; height: 650px;
         background: rgba(255, 255, 255, 0.85);
         border: 1px solid rgba(255, 255, 255, 0.9); border-radius: 8px;
-        display: flex; flex-direction: column; pointer-events: auto;
-        box-shadow: 0 10px 40px rgba(0,0,0,0.4), inset 0 0 15px rgba(255,255,255,0.5);
-        overflow: hidden; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+        display: flex; flex-direction: column; 
+        pointer-events: auto; /* FIX: Only the window blocks clicks */
+        box-shadow: 0 10px 40px rgba(0,0,0,0.4); overflow: hidden; backdrop-filter: blur(8px);
       }
       .wiki-title-bar {
         height: 35px; background: linear-gradient(to bottom, #00fbff 0%, #0072ff 50%, #0059b3 100%);
@@ -170,7 +168,6 @@ function openWikiOverlay(db, currentUsername, userRole) {
       <div class="wiki-nav">
         <div class="wiki-tab active" data-section="lore">Horse Knowledge</div>
         <div class="wiki-tab" data-section="references">References</div>
-        <div class="wiki-tab" data-section="community">Community</div>
       </div>
       <div class="wiki-content">
         <div class="wiki-sidebar" id="wiki-article-list"></div>
@@ -472,7 +469,6 @@ function openWikiOverlay(db, currentUsername, userRole) {
         if (currentSection === "lore")
           rawCat = categoryMap[article.title] || "04_Uncategorized";
         else if (currentSection === "references") rawCat = "Literature";
-        else rawCat = "Community Submissions";
       }
       if (rawCat === "01_The_Apparatus") rawCat = "03_The_Apparatus";
       if (rawCat === "02_The_Essence") rawCat = "01_The_Essence";
@@ -579,7 +575,7 @@ function openWikiOverlay(db, currentUsername, userRole) {
         <h1 style="color:#002244; margin:0; font-size:28px;">${article.title}</h1>
         <div style="display:flex;">
           ${canEdit ? `<button class="wiki-action-btn" id="wiki-edit-btn">Edit</button>` : ""}
-          ${isAdmin || (isAuthor && article.section === "community") ? `<button class="wiki-action-btn" id="wiki-delete-btn" style="color:red;">Delete</button>` : ""}
+          ${isAdmin ? `<button class="wiki-action-btn" id="wiki-delete-btn" style="color:red;">Delete</button>` : ""}
         </div>
       </div>
       <div style="font-size:12px; color:#666; margin-bottom:20px; border-bottom: 1px solid #eee; padding-bottom: 10px;">By: <strong>${article.author}</strong> | Section: <span style="text-transform: capitalize;">${article.section}</span></div>
