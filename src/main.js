@@ -37,6 +37,26 @@ import {
   unmountGlueFactory,
 } from "./World/Components/GlueFactory/GlueFactory.js";
 
+// --- GLOBAL WINDOW Z-INDEX MANAGER ---
+window.__highestVistaZIndex = window.__highestVistaZIndex || 12000;
+
+document.addEventListener(
+  "mousedown",
+  (e) => {
+    // Check for the forum window class
+    const win = e.target.closest(
+      ".wiki-overlay, #dischorse-overlay, .wiki-window, .forum-window, .vista-window, .void-window",
+    );
+
+    if (win) {
+      window.__highestVistaZIndex =
+        Math.max(window.__highestVistaZIndex || 0, 12000) + 1;
+      win.style.zIndex = window.__highestVistaZIndex;
+    }
+  },
+  true,
+);
+
 const firebaseConfig = {
   apiKey: "AIzaSyAYbyrD9uPCWh7e1GUUjc1Hd0gK6GEeDMI",
   authDomain: "horse-connection.firebaseapp.com",

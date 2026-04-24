@@ -40,10 +40,10 @@ function syncForumTaskbar() {
 
 const bringToFront = () => {
   if (!forumWindowRef) return;
-  const win = forumWindowRef.querySelector(".forum-window");
+  // Apply the Z-index to the OVERLAY (the parent container)
   window.__highestVistaZIndex =
     Math.max(window.__highestVistaZIndex || 0, 12000) + 1;
-  win.style.zIndex = window.__highestVistaZIndex;
+  forumWindowRef.style.zIndex = window.__highestVistaZIndex;
 };
 
 const animateWindow = (show) => {
@@ -136,6 +136,48 @@ const setupSignatureIcon = (username, imgElement) => {
   };
 };
 
+const makeResizable = (el, handle, saveKey) => {
+  let isResizing = false;
+  let startX, startY, startWidth, startHeight;
+
+  const doResize = (e) => {
+    if (!isResizing) return;
+    const newWidth = startWidth + (e.clientX - startX);
+    const newHeight = startHeight + (e.clientY - startY);
+    if (newWidth >= 500) el.style.width = newWidth + "px";
+    if (newHeight >= 400) el.style.height = newHeight + "px";
+  };
+
+  const stopResize = () => {
+    if (isResizing) {
+      isResizing = false;
+      document.body.style.userSelect = "";
+      document.removeEventListener("mousemove", doResize);
+      document.removeEventListener("mouseup", stopResize);
+      if (saveKey)
+        localStorage.setItem(
+          saveKey,
+          JSON.stringify({ width: el.style.width, height: el.style.height }),
+        );
+    }
+  };
+
+  handle.onmousedown = (e) => {
+    e.stopPropagation();
+    isResizing = true;
+    document.body.style.userSelect = "none";
+    startX = e.clientX;
+    startY = e.clientY;
+    startWidth = parseInt(document.defaultView.getComputedStyle(el).width, 10);
+    startHeight = parseInt(
+      document.defaultView.getComputedStyle(el).height,
+      10,
+    );
+    document.addEventListener("mousemove", doResize);
+    document.addEventListener("mouseup", stopResize);
+  };
+};
+
 function openForum(db, currentUsername, userRole) {
   isAppRunning = true;
   isWindowVisible = true;
@@ -216,17 +258,27 @@ function openForum(db, currentUsername, userRole) {
         </div>
         <div class="forum-main" id="topic-content"></div>
       </div>
-      <div class="vista-resize-handle" id="forum-resizer"></div>
+      <div class="dischorse-resize-handle" id="forum-resizer"></div>
     </div>
   `;
 
   document.body.appendChild(overlay);
   const win = overlay.querySelector(".forum-window");
+
+  // FIX: Trigger bringToFront on the window's mousedown
+  win.addEventListener("mousedown", (e) => {
+    bringToFront();
+  });
+
+  // Call it immediately on open
+  bringToFront();
   const mainView = overlay.querySelector("#topic-content");
   const topicList = overlay.querySelector("#topic-list");
 
   const minBtn = overlay.querySelector("#forum-min");
   const closeBtn = overlay.querySelector("#forum-close");
+  const resizer = overlay.querySelector("#forum-resizer");
+  makeResizable(win, resizer, "dischorse_size");
 
   minBtn.onclick = (e) => {
     e.stopPropagation();

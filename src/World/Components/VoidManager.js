@@ -46,6 +46,7 @@ export function createVoidManager() {
     if (!win) {
       win = document.createElement("div");
       win.id = id;
+      win.className = "void-window";
       document.body.appendChild(win);
     }
     const contentHeight = (width / 1800) * 1126;
@@ -122,6 +123,7 @@ export function createVoidManager() {
 
   const popup = document.createElement("div");
   popup.id = "void-popup-note";
+  popup.className = "void-window";
   popup.style.cssText = `position: fixed; top: 70vh; left: 62vw; background: #c0c0c0; border: 2px outset #fff; padding: 3px; z-index: 9999; width: 300px; display: none; flex-direction: column; box-shadow: 5px 5px 15px rgba(0,0,0,0.5); font-family: 'MS Sans Serif', Arial, sans-serif;`;
   popup.innerHTML = `
     <div id="void-pop-handle" style="background: #000080; color: white; padding: 3px 5px; font-weight: bold; font-size: 12px; margin-bottom: 15px; cursor: move;">Message</div>
@@ -306,9 +308,13 @@ export function createVoidManager() {
           setTimeout(() => h.remove(), 3000);
         }, 600);
       }
-      [bottleWin, memoryWin, ledgerWin, msgSlideshowWin, popup].forEach(
-        (w) => (w.style.display = "flex"),
-      );
+      [bottleWin, memoryWin, ledgerWin, msgSlideshowWin, popup].forEach((w) => {
+        window.__highestVistaZIndex =
+          Math.max(window.__highestVistaZIndex || 0, 12000) + 1;
+        w.style.zIndex = window.__highestVistaZIndex;
+
+        w.style.display = "flex";
+      });
 
       const submitBtn = ledgerWin.querySelector("#void-submit-msg");
       const inputField = ledgerWin.querySelector("#void-msg-input");

@@ -8,9 +8,10 @@ import {
   addDoc,
   serverTimestamp,
   getDoc,
-  where, // NEWLY ADDED
-  orderBy, // NEWLY ADDED
+  where,
+  orderBy,
 } from "firebase/firestore";
+import "./wiki.css";
 
 let wikiWindowRef = null;
 let isAppRunning = false;
@@ -30,7 +31,7 @@ function syncWikiTaskbar() {
           wikiWindowRef.style.display = isWindowVisible ? "block" : "none";
           if (isWindowVisible) {
             window.__highestVistaZIndex =
-              (window.__highestVistaZIndex || 10000) + 1;
+              Math.max(window.__highestVistaZIndex || 0, 12000) + 1;
             wikiWindowRef.style.zIndex = window.__highestVistaZIndex;
           }
         }
@@ -48,7 +49,8 @@ function openWikiOverlay(db, currentUsername, userRole) {
 
   if (wikiWindowRef) {
     wikiWindowRef.style.display = "block";
-    window.__highestVistaZIndex = (window.__highestVistaZIndex || 10000) + 1;
+    window.__highestVistaZIndex =
+      Math.max(window.__highestVistaZIndex || 0, 12000) + 1;
     wikiWindowRef.style.zIndex = window.__highestVistaZIndex;
     return;
   }
@@ -76,92 +78,19 @@ function openWikiOverlay(db, currentUsername, userRole) {
 
   const overlay = document.createElement("div");
   overlay.id = "wiki-overlay";
-  overlay.style.cssText = `
-    position: fixed; inset: 0; pointer-events: none;
-    z-index: 10000; display: block; font-family: 'Segoe UI', Tahoma, sans-serif;
-  `;
+  overlay.className = "wiki-overlay";
   wikiWindowRef = overlay;
 
   overlay.innerHTML = `
-    <style>
-      .wiki-window {
-        position: fixed; top: 50px; left: 50px;
-        width: 850px; height: 650px;
-        background: rgba(255, 255, 255, 0.85);
-        border: 1px solid rgba(255, 255, 255, 0.9); border-radius: 8px;
-        display: flex; flex-direction: column; 
-        pointer-events: auto; /* FIX: Only the window blocks clicks */
-        box-shadow: 0 10px 40px rgba(0,0,0,0.4); overflow: hidden; backdrop-filter: blur(8px);
-      }
-      .wiki-title-bar {
-        height: 35px; background: linear-gradient(to bottom, #00fbff 0%, #0072ff 50%, #0059b3 100%);
-        display: flex; align-items: center; justify-content: space-between; padding: 0 15px;
-        border-bottom: 1px solid #003366; cursor: move; user-select: none; flex-shrink: 0;
-      }
-      .wiki-nav { display: flex; background: rgba(255,255,255,0.8); border-bottom: 1px solid #ccc; flex-shrink: 0; }
-      .wiki-tab { padding: 10px 20px; cursor: pointer; font-weight: bold; color: #444; transition: background 0.2s; border-right: 1px solid #ccc; }
-      .wiki-tab.active { background: #fff; color: #0072ff; box-shadow: inset 0 3px 0 #0072ff; }
-      .wiki-content { display: flex; flex-grow: 1; overflow: hidden; background: #fff; position: relative; }
-      .wiki-sidebar { width: 250px; background: #f0f4f8; border-right: 1px solid #ccc; overflow-y: auto; padding: 10px 5px; flex-shrink: 0; }
-      .wiki-article-view { flex-grow: 1; padding: 30px 40px; overflow-y: auto; color: #222; font-size: 15px; line-height: 1.6; display: flex; flex-direction: column; position: relative; }
-      
-      .obsidian-link { color: #0072ff; text-decoration: none; font-weight: 600; cursor: pointer; background: rgba(0, 114, 255, 0.1); padding: 2px 4px; border-radius: 3px; }
-      .obsidian-link:hover { text-decoration: underline; background: rgba(0, 114, 255, 0.2); }
-      .wiki-btn { background: linear-gradient(to bottom, #76d275, #2e7d32); border: 1px solid #1b5e20; border-radius: 3px; padding: 6px 15px; color: white; font-weight: bold; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.2); width: 100%; margin-bottom: 10px; }
-      
-      .wiki-text-content h2, .rich-text-content h2 { color: #004488; border-bottom: 1px solid #ccc; padding-bottom: 5px; margin-top: 25px; margin-bottom: 15px; font-size: 20px; }
-      .wiki-text-content h3, .rich-text-content h3 { color: #0059b3; margin-top: 20px; margin-bottom: 10px; font-size: 16px; }
-      .wiki-text-content img, .rich-text-content img { max-width: 100%; height: auto; border-radius: 6px; margin: 10px 0; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
-      
-      .sidebar-category-header { padding: 12px 8px 4px 10px; font-weight: 800; color: #0059b3; font-size: 13px; border-bottom: 2px solid #ccc; margin-top: 5px; display: flex; align-items: center; gap: 6px; user-select: none; }
-      .sidebar-item { padding: 6px 8px 6px 20px; cursor: pointer; border-bottom: 1px solid transparent; color: #444; font-size: 13px; transition: all 0.2s; user-select: none; border-radius: 4px; margin: 1px 4px; }
-      .sidebar-item:hover { background: #e6f2ff; color: #004488; }
-      .sidebar-item.active-item { background: linear-gradient(90deg, #0072ff, #0099ff); color: white; font-weight: 600; box-shadow: 0 2px 4px rgba(0,0,0,0.2); border-bottom: none; }
-      
-      /* NEW: Suggestion CSS */
-      .suggestion-highlight { background: rgba(255, 235, 59, 0.4); border-bottom: 2px dashed #fbc02d; cursor: pointer; transition: background 0.2s; }
-      .suggestion-highlight:hover { background: rgba(255, 235, 59, 0.6); }
-      .suggest-float-btn { 
-        position: absolute; 
-        background: #0072ff; 
-        color: white; 
-        padding: 6px 12px; 
-        border-radius: 20px; 
-        font-size: 11px; 
-        font-weight: bold; 
-        cursor: pointer; 
-        display: none; 
-        z-index: 10002; 
-        box-shadow: 0 4px 15px rgba(0,0,0,0.3); 
-        border: 1px solid rgba(255,255,255,0.3);
-        pointer-events: auto;
-        white-space: nowrap;
-      }
-
-      /* REFERENCE CARD STYLES */
-      .ref-section-container { margin-bottom: 10px; border: 1px solid #ddd; border-radius: 6px; overflow: hidden; background: #fff; transition: all 0.3s; }
-      .ref-section-header { background: linear-gradient(to bottom, #f9f9f9, #ececec); padding: 10px 15px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: bold; color: #004488; border-bottom: 1px solid #ddd; }
-      .ref-count { font-size: 10px; background: #0072ff; color: white; padding: 2px 8px; border-radius: 10px; opacity: 0.8; }
-      .ref-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px; padding: 20px; }
-      .reference-card { background: rgba(255,255,255,0.9); border: 1px solid #ccc; border-radius: 4px; padding: 12px; border-left: 4px solid #0072ff; }
-
-      .wiki-toolbar { display: flex; gap: 5px; padding: 8px; background: #f0f4f8; border: 1px solid #ccc; border-bottom: none; border-radius: 4px 4px 0 0; flex-wrap: wrap; align-items: center; }
-      .wiki-tool-btn { background: white; border: 1px solid #ccc; border-radius: 3px; padding: 4px 10px; cursor: pointer; font-size: 14px; }
-      .wiki-editor-textarea { flex-grow: 1; border: 1px solid #ccc; border-radius: 0 0 4px 4px; padding: 15px; font-family: 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.6; overflow-y: auto; background: white; outline: none; }
-      
-      .wiki-tool-modal { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); padding: 20px; border-radius: 8px; border: 1px solid #999; box-shadow: 0 15px 40px rgba(0,0,0,0.5); z-index: 10005; display: none; flex-direction: column; width: 350px; }
-      .wiki-modal-close { position: absolute; top: 10px; right: 10px; cursor: pointer; font-weight: bold; color: #888; }
-      .vista-resize-handle { position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize; z-index: 100; background: linear-gradient(135deg, transparent 50%, rgba(0,0,0,0.2) 50%); border-bottom-right-radius: 8px; }
-    </style>
-    <div class="wiki-window">
+    <div class="wiki-window" style="top: ${savedWindowPos.top}px; left: ${savedWindowPos.left}px; width: ${savedWindowSize.width}; height: ${savedWindowSize.height};">
       <div class="wiki-title-bar" id="wiki-drag-handle">
-        <span style="color: white; font-weight: 600; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); pointer-events: none;">Herd Knowledge Base</span>
-        <div style="display: flex; gap: 6px; align-items: center;">
-          <div id="wiki-minimize" style="width: 24px; height: 22px; border: 1px solid rgba(255,255,255,0.4); border-radius: 4px; background: linear-gradient(180deg, rgba(255,255,255,0.3), rgba(255,255,255,0.05)); cursor: pointer; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 5px; box-sizing: border-box; transition: background 0.2s;">
-            <div style="width: 10px; height: 2px; background: white; box-shadow: 0 1px 2px rgba(0,0,0,0.5); pointer-events: none;"></div>
+        <span class="wiki-title-text">Herd Knowledge Base</span>
+        <div class="wiki-header-controls">
+          <div id="wiki-minimize" class="wiki-min-btn">
+            <div class="wiki-min-line"></div>
           </div>
-          <div id="wiki-close" style="width: 38px; height: 22px; border: 1px solid rgba(255,255,255,0.4); border-radius: 4px; background: linear-gradient(180deg, rgba(230,80,80,0.85) 0%, rgba(190,30,30,0.9) 49%, rgba(150,10,10,0.95) 50%, rgba(210,40,40,0.9) 100%); cursor: pointer; display: flex; align-items: center; justify-content: center; box-sizing: border-box; transition: all 0.2s ease; box-shadow: inset 0 1px 2px rgba(255,255,255,0.6), 0 1px 3px rgba(0,0,0,0.3);">
-            <svg width="10" height="10" viewBox="0 0 10 10" style="pointer-events: none;"><path d="M1 1 L9 9 M9 1 L1 9" stroke="white" stroke-width="1.5" stroke-linecap="round" style="filter: drop-shadow(0 1px 1px rgba(0,0,0,0.8));"></path></svg>
+          <div id="wiki-close" class="wiki-close-btn">
+            <svg width="10" height="10" viewBox="0 0 10 10" class="wiki-close-icon"><path d="M1 1 L9 9 M9 1 L1 9" stroke="white" stroke-width="1.5" stroke-linecap="round"></path></svg>
           </div>
         </div>
       </div>
@@ -177,35 +106,35 @@ function openWikiOverlay(db, currentUsername, userRole) {
 
         <div id="wiki-suggestion-modal" class="wiki-tool-modal">
           <div class="wiki-modal-close" onclick="this.parentElement.style.display='none'">X</div>
-          <h3 style="margin:0 0 10px 0; color:#004488;">Suggest Edit</h3>
-          <p style="font-size:11px; color:#666; margin-bottom:5px;">Proposed change for: <br><span id="wiki-orig-preview" style="font-style:italic; background:#eee;"></span></p>
-          <textarea id="wiki-suggest-text" class="wiki-editor-input" style="height:100px;" placeholder="Your proposed text..."></textarea>
+          <h3 class="wiki-modal-title">Suggest Edit</h3>
+          <p class="wiki-modal-subtitle">Proposed change for: <br><span id="wiki-orig-preview" class="wiki-modal-preview"></span></p>
+          <textarea id="wiki-suggest-text" class="wiki-editor-input wiki-suggest-textarea" placeholder="Your proposed text..."></textarea>
           <button class="wiki-btn" id="wiki-submit-suggest-btn">Submit Proposal</button>
         </div>
 
         <div id="wiki-link-modal" class="wiki-tool-modal">
           <div class="wiki-modal-close" onclick="this.parentElement.style.display='none'">X</div>
-          <h3 style="margin:0 0 10px 0; color:#004488;">Link to Article</h3>
+          <h3 class="wiki-modal-title">Link to Article</h3>
           <input type="text" id="wiki-link-search" class="wiki-editor-input" placeholder="Search articles..." />
-          <div id="wiki-link-results" style="max-height:150px; overflow-y:auto; border:1px solid #ccc; border-radius:4px; display:flex; flex-direction:column;"></div>
+          <div id="wiki-link-results" class="wiki-link-results"></div>
         </div>
         
-        <div id="wiki-image-modal" class="wiki-tool-modal" style="width: 400px;">
+        <div id="wiki-image-modal" class="wiki-tool-modal image-modal">
           <div class="wiki-modal-close" onclick="this.parentElement.style.display='none'">X</div>
-          <h3 style="margin:0 0 10px 0; color:#004488;">Insert Image</h3>
+          <h3 class="wiki-modal-title">Insert Image</h3>
           <input type="file" id="wiki-image-file" accept="image/*" class="wiki-editor-input" />
-          <canvas id="wiki-image-canvas" style="width:100%; max-height:200px; display:none;"></canvas>
-          <div style="display:flex; gap:5px; margin:10px 0;">
-            <button class="wiki-tool-btn" id="wiki-crop-orig" style="flex:1;">Orig</button>
-            <button class="wiki-tool-btn" id="wiki-crop-sq" style="flex:1;">1:1</button>
-            <button class="wiki-tool-btn" id="wiki-crop-wide" style="flex:1;">16:9</button>
+          <canvas id="wiki-image-canvas" class="wiki-image-canvas"></canvas>
+          <div class="wiki-modal-btn-row">
+            <button class="wiki-tool-btn" id="wiki-crop-orig">Orig</button>
+            <button class="wiki-tool-btn" id="wiki-crop-sq">1:1</button>
+            <button class="wiki-tool-btn" id="wiki-crop-wide">16:9</button>
           </div>
           <button class="wiki-btn" id="wiki-insert-image-btn">Compress & Insert</button>
         </div>
 
         <div id="wiki-embed-modal" class="wiki-tool-modal">
           <div class="wiki-modal-close" onclick="this.parentElement.style.display='none'">X</div>
-          <h3 style="margin:0 0 10px 0; color:#004488;">Embed Media</h3>
+          <h3 class="wiki-modal-title">Embed Media</h3>
           <input type="text" id="wiki-embed-url" class="wiki-editor-input" placeholder="https://..." />
           <button class="wiki-btn" id="wiki-insert-embed-btn">Embed</button>
         </div>
@@ -224,10 +153,12 @@ function openWikiOverlay(db, currentUsername, userRole) {
   const origPreview = overlay.querySelector("#wiki-orig-preview");
 
   const bringToFront = () => {
-    window.__highestVistaZIndex = (window.__highestVistaZIndex || 10000) + 1;
-    wikiWindow.style.zIndex = window.__highestVistaZIndex;
+    window.__highestVistaZIndex =
+      Math.max(window.__highestVistaZIndex || 0, 12000) + 1;
+    wikiWindowRef.style.zIndex = window.__highestVistaZIndex;
   };
   wikiWindow.addEventListener("mousedown", bringToFront);
+  bringToFront();
 
   const makeDraggable = (el, handle, saveKey) => {
     let wasDragged = false;
@@ -257,7 +188,12 @@ function openWikiOverlay(db, currentUsername, userRole) {
       }
     };
     handle.addEventListener("mousedown", (e) => {
-      if (e.target.id === "wiki-minimize" || e.target.id === "wiki-close")
+      if (
+        e.target.id === "wiki-minimize" ||
+        e.target.id === "wiki-close" ||
+        e.target.closest("#wiki-minimize") ||
+        e.target.closest("#wiki-close")
+      )
         return;
       document.body.style.userSelect = "none";
       startX = e.clientX;
@@ -402,19 +338,20 @@ function openWikiOverlay(db, currentUsername, userRole) {
     return `<div class="rich-text-content">${parsed}</div>`;
   };
 
-  // NEW: Suggestion Popup Logic
   const showSuggestionManagementPopup = (e, sug, article) => {
     const isAdmin = userRole === "admin";
     const isAuthor = article.author === currentUsername;
 
     const pop = document.createElement("div");
     pop.className = "wiki-suggestion-action-pop";
-    pop.style.cssText = `position: absolute; top: ${e.clientY}px; left: ${e.clientX}px; background: white; border: 1px solid #999; border-radius: 8px; padding: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); z-index: 11000; width: 250px; font-size: 13px; font-family: sans-serif;`;
+    pop.style.top = `${e.clientY}px`;
+    pop.style.left = `${e.clientX}px`;
+
     pop.innerHTML = `
-      <div style="color:#0072ff; font-weight:bold; margin-bottom:5px;">✨ Edit Suggestion</div>
-      <div style="font-size:11px; color:#666; margin-bottom:10px;">By: ${sug.suggestedBy}</div>
-      <div style="background:#f9f9f9; padding:8px; border:1px solid #ddd; border-radius:4px; margin-bottom:10px; max-height:100px; overflow-y:auto;">${sug.suggestedText}</div>
-      <div id="pop-controls" style="display:flex; gap:5px; justify-content:flex-end;">
+      <div class="wiki-pop-title">✨ Edit Suggestion</div>
+      <div class="wiki-pop-meta">By: ${sug.suggestedBy}</div>
+      <div class="wiki-pop-text">${sug.suggestedText}</div>
+      <div class="wiki-pop-controls" id="pop-controls">
         <button class="wiki-action-btn" id="pop-ignore">Ignore</button>
       </div>
     `;
@@ -423,8 +360,8 @@ function openWikiOverlay(db, currentUsername, userRole) {
       pop.querySelector("#pop-controls").insertAdjacentHTML(
         "afterbegin",
         `
-        <button class="wiki-action-btn" style="color:green; border-color:green;" id="pop-agree">Agree</button>
-        <button class="wiki-action-btn" style="color:red; border-color:red;" id="pop-delete">Delete</button>
+        <button class="wiki-action-btn wiki-pop-agree" id="pop-agree">Agree</button>
+        <button class="wiki-action-btn wiki-pop-delete" id="pop-delete">Delete</button>
       `,
       );
     }
@@ -523,7 +460,6 @@ function openWikiOverlay(db, currentUsername, userRole) {
 
     let articleContent = article.content;
 
-    // Inject Suggestion Highlights
     activeSuggestions
       .filter((s) => s.articleId === article.id && s.status === "pending")
       .forEach((s) => {
@@ -559,36 +495,24 @@ function openWikiOverlay(db, currentUsername, userRole) {
     const canEdit = isAdmin || (article.section === "community" && isAuthor);
 
     articleBody.innerHTML = `
-      <style>
-        .comment-block { background: #fdfdfd; border: 1px solid #eee; border-radius: 6px; padding: 12px; margin-bottom: 10px; position: relative; }
-        .comment-reply { margin-left: 30px; border-left: 2px solid #0072ff; background: #f9f9fb; }
-        .comment-header { font-size: 11px; color: #777; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center; }
-        .comment-text { font-size: 13px; color: #333; line-height: 1.4; }
-        .comment-actions { display: flex; gap: 10px; align-items: center; margin-top: 8px; }
-        .reply-link { font-size: 11px; color: #0072ff; cursor: pointer; font-weight: bold; }
-        .delete-comment-link { font-size: 11px; color: #cc0000; cursor: pointer; font-weight: bold; }
-        .comment-input-area { margin-top: 20px; border-top: 1px dashed #ccc; padding-top: 15px; }
-        .comment-box { width: 100%; border: 1px solid #ccc; border-radius: 4px; padding: 8px; font-family: sans-serif; font-size: 13px; resize: none; min-height: 60px; margin-bottom: 8px; }
-      </style>
-
-      <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:5px;">
-        <h1 style="color:#002244; margin:0; font-size:28px;">${article.title}</h1>
-        <div style="display:flex;">
+      <div class="wiki-article-header-row">
+        <h1 class="wiki-article-title">${article.title}</h1>
+        <div class="wiki-article-actions">
           ${canEdit ? `<button class="wiki-action-btn" id="wiki-edit-btn">Edit</button>` : ""}
-          ${isAdmin ? `<button class="wiki-action-btn" id="wiki-delete-btn" style="color:red;">Delete</button>` : ""}
+          ${isAdmin ? `<button class="wiki-action-btn delete-btn" id="wiki-delete-btn">Delete</button>` : ""}
         </div>
       </div>
-      <div style="font-size:12px; color:#666; margin-bottom:20px; border-bottom: 1px solid #eee; padding-bottom: 10px;">By: <strong>${article.author}</strong> | Section: <span style="text-transform: capitalize;">${article.section}</span></div>
+      <div class="wiki-article-meta">By: <strong>${article.author}</strong> | Section: <span>${article.section}</span></div>
       
       <div class="wiki-text-content">${html}</div>
 
-      <hr style="margin-top: 50px; border: 0; border-top: 1px dashed #ccc;">
-      <h3 style="color: #555; margin-top: 20px;">Community Discussion</h3>
+      <hr class="wiki-article-divider">
+      <h3 class="wiki-discussion-title">Community Discussion</h3>
       <div id="wiki-comments-container">Loading conversation...</div>
 
       <div class="comment-input-area">
-        <textarea id="main-comment-input" class="comment-box" placeholder="Share your thoughts with the herd..."></textarea>
-        <button class="wiki-btn" id="submit-main-comment" style="width: auto;">Post Comment</button>
+        <textarea id="main-comment-input" class="wiki-comment-box" placeholder="Share your thoughts with the herd..."></textarea>
+        <button class="wiki-btn reply-post-btn" id="submit-main-comment">Post Comment</button>
       </div>
     `;
 
@@ -606,7 +530,7 @@ function openWikiOverlay(db, currentUsername, userRole) {
         const allComs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         comContainer.innerHTML =
           allComs.length === 0
-            ? '<p style="color:#999; font-style:italic; font-size:13px;">No comments yet.</p>'
+            ? '<p class="wiki-no-comments">No comments yet.</p>'
             : "";
 
         const topLevel = allComs.filter((c) => !c.parentId);
@@ -618,7 +542,7 @@ function openWikiOverlay(db, currentUsername, userRole) {
                 <strong>${parent.author}</strong> 
                 <div>
                   ${isAdmin ? `<span class="delete-comment-link" data-id="${parent.id}">Delete</span>` : ""}
-                  <span style="margin-left:8px;">${parent.timestamp?.toDate().toLocaleString() || "just now"}</span>
+                  <span class="comment-timestamp">${parent.timestamp?.toDate().toLocaleString() || "just now"}</span>
                 </div>
             </div>
             <div class="comment-text">${parent.text}</div>
@@ -627,13 +551,12 @@ function openWikiOverlay(db, currentUsername, userRole) {
             </div>
             <div id="replies-to-${parent.id}"></div>
             <div id="input-for-${parent.id}" style="display:none; margin-top:10px;">
-              <textarea class="comment-box" id="reply-text-${parent.id}" placeholder="Replying..."></textarea>
-              <button class="wiki-btn" style="width:auto; font-size:11px;" id="send-reply-${parent.id}">Post Reply</button>
+              <textarea class="wiki-comment-box" id="reply-text-${parent.id}" placeholder="Replying..."></textarea>
+              <button class="wiki-btn reply-post-btn" id="send-reply-${parent.id}">Post Reply</button>
             </div>
           `;
           comContainer.appendChild(parentEl);
 
-          // Handle Top-Level Deletion
           if (isAdmin) {
             parentEl.querySelector(".delete-comment-link").onclick =
               async () => {
@@ -652,14 +575,13 @@ function openWikiOverlay(db, currentUsername, userRole) {
                 <strong>${rep.author}</strong> 
                 <div>
                   ${isAdmin ? `<span class="delete-comment-link" data-id="${rep.id}">Delete</span>` : ""}
-                  <span style="margin-left:8px;">${rep.timestamp?.toDate().toLocaleString() || "now"}</span>
+                  <span class="comment-timestamp">${rep.timestamp?.toDate().toLocaleString() || "now"}</span>
                 </div>
               </div>
               <div class="comment-text">${rep.text}</div>
             `;
             replyBox.appendChild(repEl);
 
-            // Handle Reply Deletion
             if (isAdmin) {
               repEl.querySelector(".delete-comment-link").onclick =
                 async () => {
@@ -708,7 +630,6 @@ function openWikiOverlay(db, currentUsername, userRole) {
       input.value = "";
     };
 
-    // Article Interactions
     articleBody.onmouseup = (e) => {
       const sel = window.getSelection();
       if (
@@ -783,10 +704,10 @@ function openWikiOverlay(db, currentUsername, userRole) {
       .replace(/<\/div>$/, "");
 
     articleBody.innerHTML = `
-      <h2 style="margin-bottom:15px; color:#004488;">${isNew ? "New Entry" : "Editing: " + article.title}</h2>
-      <div style="display:flex; gap:10px; margin-bottom:10px;">
-        <input type="text" id="edit-title" style="flex:2; padding:8px;" value="${article.title || ""}" placeholder="Title" />
-        <input type="text" id="edit-category" style="flex:1; padding:8px;" value="${(article.category || "").replace(/^\d{2}_/, "").replace(/_/g, " ")}" placeholder="Category" />
+      <h2 class="wiki-editor-header">${isNew ? "New Entry" : "Editing: " + article.title}</h2>
+      <div class="wiki-editor-inputs">
+        <input type="text" id="edit-title" class="wiki-edit-title-input" value="${article.title || ""}" placeholder="Title" />
+        <input type="text" id="edit-category" class="wiki-edit-category-input" value="${(article.category || "").replace(/^\d{2}_/, "").replace(/_/g, " ")}" placeholder="Category" />
       </div>
       <div class="wiki-toolbar">
         <button class="wiki-tool-btn" data-cmd="bold"><b>B</b></button>
@@ -799,9 +720,9 @@ function openWikiOverlay(db, currentUsername, userRole) {
         <button class="wiki-tool-btn" id="tool-mic">🎙️ Mic</button>
       </div>
       <div id="edit-content" class="wiki-editor-textarea rich-text-content" contenteditable="true">${initC}</div>
-      <div style="display:flex; gap:10px; margin-top:10px;">
+      <div class="wiki-editor-actions">
         <button class="wiki-btn" id="wiki-save-btn">Save</button>
-        <button class="wiki-btn" id="wiki-cancel-btn" style="background:#999;">Cancel</button>
+        <button class="wiki-btn wiki-cancel-btn" id="wiki-cancel-btn">Cancel</button>
       </div>
     `;
 
@@ -895,7 +816,6 @@ function openWikiOverlay(db, currentUsername, userRole) {
             updatedAt: serverTimestamp(),
           });
           currentArticleId = docRef.id;
-          // Immediately render the new article view
           renderArticle({
             id: docRef.id,
             title,
@@ -911,7 +831,6 @@ function openWikiOverlay(db, currentUsername, userRole) {
             content,
             updatedAt: serverTimestamp(),
           });
-          // Immediately render the updated article view
           renderArticle({ ...article, title, category: cat, content });
         }
         renderSidebar();
@@ -953,14 +872,12 @@ function openWikiOverlay(db, currentUsername, userRole) {
   });
 
   onSnapshot(query(collection(db, "wiki_articles")), (snap) => {
-    // FIXED: Explicitly sort articles by title for consistency
     articles = snap.docs
       .map((doc) => ({ id: doc.id, ...doc.data() }))
       .sort((a, b) => a.title.localeCompare(b.title));
 
     renderSidebar();
 
-    // If an article ID was restored from localStorage, find and show it
     if (currentArticleId) {
       const restored = articles.find((a) => a.id === currentArticleId);
       const isEditing = !!articleBody.querySelector("#edit-content");
@@ -968,7 +885,6 @@ function openWikiOverlay(db, currentUsername, userRole) {
         renderArticle(restored);
       }
     } else if (articles.length > 0) {
-      // Otherwise, auto-load the first article of the current section
       const first = articles.find((a) => a.section === currentSection);
       if (first) renderArticle(first);
     }
@@ -986,7 +902,7 @@ function openWikiOverlay(db, currentUsername, userRole) {
       const first = articles.find((a) => a.section === currentSection);
       if (first) renderArticle(first);
       else
-        articleBody.innerHTML = `<h2 style="color: #ccc; text-align: center; margin-top: 20%;">No entries.</h2>`;
+        articleBody.innerHTML = `<h2 class="wiki-empty-state">No entries.</h2>`;
     };
   });
 
@@ -1007,29 +923,15 @@ function openWikiOverlay(db, currentUsername, userRole) {
   };
 }
 
-// EXPORTED INITIALIZER
 export function initWiki(db, currentUsername, userRole) {
   if (!currentUsername) return;
 
   const wikiIcon = document.createElement("div");
   wikiIcon.id = "wiki-desktop-icon";
-
-  wikiIcon.style.cssText = `
-    position: absolute; 
-    top: 65%; 
-    right: 10%; 
-    display: flex; 
-    flex-direction: column; 
-    align-items: center; 
-    justify-content: center;
-    cursor: pointer; 
-    z-index: 50; 
-    pointer-events: auto;
-    transition: transform 0.2s ease, filter 0.2s ease;
-  `;
+  wikiIcon.className = "wiki-desktop-icon";
 
   wikiIcon.innerHTML = `
-    <div style="width: 48px; height: 48px; margin-bottom: 5px; filter: drop-shadow(2px 4px 6px rgba(0,0,0,0.6));">
+    <div class="wiki-desktop-icon-svg-wrapper">
       <svg viewBox="0 0 100 100" width="100%" height="100%">
         <defs>
           <linearGradient id="pistachio-grad" x1="0%" y1="0%" x2="0%" y2="100%">
@@ -1046,19 +948,9 @@ export function initWiki(db, currentUsername, userRole) {
         <path d="M10,40 L90,40 L90,85 L10,85 Z" fill="url(#pistachio-grad)" opacity="0.95"/>
       </svg>
     </div>
-    <div style="color: #ededee; font-family: serif; font-size: 15px; text-shadow: 1px 1px 2px black;">Wiki</div>
+    <div class="wiki-desktop-icon-text">Wiki</div>
   `;
 
-  wikiIcon.onmouseenter = () => {
-    wikiIcon.style.transform = "scale(1.1)";
-    wikiIcon.style.filter = "brightness(1.1)";
-  };
-  wikiIcon.onmouseleave = () => {
-    wikiIcon.style.transform = "scale(1)";
-    wikiIcon.style.filter = "none";
-  };
-
-  // Define launch here so it can be used for both click and auto-restore
   const launch = async () => {
     let activeRole = userRole;
     try {

@@ -64,7 +64,6 @@ a, button, .topic-card, .forum-emoji, .action-text-btn, .rep-toggle, .edit-toggl
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: 10000;
   background: rgba(0, 0, 0, 0.01);
 }
 
@@ -140,7 +139,7 @@ a, button, .topic-card, .forum-emoji, .action-text-btn, .rep-toggle, .edit-toggl
 
 .forum-min-line { width: 12px; height: 3px; background: black; margin-top: 10px; }
 
-.vista-resize-handle { 
+.dischorse-resize-handle { 
   position: absolute; right: 0; bottom: 0; width: 20px; height: 20px; 
   cursor: nwse-resize; 
   background: repeating-linear-gradient(135deg, transparent, transparent 2px, #000 2px, #000 4px);
