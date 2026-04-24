@@ -1034,16 +1034,103 @@ export function initDiscHorse(db, currentUsername, userRole) {
   onSnapshot(collection(db, "policy_signatures"), (snap) => {
     globalSignatures = snap.docs.map((d) => d.data());
   });
+
+  const savedIconPos = JSON.parse(
+    localStorage.getItem("dischorse_icon_pos"),
+  ) || { left: "85vw", top: "10vh" };
+  const getPos = (val) => (typeof val === "number" ? val + "px" : val);
+
   const icon = document.createElement("div");
   icon.id = "dischorse-icon";
+  icon.style.cssText = `position: fixed; left: ${getPos(savedIconPos.left)}; top: ${getPos(savedIconPos.top)}; z-index: 5000; cursor: pointer; transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);`;
 
   icon.innerHTML = `
-    <img src="assets/dischorse.png" class="dischorse-icon-img">
-    <div class="dischorse-icon-text">Disc:Horse</div>
+    <img src="assets/dischorse.png" class="dischorse-icon-img" style="pointer-events: none;">
+    <div class="dischorse-icon-text" style="pointer-events: none;">Disc:Horse</div>
   `;
 
-  icon.onclick = () => openForum(db, currentUsername, userRole);
   document.body.appendChild(icon);
-  if (localStorage.getItem("dischorse_is_open") === "true")
+
+  const makeIconDraggable = (iconEl, saveKey, clickCallback) => {
+    let isDragging = false;
+    let wasDragged = false;
+    let startX, startY, initialLeft, initialTop;
+
+    iconEl.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      document.body.style.userSelect = "none";
+
+      startX = e.clientX;
+      startY = e.clientY;
+      const rect = iconEl.getBoundingClientRect();
+      initialLeft = rect.left;
+      initialTop = rect.top;
+
+      isDragging = true;
+      wasDragged = false;
+
+      const onMouseMove = (moveEvent) => {
+        if (!isDragging) return;
+        const dx = moveEvent.clientX - startX;
+        const dy = moveEvent.clientY - startY;
+
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+          wasDragged = true;
+          iconEl.style.transition = "none";
+        }
+
+        if (wasDragged) {
+          iconEl.style.left = initialLeft + dx + "px";
+          iconEl.style.top = initialTop + dy + "px";
+          iconEl.style.right = "auto";
+          iconEl.style.bottom = "auto";
+        }
+      };
+
+      const onMouseUp = (upEvent) => {
+        if (!isDragging) return;
+        isDragging = false;
+        document.body.style.userSelect = "";
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+
+        if (wasDragged) {
+          iconEl.style.transition =
+            "transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)";
+          const finalRect = iconEl.getBoundingClientRect();
+          const safeLeft = Math.max(
+            0,
+            Math.min(finalRect.left, window.innerWidth - 64),
+          );
+          const safeTop = Math.max(
+            0,
+            Math.min(finalRect.top, window.innerHeight - 64),
+          );
+
+          const vwPos = (safeLeft / window.innerWidth) * 100;
+          const vhPos = (safeTop / window.innerHeight) * 100;
+
+          const relativePos = { left: vwPos + "vw", top: vhPos + "vh" };
+          iconEl.style.left = relativePos.left;
+          iconEl.style.top = relativePos.top;
+
+          localStorage.setItem(saveKey, JSON.stringify(relativePos));
+        } else {
+          if (clickCallback) clickCallback(e);
+        }
+      };
+
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    });
+  };
+
+  makeIconDraggable(icon, "dischorse_icon_pos", () => {
     openForum(db, currentUsername, userRole);
+  });
+
+  if (localStorage.getItem("dischorse_is_open") === "true") {
+    openForum(db, currentUsername, userRole);
+  }
 }

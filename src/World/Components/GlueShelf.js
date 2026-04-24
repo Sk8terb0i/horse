@@ -5,7 +5,9 @@ export function initGlueShelf(currentUsername, showMemory, onToggle) {
 
   const savedFolderPos = JSON.parse(
     localStorage.getItem("glue_folder_pos"),
-  ) || { top: 200, left: 100 };
+  ) || { top: "20vh", left: "10vw" };
+  const getPos = (val) => (typeof val === "number" ? val + "px" : val);
+
   const savedWindowPos = JSON.parse(
     localStorage.getItem("glue_window_pos"),
   ) || { top: 200, left: 200 };
@@ -17,7 +19,7 @@ export function initGlueShelf(currentUsername, showMemory, onToggle) {
   const folderIcon = document.createElement("div");
   folderIcon.id = "glue-folder-standalone";
   folderIcon.style.cssText = `
-    position: fixed; top: ${savedFolderPos.top}px; left: ${savedFolderPos.left}px; 
+    position: fixed; top: ${getPos(savedFolderPos.top)}; left: ${getPos(savedFolderPos.left)}; 
     z-index: 5000; cursor: pointer; display: ${currentUsername ? "block" : "none"}; 
     transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   `;
@@ -190,15 +192,90 @@ export function initGlueShelf(currentUsername, showMemory, onToggle) {
     if (rect.right > window.innerWidth)
       vistaWindow.style.left = window.innerWidth - rect.width - 20 + "px";
   };
+
+  // Keep the window draggable logic
   makeDraggable(
     vistaWindow,
     vistaWindow.querySelector("#shelf-drag-handle"),
     "glue_window_pos",
   );
 
-  folderIcon.addEventListener("click", () => {
-    if (folderStatus()) return;
+  const makeIconDraggable = (iconEl, saveKey, clickCallback) => {
+    let isDragging = false;
+    let wasDragged = false;
+    let startX, startY, initialLeft, initialTop;
 
+    iconEl.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault(); // Kills the text highlight/native drag issue
+      document.body.style.userSelect = "none";
+
+      startX = e.clientX;
+      startY = e.clientY;
+      const rect = iconEl.getBoundingClientRect();
+      initialLeft = rect.left;
+      initialTop = rect.top;
+
+      isDragging = true;
+      wasDragged = false;
+
+      const onMouseMove = (moveEvent) => {
+        if (!isDragging) return;
+        const dx = moveEvent.clientX - startX;
+        const dy = moveEvent.clientY - startY;
+
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+          wasDragged = true;
+          iconEl.style.transition = "none";
+        }
+
+        if (wasDragged) {
+          iconEl.style.left = initialLeft + dx + "px";
+          iconEl.style.top = initialTop + dy + "px";
+          iconEl.style.right = "auto";
+          iconEl.style.bottom = "auto";
+        }
+      };
+
+      const onMouseUp = (upEvent) => {
+        if (!isDragging) return;
+        isDragging = false;
+        document.body.style.userSelect = "";
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+
+        if (wasDragged) {
+          iconEl.style.transition =
+            "transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)";
+          const finalRect = iconEl.getBoundingClientRect();
+          const safeLeft = Math.max(
+            0,
+            Math.min(finalRect.left, window.innerWidth - 64),
+          );
+          const safeTop = Math.max(
+            0,
+            Math.min(finalRect.top, window.innerHeight - 64),
+          );
+
+          const vwPos = (safeLeft / window.innerWidth) * 100;
+          const vhPos = (safeTop / window.innerHeight) * 100;
+
+          const relativePos = { left: vwPos + "vw", top: vhPos + "vh" };
+          iconEl.style.left = relativePos.left;
+          iconEl.style.top = relativePos.top;
+
+          localStorage.setItem(saveKey, JSON.stringify(relativePos));
+        } else {
+          if (clickCallback) clickCallback(e);
+        }
+      };
+
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    });
+  };
+
+  makeIconDraggable(folderIcon, "glue_folder_pos", (e) => {
     isAppRunning = true;
     isWindowVisible = true;
     localStorage.setItem("shelf_expanded", "true");

@@ -1007,15 +1007,17 @@ export function initWiki(db, currentUsername, userRole) {
 
         <path d="M 15,10 C 25,5 35,8 45,10 C 40,15 35,25 25,25 C 15,20 10,15 15,10 Z" fill="#e8ecef" stroke="#a2a9b1" stroke-width="1.5"/>
 
-        <svg x="6" y="6" width="120" height="120" viewBox="-1000 -1000 14500 14500" preserveAspectRatio="xMidYMid meet">
+        <svg x="6" y="6" width="88" height="88" viewBox="-1000 -1000 14500 14500" preserveAspectRatio="xMidYMid meet">
           <g transform="translate(12500, 12000) scale(-1, -1)">
             <path d="M10630 11425 c-110 -31 -227 -113 -355 -246 -72 -76 -100 -110 -188 -231 -35 -48 -182 -165 -390 -312 l-169 -118 -81 21 c-448 112 -1127 54 -1968 -169 -1070 -284 -2300 -825 -2794 -1231 -38 -31 -131 -112 -205 -179 -442 -399 -518 -464 -713 -604 -344 -248 -755 -443 -1182 -560 -49 -13 -178 -41 -285 -61 -461 -85 -765 -170 -1120 -313 -432 -173 -1035 -513 -1111 -627 -84 -124 -87 -363 -7 -655 111 -407 391 -1007 791 -1695 964 -1657 2575 -3762 3298 -4309 156 -119 248 -153 324 -122 118 50 308 210 428 362 335 426 599 1162 743 2074 22 142 26 202 29 430 1 146 8 310 14 365 43 381 134 695 293 1010 78 154 107 197 307 445 287 359 591 776 881 1210 289 434 427 618 575 766 217 219 486 363 825 440 153 35 149 36 189 -43 42 -81 124 -185 187 -237 118 -98 294 -177 464 -207 36 -6 155 -12 265 -14 277 -4 482 -37 700 -112 325 -113 566 -305 687 -549 45 -92 76 -121 232 -228 264 -179 566 -238 747 -146 35 18 36 18 85 -6 195 -96 365 -7 449 235 14 39 25 76 25 83 0 6 18 39 40 72 52 82 104 196 132 292 29 103 31 285 4 384 -36 131 -70 183 -237 360 -407 432 -638 717 -810 1001 -138 229 -202 402 -245 663 -47 294 -80 359 -267 543 -133 130 -193 214 -255 361 -40 94 -44 111 -39 162 7 81 45 149 119 212 167 141 264 259 341 413 87 174 128 350 128 547 0 204 -37 298 -117 298 -47 0 -77 -31 -193 -196 -108 -153 -275 -320 -386 -386 -97 -58 -245 -115 -245 -94 0 25 47 139 114 276 95 193 175 454 176 568 0 37 -3 44 -27 53 -47 18 -144 20 -203 4z" fill="#002bb8"/>
           </g>
         </svg>
       </svg>
     </div>
-    <div class="wiki-desktop-icon-text">Hors[p]e[dia]</div>
+    <div class="wiki-desktop-icon-text">Horsepedia</div>
   `;
+
+  document.body.appendChild(wikiIcon);
 
   const launch = async () => {
     let activeRole = userRole;
@@ -1030,12 +1032,101 @@ export function initWiki(db, currentUsername, userRole) {
     openWikiOverlay(db, currentUsername, activeRole);
   };
 
-  wikiIcon.onclick = (e) => {
-    e.stopPropagation();
-    launch();
+  // --- RELATIVE DRAG LOGIC ---
+  const makeIconDraggable = (icon, saveKey, clickCallback) => {
+    let isDragging = false;
+    let wasDragged = false;
+    let startX, startY, initialLeft, initialTop;
+
+    // 1. Load saved VW/VH positions
+    const savedPos = JSON.parse(localStorage.getItem(saveKey));
+    if (savedPos) {
+      icon.style.left = savedPos.left;
+      icon.style.top = savedPos.top;
+      icon.style.right = "auto";
+      icon.style.bottom = "auto";
+    }
+
+    icon.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return; // Only allow left-clicks to drag
+
+      e.preventDefault(); // KILLS THE NATIVE HIGHLIGHTING/IMAGE DRAGGING
+      document.body.style.userSelect = "none";
+
+      startX = e.clientX;
+      startY = e.clientY;
+      const rect = icon.getBoundingClientRect();
+      initialLeft = rect.left;
+      initialTop = rect.top;
+
+      isDragging = true;
+      wasDragged = false;
+
+      const onMouseMove = (moveEvent) => {
+        if (!isDragging) return;
+        const dx = moveEvent.clientX - startX;
+        const dy = moveEvent.clientY - startY;
+
+        // Threshold to distinguish a drag from a simple click
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+          wasDragged = true;
+        }
+
+        if (wasDragged) {
+          icon.style.left = initialLeft + dx + "px";
+          icon.style.top = initialTop + dy + "px";
+          icon.style.right = "auto";
+          icon.style.bottom = "auto";
+        }
+      };
+
+      const onMouseUp = (upEvent) => {
+        if (!isDragging) return;
+        isDragging = false;
+        document.body.style.userSelect = "";
+
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+
+        if (wasDragged) {
+          const finalRect = icon.getBoundingClientRect();
+
+          // Prevent icon from being dragged completely out of the window
+          const safeLeft = Math.max(
+            0,
+            Math.min(finalRect.left, window.innerWidth - 64),
+          );
+          const safeTop = Math.max(
+            0,
+            Math.min(finalRect.top, window.innerHeight - 64),
+          );
+
+          // 2. Convert raw pixels to Viewport Width (vw) and Height (vh)
+          const vwPos = (safeLeft / window.innerWidth) * 100;
+          const vhPos = (safeTop / window.innerHeight) * 100;
+
+          const relativePos = { left: vwPos + "vw", top: vhPos + "vh" };
+
+          icon.style.left = relativePos.left;
+          icon.style.top = relativePos.top;
+
+          localStorage.setItem(saveKey, JSON.stringify(relativePos));
+        } else {
+          // If the user didn't move the mouse past the threshold, it was just a click
+          if (clickCallback) clickCallback(e);
+        }
+      };
+
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    });
   };
 
-  document.body.appendChild(wikiIcon);
+  // Bind the Horsepedia icon
+  makeIconDraggable(wikiIcon, "wiki_icon_pos", (e) => {
+    e.stopPropagation();
+    launch();
+  });
 
   // Restore window if it was left open
   if (localStorage.getItem("wiki_is_open") === "true") {

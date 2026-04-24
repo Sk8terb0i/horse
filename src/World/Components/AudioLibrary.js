@@ -4,9 +4,11 @@ export function createAudioLibrary(currentUsername) {
   const ASSET_PATH = import.meta.env.BASE_URL + "assets/";
 
   const savedIconPos = JSON.parse(localStorage.getItem("audio_icon_pos")) || {
-    top: 320,
-    left: 100,
+    top: "32vh",
+    left: "10vw",
   };
+  const getPos = (val) => (typeof val === "number" ? val + "px" : val);
+
   const savedWindowPos = JSON.parse(
     localStorage.getItem("audio_window_pos"),
   ) || { top: 200, left: 250 };
@@ -21,7 +23,7 @@ export function createAudioLibrary(currentUsername) {
   const icon = document.createElement("div");
   icon.id = "audio-library-standalone";
   icon.style.cssText = `
-    position: fixed; top: ${savedIconPos.top}px; left: ${savedIconPos.left}px;
+    position: fixed; top: ${getPos(savedIconPos.top)}; left: ${getPos(savedIconPos.left)};
     z-index: 5000; cursor: pointer; display: ${currentUsername ? "flex" : "none"};
     flex-direction: column; align-items: center; transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   `;
@@ -356,9 +358,82 @@ export function createAudioLibrary(currentUsername) {
     "audio_window_pos",
   );
 
-  icon.addEventListener("click", () => {
-    if (iconStatus()) return;
+  const makeIconDraggable = (iconEl, saveKey, clickCallback) => {
+    let isDragging = false;
+    let wasDragged = false;
+    let startX, startY, initialLeft, initialTop;
 
+    iconEl.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault(); // Kills the text highlight/native drag issue
+      document.body.style.userSelect = "none";
+
+      startX = e.clientX;
+      startY = e.clientY;
+      const rect = iconEl.getBoundingClientRect();
+      initialLeft = rect.left;
+      initialTop = rect.top;
+
+      isDragging = true;
+      wasDragged = false;
+
+      const onMouseMove = (moveEvent) => {
+        if (!isDragging) return;
+        const dx = moveEvent.clientX - startX;
+        const dy = moveEvent.clientY - startY;
+
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+          wasDragged = true;
+          iconEl.style.transition = "none";
+        }
+
+        if (wasDragged) {
+          iconEl.style.left = initialLeft + dx + "px";
+          iconEl.style.top = initialTop + dy + "px";
+          iconEl.style.right = "auto";
+          iconEl.style.bottom = "auto";
+        }
+      };
+
+      const onMouseUp = (upEvent) => {
+        if (!isDragging) return;
+        isDragging = false;
+        document.body.style.userSelect = "";
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+
+        if (wasDragged) {
+          iconEl.style.transition =
+            "transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)";
+          const finalRect = iconEl.getBoundingClientRect();
+          const safeLeft = Math.max(
+            0,
+            Math.min(finalRect.left, window.innerWidth - 64),
+          );
+          const safeTop = Math.max(
+            0,
+            Math.min(finalRect.top, window.innerHeight - 64),
+          );
+
+          const vwPos = (safeLeft / window.innerWidth) * 100;
+          const vhPos = (safeTop / window.innerHeight) * 100;
+
+          const relativePos = { left: vwPos + "vw", top: vhPos + "vh" };
+          iconEl.style.left = relativePos.left;
+          iconEl.style.top = relativePos.top;
+
+          localStorage.setItem(saveKey, JSON.stringify(relativePos));
+        } else {
+          if (clickCallback) clickCallback(e);
+        }
+      };
+
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    });
+  };
+
+  makeIconDraggable(icon, "audio_icon_pos", (e) => {
     isAppRunning = true;
     isWindowVisible = true;
     localStorage.setItem("audio_running", "true");
