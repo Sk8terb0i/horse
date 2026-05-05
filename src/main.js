@@ -13,6 +13,7 @@ import { initGlueShelf } from "./World/Components/GlueShelf.js";
 import { createMemoryModal } from "./World/Components/MemoryModal.js";
 import { createXPLoader } from "./World/Components/XPLoader.js";
 import { createVoidManager } from "./World/Components/VoidManager.js";
+import { createLoneManager } from "./World/Components/LoneManager.js";
 import { initWiki } from "./World/Components/WikiManager.js";
 import { runWikiSeeder } from "./World/Components/seedWiki.js";
 import { initDiscHorse } from "./World/Components/DiscHorse.js";
@@ -130,6 +131,13 @@ async function init() {
   const memoryModal = createMemoryModal();
   const xpLoader = createXPLoader();
   const voidMgr = createVoidManager();
+  const loneMgr = createLoneManager(
+    scene,
+    camera,
+    renderer.domElement,
+    controls,
+    signatureUI,
+  );
 
   const applyShelfState = (expanded, animate = false) => {
     if (!currentUsername || isVoidMode) return;
@@ -255,6 +263,11 @@ async function init() {
   };
 
   const handleThemeChange = (themeId) => {
+    // Stop lone manager if we are switching away from it
+    if (themeId !== "lone" && horseDataRef) {
+      loneMgr.stop(horseDataRef);
+    }
+
     if (themeId === "void") {
       isVoidMode = true;
       renderer.domElement.style.display = "none";
@@ -264,6 +277,29 @@ async function init() {
       const ui = document.getElementById("logged-in-ui");
       if (ui) ui.style.display = "none";
       voidMgr.start(getManifestations(), globalVoidMessages);
+    } else if (themeId === "lone") {
+      isVoidMode = false;
+      voidMgr.stop();
+      if (window.location.hash !== "#/ritual") {
+        renderer.domElement.style.display = "block";
+        lDom.style.display = "block";
+        toggleDesktopIcons(false);
+        if (glueShelf.wrapper) glueShelf.wrapper.style.display = "none";
+
+        applyShelfState(false, true);
+
+        const ui = document.getElementById("logged-in-ui");
+        if (ui) ui.style.display = "none";
+
+        // PASS THE USER COLOR TO LONE MANAGER
+        const currentUserData = globalUsersData.find(
+          (u) => u.username === currentUsername,
+        );
+        const userColor = currentUserData
+          ? currentUserData.innerColor
+          : "#ffffff";
+        loneMgr.start(currentUsername, userColor, horseDataRef, db);
+      }
     } else {
       isVoidMode = false;
       voidMgr.stop();
@@ -290,10 +326,14 @@ async function init() {
     const hash = window.location.hash;
     const isRitual = hash === "#/ritual";
     const currentTheme = localStorage.getItem("horse_herd_theme") || "herd";
+    if (conn.lineMaterial.opacity > 0 && currentTheme !== "lone") {
+      conn.updateConnections(horseDataRef);
+    }
 
     const executeSwap = () => {
       if (isRitual) {
         voidMgr.stop();
+        if (horseDataRef) loneMgr.stop(horseDataRef);
         renderer.domElement.style.display = "none";
         lDom.style.display = "none";
         toggleDesktopIcons(false); // Hide icons during ritual
@@ -309,13 +349,27 @@ async function init() {
         unmountGlueFactory();
         if (currentTheme === "void") {
           isVoidMode = true;
+          if (horseDataRef) loneMgr.stop(horseDataRef);
           renderer.domElement.style.display = "none";
           lDom.style.display = "none";
           taskbar.style.display = "flex";
           toggleDesktopIcons(false); // Ensure hidden in void
           voidMgr.start(getManifestations(), globalVoidMessages);
+        } else if (currentTheme === "lone") {
+          isVoidMode = false;
+          voidMgr.stop();
+          renderer.domElement.style.display = "block";
+          lDom.style.display = "block";
+          taskbar.style.display = "flex";
+          toggleDesktopIcons(false); // Ensure hidden in lone
+          applyShelfState(false, false);
+          const ui = document.getElementById("logged-in-ui");
+          if (ui) ui.style.display = "none";
+          loneMgr.start(currentUsername, horseDataRef);
         } else {
           isVoidMode = false;
+          voidMgr.stop();
+          if (horseDataRef) loneMgr.stop(horseDataRef);
           renderer.domElement.style.display = "block";
           lDom.style.display = "block";
           if (currentUsername) {
@@ -379,12 +433,13 @@ async function init() {
   function addUserToScene(data) {
     if (addedUsers.has(data.username)) return;
     addedUsers.add(data.username);
-    if (horseDataRef)
+    if (horseDataRef) {
       horseDataRef.addUserSphere(
         data.username,
         data.innerColor,
         !!data.password,
       );
+    }
     if (data.username === currentUsername && data.innerColor)
       overlay.setInitialColor(data.innerColor);
   }
@@ -395,6 +450,16 @@ async function init() {
     horseData.horseGroup.rotation.y = THREE.MathUtils.degToRad(-20);
     scene.add(horseData.horseGroup);
     horseUpdater = horseData.update;
+
+    // CRITICAL: Ensure the 3D horse is instantly hidden if we refresh into Lone or Void
+    const currentTheme = localStorage.getItem("horse_herd_theme") || "herd";
+    if (currentTheme === "lone") {
+      horseDataRef.horseGroup.visible = false;
+    } else if (currentTheme === "void") {
+      renderer.domElement.style.display = "none";
+      lDom.style.display = "none";
+    }
+
     createUserUI(db, overlay, horseData);
     if (currentUsername) {
       overlay.showMainUI();
@@ -500,6 +565,7 @@ async function init() {
     }
 
     if (horseUpdater) horseUpdater(delta * timeScale, camera);
+    loneMgr.update(delta, camera);
 
     renderer.render(scene, camera);
     labelRenderer.render(scene, camera);
@@ -535,16 +601,20 @@ async function init() {
         (u) => u.username === currentUsername,
       );
 
-      // Show UI elements
+      // 1. Show the base UI elements first
       overlay.showMainUI();
       taskbar.style.display = "flex";
       const ui = document.getElementById("logged-in-ui");
       if (ui) ui.style.display = "block";
 
-      // Initialize Wiki with correct role
+      // 2. Initialize the desktop applications so their DOM nodes exist
       const userRole = currentUserData ? currentUserData.role : "user";
       initWiki(db, currentUsername, userRole);
       initDiscHorse(db, currentUsername, userRole);
+
+      // 3. ENFORCE THE THEME: This instantly hides the UI, icons, and 3D canvas if in Void or Lone
+      const currentTheme = localStorage.getItem("horse_herd_theme") || "herd";
+      handleThemeChange(currentTheme);
     }
   };
 

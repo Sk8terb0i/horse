@@ -1,5 +1,12 @@
 import { RitualStyles } from "./RitualStyles.js";
-import { doc, updateDoc, getDoc } from "firebase/firestore";
+import {
+  getStorage,
+  ref,
+  uploadString,
+  getDownloadURL,
+} from "firebase/storage";
+
+import { doc, getDoc, updateDoc } from "firebase/firestore";
 
 const CATEGORY_Z_INDEX = {
   leg_b_back: 1,
@@ -541,13 +548,26 @@ function renderBottlePhase(container, horseID, db, username, manifestations) {
       ctx.restore();
     }
 
-    try {
-      // Use WebP: Supports transparency AND respects the quality compression parameter
-      const imgData = canvas.toDataURL("image/webp", 0.5);
+    const imgData = canvas.toDataURL("image/webp", 0.6); // You can keep quality higher now!
 
+    try {
+      // 1. Setup Storage Reference
+      const storage = getStorage();
+      const imageRef = ref(
+        storage,
+        `bottles/${username}/${horseID}_${Date.now()}.webp`,
+      );
+
+      // 2. Upload the Base64 string to Storage
+      await uploadString(imageRef, imgData, "data_url");
+
+      // 3. Get the public download URL
+      const downloadURL = await getDownloadURL(imageRef);
+
+      // 4. Save the lightweight URL to Firestore, NOT the image data
       await updateDoc(doc(db, "users", username), {
         [`manifestations.${horseID}.isBottled`]: true,
-        [`manifestations.${horseID}.finalImage`]: imgData,
+        [`manifestations.${horseID}.finalImage`]: downloadURL, // Only ~100 bytes!
         activeHorseName: "",
       });
 
@@ -690,7 +710,11 @@ function renderDressUpPhase(
         if (selectedEl) selectedEl.classList.remove("active-part");
         selectedEl = img;
         selectedEl.classList.add("active-part");
-        stagedKey = "";
+
+        // Only clear the staged key if this is the very first part on a blank canvas
+        if (viewport.querySelectorAll(".draggable").length <= 1) {
+          stagedKey = "";
+        }
       }
       applyTransform(img);
     };
