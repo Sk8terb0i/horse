@@ -10,12 +10,15 @@ export function createMemoryModal() {
 
   const windowEl = document.createElement("div");
   windowEl.id = "memory-drag-container";
+
+  // FIX 1: Smart default dimensions that perfectly match the 1.6 aspect ratio to kill black bars
   windowEl.style.cssText = `
     position: fixed; top: 10vh; left: 15vw; 
     background: #c0c0c0; border: 2px outset #fff; padding: 3px; 
     display: none; flex-direction: column; 
     box-shadow: 10px 10px 40px rgba(0,0,0,0.6); 
-    width: 70vw; height: 500px; min-width: 400px; 
+    width: 800px; height: 530px; 
+    min-width: 400px; min-height: 280px;
     z-index: 5001; resize: both; overflow: hidden;
     opacity: 0; transform: scale(0.8); pointer-events: none;
   `;
@@ -63,6 +66,20 @@ export function createMemoryModal() {
 
   const animateWindow = (show) => {
     if (show) {
+      // Dynamic screen clamping logic
+      const savedPos = JSON.parse(
+        localStorage.getItem("memory_window_pos"),
+      ) || { top: 100, left: 150 };
+      const wW = Math.min(800, window.innerWidth * 0.95);
+      const wH = Math.min(530, window.innerHeight * 0.9);
+
+      windowEl.style.width = wW + "px";
+      windowEl.style.height = wH + "px";
+      windowEl.style.left =
+        Math.max(0, Math.min(savedPos.left, window.innerWidth - wW)) + "px";
+      windowEl.style.top =
+        Math.max(0, Math.min(savedPos.top, window.innerHeight - wH)) + "px";
+
       windowEl.style.display = "flex";
       windowEl.style.pointerEvents = "auto";
     }
@@ -127,6 +144,10 @@ export function createMemoryModal() {
     const stop = () => {
       document.removeEventListener("mousemove", move);
       document.removeEventListener("mouseup", stop);
+      localStorage.setItem(
+        "memory_window_pos",
+        JSON.stringify({ top: windowEl.offsetTop, left: windowEl.offsetLeft }),
+      );
     };
     document.addEventListener("mousemove", move);
     document.addEventListener("mouseup", stop);
@@ -135,26 +156,25 @@ export function createMemoryModal() {
   // --- THE TRUE PROXY ROOM ---
   const contentArea = windowEl.querySelector("#memory-content-area");
 
-  // 1. The Proxy Wrapper: Absolute positioning prevents the modal from squishing it.
-  // It uses the EXACT formulas from RitualStyles.js so the browser calculates the identical pixels.
   const proxyWrapper = document.createElement("div");
+  proxyWrapper.className = "memory-proxy-wrapper";
+
+  // FIX 2: Freeze native resolution to 1200x750.
+  // No vh/vw formulas! This permanently locks the horse parts together regardless of monitor size.
   proxyWrapper.style.cssText = `
     position: absolute;
     top: 50%; left: 50%;
-    height: 85vh; 
-    width: calc(85vh * (1800 / 1126));
-    max-width: 95vw;
-    max-height: calc(95vw * (1126 / 1800));
+    width: 1200px;
+    height: 750px;
     transform: translate(-50%, -50%);
     transform-origin: center center;
   `;
 
-  // 2. The Virtual Canvas: Mimics the original .viewport-area exactly.
   const virtualCanvas = document.createElement("div");
   virtualCanvas.style.cssText = `
     width: 100%; height: 100%;
     background-image: url('${ASSET_PATH}bg_dressup_room.jpg');
-    background-size: 100% 100%; /* Fixes the black bars / cropping */
+    background-size: 100% 100%; 
     background-position: center;
     position: relative;
     overflow: hidden;
@@ -164,16 +184,13 @@ export function createMemoryModal() {
   contentArea.appendChild(proxyWrapper);
 
   const updateScale = () => {
-    // Briefly reset scale to 1 so we can read the true, uncrushed pixel dimensions
     proxyWrapper.style.transform = "translate(-50%, -50%) scale(1)";
-
-    const nativeW = proxyWrapper.offsetWidth;
-    const nativeH = proxyWrapper.offsetHeight;
+    const nativeW = 1200;
+    const nativeH = 750;
     const containerW = contentArea.clientWidth;
     const containerH = contentArea.clientHeight;
 
-    if (nativeW > 0 && containerW > 0) {
-      // Find the scale factor needed to shrink the giant room into the small modal
+    if (containerW > 0 && containerH > 0) {
       const scale = Math.min(containerW / nativeW, containerH / nativeH);
       proxyWrapper.style.transform = `translate(-50%, -50%) scale(${scale})`;
     }
@@ -192,7 +209,6 @@ export function createMemoryModal() {
     const formatCoord = (val) =>
       String(val).includes("%") || String(val).includes("px") ? val : val + "%";
 
-    // The horse is rendered onto the proxy room using the exact logic from your database
     virtualCanvas.innerHTML = config
       .map((p) => {
         const isBack = p.category && p.category.includes("_back");
