@@ -253,6 +253,52 @@ function openForum(db, currentUsername, userRole) {
   ];
 
   overlay.innerHTML = `
+    <style>
+      /* Container Queries make the layout respond to the WINDOW'S width, not just the monitor's width */
+      .forum-window { container-type: inline-size; }
+      
+      @container (max-width: 650px) {
+        .forum-body-container { flex-direction: column !important; }
+        
+        /* Stack the sidebar on top, strictly forcing flex heights and allowing scrolling */
+        .forum-sidebar { 
+          width: 100% !important; 
+          flex: 0 0 35% !important; 
+          max-height: none !important;
+          height: 35% !important;
+          border-right: none !important; 
+          border-bottom: 2px outset #fff !important; 
+          overflow-y: auto !important;
+        }
+        
+        /* Strictly bound the main content area so it scrolls instead of clipping */
+        .forum-main { 
+          width: 100% !important; 
+          flex: 0 0 65% !important; 
+          max-height: none !important;
+          height: 65% !important;
+          overflow-y: auto !important; 
+          padding-bottom: 25px !important;
+          box-sizing: border-box !important;
+        }
+        
+        /* Wrap elements that get crushed on small widths */
+        .topic-view-header { flex-direction: column !important; align-items: flex-start !important; gap: 10px !important; }
+        .topic-view-actions { width: 100% !important; justify-content: flex-end !important; }
+        .comment-layout { flex-direction: column !important; align-items: flex-start !important; }
+        .comment-content { width: 100% !important; padding-left: 0 !important; margin-top: 5px !important; box-sizing: border-box !important; }
+        .poll-creator-grid { grid-template-columns: 1fr !important; }
+        .editor-actions-row { flex-direction: column !important; }
+        .editor-actions-row button { width: 100% !important; margin-left: 0 !important; margin-bottom: 8px !important; }
+        
+        /* FIX FOR HORIZONTAL AND VERTICAL TEXT CUTOFFS */
+        .topic-view-body, .comment-text, .forum-body-container * { 
+          word-wrap: break-word !important; 
+          overflow-wrap: break-word !important; 
+          max-width: 100% !important;
+        }
+      }
+    </style>
     <div class="forum-window" style="top: ${savedPos.top}px; left: ${savedPos.left}px; width: ${savedSize.width}; height: ${savedSize.height};">
       <div class="forum-header" id="forum-drag-handle">
         <div class="forum-header-left">
