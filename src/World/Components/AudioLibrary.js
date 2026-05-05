@@ -366,7 +366,6 @@ export function createAudioLibrary(currentUsername) {
     return () => wasDragged;
   };
 
-  const iconStatus = makeDraggable(icon, icon, "audio_icon_pos");
   makeDraggable(
     windowEl,
     windowEl.querySelector("#audio-drag-handle"),

@@ -206,8 +206,6 @@ export function initGlueShelf(currentUsername, showMemory, onToggle) {
     return () => wasDragged;
   };
 
-  const folderStatus = makeDraggable(folderIcon, folderIcon, "glue_folder_pos");
-
   const checkBounds = () => {
     const rect = vistaWindow.getBoundingClientRect();
     if (rect.right > window.innerWidth)
