@@ -1,4 +1,15 @@
-import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  deleteField,
+} from "firebase/firestore";
+import {
+  getAuth,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+} from "firebase/auth";
 import * as THREE from "three";
 
 async function hashPassword(password) {
@@ -73,19 +84,6 @@ export function createUserUI(db, overlay, horseInstance) {
     const passwordInput = container.querySelector("#passwordInput");
     const uiHeader = container.querySelector("#ui-header");
 
-    usernameInput.addEventListener("blur", async () => {
-      const username = usernameInput.value.trim().toLowerCase();
-      if (!username) return;
-      const userRef = doc(db, "users", username);
-      const userSnap = await getDoc(userRef);
-      if (userSnap.exists() && !userSnap.data().password) {
-        uiHeader.innerText =
-          "this soul is unclaimed. set a password to secure your place.";
-        passwordInput.placeholder = "set your new password";
-        uiHeader.style.color = "var(--big-horse-color)";
-      }
-    });
-
     attachListeners(true);
   }
 
@@ -141,53 +139,87 @@ export function createUserUI(db, overlay, horseInstance) {
       setButtonsLoading(true);
       msg.innerText = "";
 
+      const auth = getAuth();
+      // Create a fake email behind the scenes for Firebase Auth
+      const pseudoEmail = `${username}@horse.herd`;
+
       try {
-        const enteredHash = await hashPassword(password);
         const userRef = doc(db, "users", username);
-        const userSnap = await getDoc(userRef);
 
         if (isLogin) {
-          if (userSnap.exists()) {
-            const userData = userSnap.data();
-            if (!userData.password) {
-              await updateDoc(userRef, { password: enteredHash });
-              loginUser(username, rememberMeState);
-            } else if (
-              userData.password === enteredHash ||
-              userData.password === password
-            ) {
-              if (userData.password === password)
-                await updateDoc(userRef, { password: enteredHash });
-              loginUser(username, rememberMeState);
+          try {
+            // 1. Try modern Firebase Auth first
+            await signInWithEmailAndPassword(auth, pseudoEmail, password);
+            loginUser(username, rememberMeState);
+          } catch (authError) {
+            // 2. MIGRATION FALLBACK: If Auth fails, check the old database
+            const userSnap = await getDoc(userRef);
+
+            if (userSnap.exists()) {
+              const userData = userSnap.data();
+              const enteredHash = await hashPassword(password);
+
+              // Verify the old password system
+              if (
+                userData.password === enteredHash ||
+                userData.password === password
+              ) {
+                // Success! Create their new secure Auth account
+                await createUserWithEmailAndPassword(
+                  auth,
+                  pseudoEmail,
+                  password,
+                );
+
+                // Optional: Delete the exposed password hash from the database
+                await updateDoc(userRef, { password: deleteField() });
+
+                loginUser(username, rememberMeState);
+              } else {
+                msg.innerText = "the password does not match the marrow.";
+                setButtonsLoading(false);
+              }
             } else {
-              msg.innerText = "the password does not match the marrow.";
+              msg.innerText = "username not found in herd.";
               setButtonsLoading(false);
             }
-          } else {
-            msg.innerText = "username not found in herd.";
-            setButtonsLoading(false);
           }
         } else {
+          // REGISTRATION: Brand new users
           const nameInput = document.getElementById("nameInput");
           const name = nameInput.value.trim();
+
           if (!name) {
             msg.innerText = "please provide your name.";
             setButtonsLoading(false);
             return;
           }
+
+          const userSnap = await getDoc(userRef);
           if (userSnap.exists()) {
             msg.innerText = "username already taken.";
             setButtonsLoading(false);
-          } else {
+            return;
+          }
+
+          try {
+            // Create Firebase Auth user
+            await createUserWithEmailAndPassword(auth, pseudoEmail, password);
+
+            // Create database entry (WITHOUT saving the password!)
             const color = new THREE.Color().setHSL(Math.random(), 0.4, 0.7);
             await setDoc(userRef, {
               realName: name,
               username: username,
-              password: enteredHash,
               innerColor: `#${color.getHexString()}`,
               createdAt: Date.now(),
             });
+
             loginUser(username, rememberMeState);
+          } catch (createErr) {
+            msg.innerText = "failed to create connection.";
+            console.error(createErr);
+            setButtonsLoading(false);
           }
         }
       } catch (e) {

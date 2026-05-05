@@ -2,6 +2,7 @@ import * as THREE from "three";
 import gsap from "gsap";
 import { ManifestoContent } from "./Content.js";
 import { doc, setDoc } from "firebase/firestore";
+import { getAuth, signOut } from "firebase/auth";
 import { createColorPicker } from "./ColorPickerUI.js";
 import { getNearestColorName } from "../Utils/ColorUtils.js";
 
@@ -218,9 +219,20 @@ export function createOverlayUI(scene, db, getUsername) {
 
   logoutBtn.onmouseenter = () => (logoutBtn.style.opacity = "1");
   logoutBtn.onmouseleave = () => (logoutBtn.style.opacity = "0.3");
-  logoutBtn.onclick = () => {
+  logoutBtn.onclick = async () => {
+    // 1. Tell Firebase to officially kill the secure session
+    try {
+      const auth = getAuth();
+      await signOut(auth);
+    } catch (err) {
+      console.error("Error signing out of Firebase:", err);
+    }
+
+    // 2. Wipe the browser's UI memory
     localStorage.removeItem("horse_herd_username");
     sessionStorage.removeItem("horse_herd_username");
+
+    // 3. Reload to reset the app back to the login screen
     window.location.reload();
   };
 

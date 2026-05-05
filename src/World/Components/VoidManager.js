@@ -20,14 +20,12 @@ export function createVoidManager() {
   funeralAudio.loop = true;
   funeralAudio.volume = savedVolume;
 
-  // Unified function to ensure the icon is always in sync with 'isPlaying'
   const updatePlayPauseIcon = () => {
     const iconContainer = document.querySelector(
       "#void-memory-win .void-icon-container",
     );
     if (!iconContainer) return;
 
-    // isPlaying = true means music is active, so show the PAUSE icon
     iconContainer.innerHTML = isPlaying
       ? `<svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="3" height="8" fill="black" /><rect x="6" y="1" width="3" height="8" fill="black" /></svg>`
       : `<svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 1 L9 5 L2 9 Z" fill="black" /></svg>`;
@@ -170,23 +168,87 @@ export function createVoidManager() {
     makeDraggable(w, h.id ? `#${h.id}` : ".void-handle");
   });
 
+  // --- RESTORED: The exact 85vh proxy logic that fixed MemoryModal.js ---
   const renderHorse = (container, config) => {
     container.innerHTML = "";
-    container.style.backgroundImage = `url('${PARTS_PATH}bg_dressup_room.jpg')`;
-    container.style.backgroundSize = "100% 100%";
-    const scaleMultiplier = 600 / 1800;
+    container.style.backgroundImage = "none";
+
+    // 1. The Proxy Wrapper: Calculates the exact original screen size using the user's viewport
+    const proxyWrapper = document.createElement("div");
+    proxyWrapper.className = "void-proxy-wrapper";
+    proxyWrapper.style.cssText = `
+      position: absolute;
+      top: 50%; left: 50%;
+      height: 85vh; 
+      width: calc(85vh * (1800 / 1126));
+      max-width: 95vw;
+      max-height: calc(95vw * (1126 / 1800));
+      transform: translate(-50%, -50%);
+      transform-origin: center center;
+    `;
+
+    // 2. The Virtual Canvas
+    const virtualCanvas = document.createElement("div");
+    virtualCanvas.style.cssText = `
+      width: 100%; height: 100%;
+      background-image: url('${PARTS_PATH}bg_dressup_room.jpg');
+      background-size: 100% 100%;
+      background-position: center;
+      position: relative;
+      overflow: hidden;
+    `;
+
+    proxyWrapper.appendChild(virtualCanvas);
+    container.appendChild(proxyWrapper);
+
+    const formatCoord = (val) =>
+      String(val).includes("%") || String(val).includes("px") ? val : val + "%";
+
+    // 3. Draw the horse directly onto the virtual canvas
     config.forEach((p) => {
       const img = document.createElement("img");
-      const l = String(p.x).includes("%")
-        ? p.x
-        : (parseFloat(p.x) / 1800) * 100 + "%";
-      const t = String(p.y).includes("%")
-        ? p.y
-        : (parseFloat(p.y) / 1126) * 100 + "%";
       img.src = `${PARTS_PATH}${p.file}`;
-      img.style.cssText = `position: absolute; left: ${l}; top: ${t}; transform: translate(-50%, -50%) scale(${(parseFloat(p.scale) || 0.7) * scaleMultiplier}) rotate(${p.rotate || 0}deg); z-index: ${p.zIndex || 10}; pointer-events: none; opacity: 1; ${p.category?.includes("_back") ? "filter: brightness(0.7);" : ""}`;
-      container.appendChild(img);
+      const isBack = p.category && p.category.includes("_back");
+      img.style.cssText = `position: absolute; left: ${formatCoord(p.x)}; top: ${formatCoord(p.y)}; transform: translate(-50%, -50%) scale(${p.scale || 0.7}) rotate(${p.rotate || 0}deg); z-index: ${p.zIndex || 10}; pointer-events: none; opacity: 1; user-select: none; ${isBack ? "filter: brightness(0.7);" : ""}`;
+      virtualCanvas.appendChild(img);
     });
+
+    // 4. Calculate exactly how much to shrink the giant room into the 600px void window
+    const updateScale = () => {
+      proxyWrapper.style.transform = "translate(-50%, -50%) scale(1)";
+      const nativeW = proxyWrapper.offsetWidth;
+      const nativeH = proxyWrapper.offsetHeight;
+      const containerW = container.clientWidth;
+      const containerH = container.clientHeight;
+
+      if (nativeW > 0 && containerW > 0) {
+        const scale = Math.min(containerW / nativeW, containerH / nativeH);
+        proxyWrapper.style.transform = `translate(-50%, -50%) scale(${scale})`;
+      }
+    };
+
+    setTimeout(updateScale, 10);
+
+    // Watch for window resizes, preventing duplicate observers from stacking up
+    if (!container._resizeObserver) {
+      container._resizeObserver = new ResizeObserver(() => {
+        const pw = container.querySelector(".void-proxy-wrapper");
+        if (pw) {
+          pw.style.transform = "translate(-50%, -50%) scale(1)";
+          const nW = pw.offsetWidth;
+          const nH = pw.offsetHeight;
+          const cW = container.clientWidth;
+          const cH = container.clientHeight;
+          if (nW > 0 && cW > 0) {
+            const scale = Math.min(cW / nW, cH / nH);
+            pw.style.transform = `translate(-50%, -50%) scale(${scale})`;
+          }
+        }
+      });
+      container._resizeObserver.observe(container);
+    }
+
+    // 5. Render hearts container OUTSIDE the proxy room so they aren't miniaturized
     const hContainer = document.createElement("div");
     hContainer.id = "void-hearts-container";
     hContainer.style.cssText =
@@ -229,7 +291,6 @@ export function createVoidManager() {
             splatterHTML += `<div style="position:absolute; left:${x}%; top:${y}%; width:100px; height:100px; background-color:${color}; -webkit-mask-image:url('${ASSET_PATH}glue_glitter.png'); -webkit-mask-size:contain; -webkit-mask-repeat:no-repeat; transform:translate(-50%, -50%) scale(${scale}); pointer-events:none; z-index:1;"></div>`;
           }
 
-          // FIXED: Added a semi-opaque teal rectangle (inset border) behind text for readability
           sContent.innerHTML = `
             ${splatterHTML}
             <div style="position: relative; padding: 10px; background: rgba(0, 128, 128, 0.7); border: 2px inset #fff; z-index: 2; display: flex; align-items: center; justify-content: center; width: 85%; box-sizing: border-box;">
@@ -276,7 +337,6 @@ export function createVoidManager() {
         isPlaying = true;
         isInitialized = true;
 
-        // Initial icon update
         setTimeout(updatePlayPauseIcon, 100);
 
         const attemptPlay = funeralAudio.play();

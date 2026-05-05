@@ -28,6 +28,7 @@ import {
   orderBy,
   limit,
 } from "firebase/firestore";
+import { getAuth, onAuthStateChanged } from "firebase/auth";
 import gsap from "gsap";
 import { createAudioManager } from "./World/Components/AudioManager.js";
 
@@ -69,6 +70,22 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth(app);
+
+// --- THE SELF-HEALING AUTH SYNC ---
+onAuthStateChanged(auth, (user) => {
+  const localUser =
+    localStorage.getItem("horse_herd_username") ||
+    sessionStorage.getItem("horse_herd_username");
+
+  // If the browser thinks they are logged in, but Firebase Auth says they aren't:
+  if (localUser && !user) {
+    console.warn("Stale session detected. Forcing re-authentication...");
+    localStorage.removeItem("horse_herd_username");
+    sessionStorage.removeItem("horse_herd_username");
+    window.location.reload(); // Instantly routes them to the login screen
+  }
+});
 
 // Global State
 let globalVoidMessages = [];
@@ -188,7 +205,7 @@ async function init() {
 
     // FIX: Look at s.username instead of s.mesh.name
     const target = horseDataRef.activeSpheres.find(
-      (s) => s.username === currentUsername,
+      (s) => s.username.toLowerCase() === currentUsername.toLowerCase(),
     );
 
     if (target) {
@@ -413,11 +430,7 @@ async function init() {
         const data = c.doc.data();
         if (c.type === "added") addUserToScene(data);
         if (c.type === "modified" && horseDataRef)
-          horseDataRef.updateUserColor(
-            data.username,
-            data.innerColor,
-            !!data.password,
-          );
+          horseDataRef.updateUserColor(data.username, data.innerColor, true);
       });
       return;
     }
@@ -434,11 +447,7 @@ async function init() {
     if (addedUsers.has(data.username)) return;
     addedUsers.add(data.username);
     if (horseDataRef) {
-      horseDataRef.addUserSphere(
-        data.username,
-        data.innerColor,
-        !!data.password,
-      );
+      horseDataRef.addUserSphere(data.username, data.innerColor, true);
     }
     if (data.username === currentUsername && data.innerColor)
       overlay.setInitialColor(data.innerColor);
@@ -501,9 +510,10 @@ async function init() {
           const username = s.username;
           const randomSig = signatureUI.getRandomSignature(username);
 
-          // Check if this dot belongs to the logged-in user
+          // Check if this dot belongs to the logged-in user (Case Insensitive!)
           const isCurrentUserDot =
-            currentUsername && username === currentUsername;
+            currentUsername &&
+            username.toLowerCase() === currentUsername.toLowerCase();
 
           if (randomSig) {
             s.label.element.insertAdjacentHTML(
