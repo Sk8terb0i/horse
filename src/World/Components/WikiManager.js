@@ -434,7 +434,8 @@ function openWikiOverlay(db, currentUsername, userRole) {
 
   const renderSidebar = () => {
     sidebar.innerHTML = "";
-    if (userRole === "admin" || currentSection === "community") {
+    // STRICT ADMIN LOCK: Only admins can create new Horsepedia entries
+    if (userRole === "admin") {
       sidebar.innerHTML += `<button class="wiki-btn" id="wiki-new-article">+ Create Entry</button>`;
     }
 
@@ -466,17 +467,69 @@ function openWikiOverlay(db, currentUsername, userRole) {
           .trim();
         catHeader.innerHTML = `<span>${getCategoryIcon(displayName)}</span> <span>${displayName}</span>`;
         sidebar.appendChild(catHeader);
-        groupedArticles[rawCat].forEach((article) => {
+
+        // Sort items by custom 'order' property first, then fallback to alphabetical
+        const items = groupedArticles[rawCat].sort((a, b) => {
+          const orderA = a.order !== undefined ? a.order : 999;
+          const orderB = b.order !== undefined ? b.order : 999;
+          if (orderA !== orderB) return orderA - orderB;
+          return a.title.localeCompare(b.title);
+        });
+
+        items.forEach((article, index) => {
           const item = document.createElement("div");
           item.className =
             "sidebar-item" +
             (article.id === currentArticleId ? " active-item" : "");
           item.innerText = article.title;
+
           item.onclick = () => {
             currentArticleId = article.id;
             renderArticle(article);
             renderSidebar();
           };
+
+          // ADMIN DRAG AND DROP LOGIC (No visual indicators)
+          if (userRole === "admin") {
+            item.draggable = true;
+
+            item.addEventListener("dragstart", (e) => {
+              e.dataTransfer.effectAllowed = "move";
+              e.dataTransfer.setData("text/plain", index);
+            });
+
+            item.addEventListener("dragover", (e) => {
+              e.preventDefault(); // Necessary to allow dropping
+              e.dataTransfer.dropEffect = "move";
+            });
+
+            item.addEventListener("drop", async (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const sourceIndex = parseInt(
+                e.dataTransfer.getData("text/plain"),
+                10,
+              );
+              const targetIndex = index;
+
+              if (sourceIndex === targetIndex || isNaN(sourceIndex)) return;
+
+              // Reorder the array based on the drop
+              const newArr = [...items];
+              const [draggedItem] = newArr.splice(sourceIndex, 1);
+              newArr.splice(targetIndex, 0, draggedItem);
+
+              // Update Firestore to lock in the new sequence for everyone
+              for (let i = 0; i < newArr.length; i++) {
+                if (newArr[i].order !== i) {
+                  updateDoc(doc(db, "wiki_articles", newArr[i].id), {
+                    order: i,
+                  });
+                }
+              }
+            });
+          }
+
           sidebar.appendChild(item);
         });
       });
@@ -561,8 +614,8 @@ function openWikiOverlay(db, currentUsername, userRole) {
     }
 
     const isAdmin = userRole === "admin";
-    const isAuthor = article.author === currentUsername;
-    const canEdit = isAdmin || (article.section === "community" && isAuthor);
+    // STRICT ADMIN LOCK: Only admins can edit Horsepedia entries
+    const canEdit = isAdmin;
 
     articleBody.innerHTML = `
       <div class="wiki-article-header-row">
