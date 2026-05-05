@@ -122,6 +122,27 @@ export function initGlueShelf(currentUsername, showMemory, onToggle) {
 
   const animateWindow = (show) => {
     if (show) {
+      // Ensure the window fits the current screen size and doesn't spawn off-screen
+      const savedPos = JSON.parse(localStorage.getItem("glue_window_pos")) || {
+        top: 200,
+        left: 200,
+      };
+      const wWidth = Math.min(320, window.innerWidth * 0.95);
+      const wHeight = Math.min(400, window.innerHeight * 0.9);
+      const wLeft = Math.max(
+        0,
+        Math.min(savedPos.left, window.innerWidth - wWidth),
+      );
+      const wTop = Math.max(
+        0,
+        Math.min(savedPos.top, window.innerHeight - wHeight),
+      );
+
+      vistaWindow.style.width = wWidth + "px";
+      vistaWindow.style.height = wHeight + "px";
+      vistaWindow.style.left = wLeft + "px";
+      vistaWindow.style.top = wTop + "px";
+
       vistaWindow.style.display = "flex";
       vistaWindow.style.pointerEvents = "auto";
     }

@@ -282,6 +282,21 @@ export function createAudioLibrary(currentUsername) {
 
   const animateWindow = (show) => {
     if (show) {
+      // Ensure the window fits the current screen size and doesn't spawn off-screen
+      const savedPos = JSON.parse(localStorage.getItem("audio_window_pos")) || {
+        top: 200,
+        left: 250,
+      };
+      const clampW = Math.min(380, window.innerWidth * 0.95);
+      const clampH = Math.min(520, window.innerHeight * 0.9);
+
+      windowEl.style.width = clampW + "px";
+      windowEl.style.height = clampH + "px";
+      windowEl.style.left =
+        Math.max(0, Math.min(savedPos.left, window.innerWidth - clampW)) + "px";
+      windowEl.style.top =
+        Math.max(0, Math.min(savedPos.top, window.innerHeight - clampH)) + "px";
+
       windowEl.style.display = "flex";
       windowEl.style.pointerEvents = "auto";
     }

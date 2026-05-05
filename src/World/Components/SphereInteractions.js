@@ -35,7 +35,10 @@ export function createSphereInteractions(
     horseData.activeSpheres.forEach((s) => {
       if (s.mesh.visible) {
         s.mesh.traverse((child) => {
-          if (child.isMesh && child.type !== "Sprite") targets.push(child);
+          // ONLY aim for the giant invisible hitboxes we just created
+          if (child.isMesh && child.name === "hitbox") {
+            targets.push(child);
+          }
         });
       }
     });
@@ -104,7 +107,10 @@ export function createSphereInteractions(
     horseData.activeSpheres.forEach((s) => {
       if (s.mesh.visible) {
         s.mesh.traverse((child) => {
-          if (child.isMesh && child.type !== "Sprite") targets.push(child);
+          // ONLY aim for the giant invisible hitboxes we just created
+          if (child.isMesh && child.name === "hitbox") {
+            targets.push(child);
+          }
         });
       }
     });

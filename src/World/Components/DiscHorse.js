@@ -50,6 +50,25 @@ const animateWindow = (show) => {
   if (!forumWindowRef) return;
   const win = forumWindowRef.querySelector(".forum-window");
   if (show) {
+    // Ensure the window fits the current screen size and doesn't spawn off-screen
+    const savedPos = JSON.parse(localStorage.getItem("dischorse_pos")) || {
+      top: 100,
+      left: 100,
+    };
+    const savedSize = JSON.parse(localStorage.getItem("dischorse_size")) || {
+      width: "950px",
+      height: "700px",
+    };
+
+    const wW = Math.min(parseInt(savedSize.width), window.innerWidth * 0.95);
+    const wH = Math.min(parseInt(savedSize.height), window.innerHeight * 0.9);
+    win.style.width = wW + "px";
+    win.style.height = wH + "px";
+    win.style.left =
+      Math.max(0, Math.min(savedPos.left, window.innerWidth - wW)) + "px";
+    win.style.top =
+      Math.max(0, Math.min(savedPos.top, window.innerHeight - wH)) + "px";
+
     forumWindowRef.style.display = "block";
     win.style.pointerEvents = "auto";
   }

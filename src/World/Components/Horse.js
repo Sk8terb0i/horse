@@ -94,6 +94,15 @@ export async function createHorse() {
     inner.scale.setScalar(0.6);
     inner.renderOrder = 999;
     inner.visible = false;
+
+    // --- NEW: The Invisible Hitbox ---
+    const hitbox = new THREE.Mesh(
+      geometry,
+      new THREE.MeshBasicMaterial({ visible: false }), // Completely invisible to the eye
+    );
+    hitbox.scale.setScalar(3.5); // Makes the clickable area 350% larger!
+    hitbox.name = "hitbox"; // We name it so the raycaster can find it
+
     const glow = new THREE.Sprite(
       new THREE.SpriteMaterial({
         map: glowTexture,
@@ -103,7 +112,9 @@ export async function createHorse() {
       }),
     );
     glow.scale.setScalar(4.0);
-    group.add(core, inner, glow);
+
+    // Add the hitbox to the group alongside the visible pieces
+    group.add(core, inner, glow, hitbox);
     group.scale.setScalar(scale);
     group.userData = { core, inner, glow, color: initialColor || 0xffffff };
     return group;
