@@ -6,6 +6,7 @@ import {
   deleteDoc,
   updateDoc,
   addDoc,
+  setDoc,
   serverTimestamp,
   getDoc,
   where,
@@ -29,7 +30,6 @@ function syncWikiTaskbar() {
         isWindowVisible = !isWindowVisible;
         if (wikiWindowRef) {
           if (isWindowVisible) {
-            // Ensure the window fits the current screen size and doesn't spawn off-screen
             const win = wikiWindowRef.querySelector(".wiki-window");
             const savedPos = JSON.parse(
               localStorage.getItem("wiki_window_pos"),
@@ -81,12 +81,12 @@ function openWikiOverlay(db, currentUsername, userRole) {
     return;
   }
 
-  // PERSISTENCE: Load last active article
-  let currentSection = "lore"; // Defaulting to lore since references tab is gone
+  let currentSection = "lore";
   let currentArticleId = localStorage.getItem("wiki_last_article_id") || null;
   let articles = [];
   let activeSuggestions = [];
   let currentSelectionData = null;
+  let categoryOrderArray = [];
 
   const savedWindowPos = JSON.parse(
     localStorage.getItem("wiki_window_pos"),
@@ -140,13 +140,13 @@ function openWikiOverlay(db, currentUsername, userRole) {
         <div id="wiki-link-modal" class="wiki-tool-modal">
           <div class="wiki-modal-close" onclick="this.parentElement.style.display='none'">X</div>
           <h3 class="wiki-modal-title">Link to Article</h3>
-          <input type="text" id="wiki-link-search" class="wiki-editor-input" placeholder="Search articles..." />
+          <input type="text" id="wiki-link-search" class="wiki-editor-input" placeholder="Search or paste URL..." />
           <div id="wiki-link-results" class="wiki-link-results"></div>
         </div>
         
         <div id="wiki-image-modal" class="wiki-tool-modal image-modal">
           <div class="wiki-modal-close" onclick="this.parentElement.style.display='none'">X</div>
-          <h3 class="wiki-modal-title">Insert Image</h3>
+          <h3 class="wiki-modal-title">Insert Media</h3>
           <input type="file" id="wiki-image-file" accept="image/*" class="wiki-editor-input" />
           <canvas id="wiki-image-canvas" class="wiki-image-canvas"></canvas>
           <div class="wiki-modal-btn-row">
@@ -154,7 +154,13 @@ function openWikiOverlay(db, currentUsername, userRole) {
             <button class="wiki-tool-btn" id="wiki-crop-sq">1:1</button>
             <button class="wiki-tool-btn" id="wiki-crop-wide">16:9</button>
           </div>
-          <button class="wiki-btn" id="wiki-insert-image-btn">Compress & Insert</button>
+          <div class="wiki-modal-btn-row" style="margin-top: 10px; font-size: 13px; display: flex; gap: 15px; color: #ccc;">
+            <label><input type="radio" name="wiki-img-size" value="800" checked> Large</label>
+            <label><input type="radio" name="wiki-img-size" value="400"> Medium</label>
+            <label><input type="radio" name="wiki-img-size" value="200"> Small</label>
+          </div>
+          <input type="text" id="wiki-image-caption" class="wiki-editor-input" style="margin-top: 15px;" placeholder="Image caption (optional)..." />
+          <button class="wiki-btn" id="wiki-insert-image-btn" style="margin-top: 15px;">Insert Image</button>
         </div>
 
         <div id="wiki-embed-modal" class="wiki-tool-modal">
@@ -346,7 +352,6 @@ function openWikiOverlay(db, currentUsername, userRole) {
     parsed = parsed
       .split("\n")
       .map((line) => {
-        // Unordered List parsing
         if (line.trim().startsWith("- ")) {
           const item = `<li>${line.substring(2)}</li>`;
           if (!inList) {
@@ -359,7 +364,6 @@ function openWikiOverlay(db, currentUsername, userRole) {
           line = `</ul>${line}`;
         }
 
-        // Ordered List parsing
         if (/^\d+\.\s/.test(line.trim())) {
           const item = `<li>${line.replace(/^\d+\.\s/, "")}</li>`;
           if (!inOrderedList) {
@@ -434,7 +438,6 @@ function openWikiOverlay(db, currentUsername, userRole) {
 
   const renderSidebar = () => {
     sidebar.innerHTML = "";
-    // STRICT ADMIN LOCK: Only admins can create new Horsepedia entries
     if (userRole === "admin") {
       sidebar.innerHTML += `<button class="wiki-btn" id="wiki-new-article">+ Create Entry</button>`;
     }
@@ -456,83 +459,124 @@ function openWikiOverlay(db, currentUsername, userRole) {
       groupedArticles[rawCat].push(article);
     });
 
-    Object.keys(groupedArticles)
-      .sort()
-      .forEach((rawCat) => {
-        const catHeader = document.createElement("div");
-        catHeader.className = "sidebar-category-header";
-        const displayName = rawCat
-          .replace(/^\d{2}_/, "")
-          .replace(/_/g, " ")
-          .trim();
-        catHeader.innerHTML = `<span>${getCategoryIcon(displayName)}</span> <span>${displayName}</span>`;
-        sidebar.appendChild(catHeader);
+    const sortedCategories = Object.keys(groupedArticles).sort((a, b) => {
+      const idxA = categoryOrderArray.indexOf(a);
+      const idxB = categoryOrderArray.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.localeCompare(b);
+    });
 
-        // Sort items by custom 'order' property first, then fallback to alphabetical
-        const items = groupedArticles[rawCat].sort((a, b) => {
-          const orderA = a.order !== undefined ? a.order : 999;
-          const orderB = b.order !== undefined ? b.order : 999;
-          if (orderA !== orderB) return orderA - orderB;
-          return a.title.localeCompare(b.title);
+    sortedCategories.forEach((rawCat) => {
+      const catHeader = document.createElement("div");
+      catHeader.className = "sidebar-category-header";
+      const displayName = rawCat
+        .replace(/^\d{2}_/, "")
+        .replace(/_/g, " ")
+        .trim();
+      catHeader.innerHTML = `<span>${getCategoryIcon(displayName)}</span> <span>${displayName}</span>`;
+
+      if (userRole === "admin") {
+        catHeader.draggable = true;
+        catHeader.addEventListener("dragstart", (e) => {
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData("text/category", rawCat);
         });
+        catHeader.addEventListener("dragover", (e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+        });
+        catHeader.addEventListener("drop", async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const draggedCat = e.dataTransfer.getData("text/category");
+          if (!draggedCat || draggedCat === rawCat) return;
 
-        items.forEach((article, index) => {
-          const item = document.createElement("div");
-          item.className =
-            "sidebar-item" +
-            (article.id === currentArticleId ? " active-item" : "");
-          item.innerText = article.title;
+          const currentOrder = [...sortedCategories];
+          const sourceIdx = currentOrder.indexOf(draggedCat);
+          if (sourceIdx > -1) currentOrder.splice(sourceIdx, 1);
 
-          item.onclick = () => {
-            currentArticleId = article.id;
-            renderArticle(article);
-            renderSidebar();
-          };
+          const insertIdx = currentOrder.indexOf(rawCat);
+          currentOrder.splice(insertIdx !== -1 ? insertIdx : 0, 0, draggedCat);
 
-          // ADMIN DRAG AND DROP LOGIC (No visual indicators)
-          if (userRole === "admin") {
-            item.draggable = true;
-
-            item.addEventListener("dragstart", (e) => {
-              e.dataTransfer.effectAllowed = "move";
-              e.dataTransfer.setData("text/plain", index);
+          categoryOrderArray = currentOrder;
+          try {
+            await updateDoc(doc(db, "wiki_settings", "category_order"), {
+              order: currentOrder,
             });
-
-            item.addEventListener("dragover", (e) => {
-              e.preventDefault(); // Necessary to allow dropping
-              e.dataTransfer.dropEffect = "move";
-            });
-
-            item.addEventListener("drop", async (e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              const sourceIndex = parseInt(
-                e.dataTransfer.getData("text/plain"),
-                10,
-              );
-              const targetIndex = index;
-
-              if (sourceIndex === targetIndex || isNaN(sourceIndex)) return;
-
-              // Reorder the array based on the drop
-              const newArr = [...items];
-              const [draggedItem] = newArr.splice(sourceIndex, 1);
-              newArr.splice(targetIndex, 0, draggedItem);
-
-              // Update Firestore to lock in the new sequence for everyone
-              for (let i = 0; i < newArr.length; i++) {
-                if (newArr[i].order !== i) {
-                  updateDoc(doc(db, "wiki_articles", newArr[i].id), {
-                    order: i,
-                  });
-                }
-              }
+          } catch (err) {
+            await setDoc(doc(db, "wiki_settings", "category_order"), {
+              order: currentOrder,
             });
           }
-
-          sidebar.appendChild(item);
+          renderSidebar();
         });
+      }
+
+      sidebar.appendChild(catHeader);
+
+      const items = groupedArticles[rawCat].sort((a, b) => {
+        const orderA = a.order !== undefined ? a.order : 999;
+        const orderB = b.order !== undefined ? b.order : 999;
+        if (orderA !== orderB) return orderA - orderB;
+        return a.title.localeCompare(b.title);
       });
+
+      items.forEach((article, index) => {
+        const item = document.createElement("div");
+        item.className =
+          "sidebar-item" +
+          (article.id === currentArticleId ? " active-item" : "");
+        item.innerText = article.title;
+
+        item.onclick = () => {
+          currentArticleId = article.id;
+          renderArticle(article);
+          renderSidebar();
+        };
+
+        if (userRole === "admin") {
+          item.draggable = true;
+
+          item.addEventListener("dragstart", (e) => {
+            e.dataTransfer.effectAllowed = "move";
+            e.dataTransfer.setData("text/plain", index);
+          });
+
+          item.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
+          });
+
+          item.addEventListener("drop", async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const sourceIndex = parseInt(
+              e.dataTransfer.getData("text/plain"),
+              10,
+            );
+            const targetIndex = index;
+
+            if (sourceIndex === targetIndex || isNaN(sourceIndex)) return;
+
+            const newArr = [...items];
+            const [draggedItem] = newArr.splice(sourceIndex, 1);
+            newArr.splice(targetIndex, 0, draggedItem);
+
+            for (let i = 0; i < newArr.length; i++) {
+              if (newArr[i].order !== i) {
+                updateDoc(doc(db, "wiki_articles", newArr[i].id), {
+                  order: i,
+                });
+              }
+            }
+          });
+        }
+
+        sidebar.appendChild(item);
+      });
+    });
 
     const newBtn = sidebar.querySelector("#wiki-new-article");
     if (newBtn)
@@ -566,7 +610,6 @@ function openWikiOverlay(db, currentUsername, userRole) {
 
     let refsSection = "";
 
-    // 1. Recover and display legacy sources formatted dynamically
     const legacyRef = articles.find(
       (a) =>
         a.section === "references" &&
@@ -596,13 +639,11 @@ function openWikiOverlay(db, currentUsername, userRole) {
         .join("");
     }
 
-    // 2. Add any newly entered sources from the text area
     let newHtml = "";
     if (article.references && article.references.trim().length > 0) {
       newHtml = `<div class="wiki-references-list">${parseMarkdownAndLinks(article.references)}</div>`;
     }
 
-    // Output unified reference block if either format exists
     if (legacyHtml || newHtml) {
       refsSection = `
         <div class="wiki-references-block">
@@ -614,7 +655,6 @@ function openWikiOverlay(db, currentUsername, userRole) {
     }
 
     const isAdmin = userRole === "admin";
-    // STRICT ADMIN LOCK: Only admins can edit Horsepedia entries
     const canEdit = isAdmin;
 
     articleBody.innerHTML = `
@@ -828,11 +868,25 @@ function openWikiOverlay(db, currentUsername, userRole) {
       .replace(/^<div class="rich-text-content">/, "")
       .replace(/<\/div>$/, "");
 
+    const uniqueCategories = [
+      ...new Set(
+        articles.map((a) =>
+          (a.category || "").replace(/^\d{2}_/, "").replace(/_/g, " "),
+        ),
+      ),
+    ].filter(Boolean);
+    const categoryOptionsHtml = uniqueCategories
+      .map((c) => `<option value="${c}">`)
+      .join("");
+
     articleBody.innerHTML = `
       <h2 class="wiki-editor-header">${isNew ? "New Entry" : "Editing: " + article.title}</h2>
       <div class="wiki-editor-inputs">
         <input type="text" id="edit-title" class="wiki-edit-title-input" value="${article.title || ""}" placeholder="Title" />
-        <input type="text" id="edit-category" class="wiki-edit-category-input" value="${(article.category || "").replace(/^\d{2}_/, "").replace(/_/g, " ")}" placeholder="Category" />
+        <input type="text" id="edit-category" list="category-datalist" class="wiki-edit-category-input" value="${(article.category || "").replace(/^\d{2}_/, "").replace(/_/g, " ")}" placeholder="Category" />
+        <datalist id="category-datalist">
+          ${categoryOptionsHtml}
+        </datalist>
       </div>
       <div class="wiki-toolbar">
         <button class="wiki-tool-btn" data-cmd="bold"><b>B</b></button>
@@ -862,6 +916,66 @@ function openWikiOverlay(db, currentUsername, userRole) {
         ed.focus();
       };
     });
+
+    const linkModal = overlay.querySelector("#wiki-link-modal");
+    const linkSearch = overlay.querySelector("#wiki-link-search");
+    const linkResults = overlay.querySelector("#wiki-link-results");
+    let savedRange = null;
+
+    articleBody.querySelector("#tool-link").onclick = () => {
+      const sel = window.getSelection();
+      if (sel.rangeCount > 0 && !sel.isCollapsed) {
+        savedRange = sel.getRangeAt(0);
+        linkSearch.value = sel.toString();
+      } else {
+        savedRange = null;
+        linkSearch.value = "";
+      }
+      linkModal.style.display = "flex";
+      renderLinkResults(linkSearch.value);
+    };
+
+    const renderLinkResults = (queryText) => {
+      linkResults.innerHTML = "";
+      const q = queryText.toLowerCase().trim();
+
+      if (q.startsWith("http")) {
+        linkResults.innerHTML += `<div class="wiki-link-item ext-link">🔗 Insert as External URL</div>`;
+        linkResults.querySelector(".ext-link").onclick = () => {
+          insertLinkHtml(
+            `<a href="${queryText}" target="_blank">${queryText}</a>`,
+          );
+        };
+      }
+
+      if (!q) return;
+
+      const matches = articles.filter((a) => a.title.toLowerCase().includes(q));
+      matches.forEach((m) => {
+        const d = document.createElement("div");
+        d.className = "wiki-link-item";
+        d.innerText = `📄 ${m.title}`;
+        d.onclick = () => {
+          insertLinkHtml(`[[${m.title}]]`);
+        };
+        linkResults.appendChild(d);
+      });
+    };
+
+    linkSearch.oninput = (e) => renderLinkResults(e.target.value);
+
+    function insertLinkHtml(html) {
+      linkModal.style.display = "none";
+      ed.focus();
+      if (savedRange) {
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(savedRange);
+        document.execCommand("insertHTML", false, html);
+      } else {
+        document.execCommand("insertHTML", false, html);
+      }
+    }
 
     articleBody.querySelector("#tool-mic").onclick = async () => {
       const mBtn = articleBody.querySelector("#tool-mic");
@@ -896,34 +1010,102 @@ function openWikiOverlay(db, currentUsername, userRole) {
 
     const iMod = overlay.querySelector("#wiki-image-modal");
     const iCan = overlay.querySelector("#wiki-image-canvas");
+    let selectedImageFile = null;
+    let savedImageRange = null;
+
     articleBody.querySelector("#tool-image").onclick = () => {
+      // Save cursor position right before opening the modal
+      const sel = window.getSelection();
+      if (sel.rangeCount > 0) {
+        savedImageRange = sel.getRangeAt(0);
+      } else {
+        savedImageRange = null;
+      }
+
       iMod.style.display = "flex";
       overlay.querySelector("#wiki-image-file").value = "";
+      overlay.querySelector("#wiki-image-caption").value = "";
       iCan.style.display = "none";
+      selectedImageFile = null;
     };
+
     overlay.querySelector("#wiki-image-file").onchange = (e) => {
       const f = e.target.files[0];
       if (!f) return;
-      const r = new FileReader();
-      r.onload = (ev) => {
-        const img = new Image();
-        img.onload = () => {
-          iCan.style.display = "block";
-          iCan.width = 800;
-          iCan.height = (img.height * 800) / img.width;
-          iCan.getContext("2d").drawImage(img, 0, 0, 800, iCan.height);
+      selectedImageFile = f;
+
+      if (f.type !== "image/gif") {
+        const r = new FileReader();
+        r.onload = (ev) => {
+          const img = new Image();
+          img.onload = () => {
+            iCan.style.display = "block";
+            iCan.width = 800;
+            iCan.height = (img.height * 800) / img.width;
+            iCan.getContext("2d").drawImage(img, 0, 0, 800, iCan.height);
+          };
+          img.src = ev.target.result;
         };
-        img.src = ev.target.result;
-      };
-      r.readAsDataURL(f);
+        r.readAsDataURL(f);
+      } else {
+        iCan.style.display = "none";
+      }
     };
-    overlay.querySelector("#wiki-insert-image-btn").onclick = () => {
-      document.execCommand(
-        "insertImage",
-        false,
-        iCan.toDataURL("image/webp", 0.7),
-      );
+
+    const insertSavedImageHtml = (html) => {
       iMod.style.display = "none";
+      ed.focus();
+      if (savedImageRange) {
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(savedImageRange);
+      }
+      document.execCommand("insertHTML", false, html);
+    };
+
+    overlay.querySelector("#wiki-insert-image-btn").onclick = () => {
+      if (!selectedImageFile) return;
+
+      const sizeRadio = overlay.querySelector(
+        'input[name="wiki-img-size"]:checked',
+      );
+      const targetWidth = sizeRadio ? parseInt(sizeRadio.value, 10) : 800;
+
+      const captionText = overlay
+        .querySelector("#wiki-image-caption")
+        .value.trim();
+      const figCaptionHtml = captionText
+        ? `<figcaption style="font-size: 0.85em; color: #555; text-align: center; margin-top: 5px;">${captionText}</figcaption>`
+        : "";
+
+      if (selectedImageFile.type === "image/gif") {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          // Added box-sizing: border-box to the figure style
+          const html = `<figure style="display: inline-block; margin: 10px; border: 1px solid #ddd; padding: 5px; background: #f9f9f9; box-sizing: border-box; width: ${targetWidth}px;"><img src="${ev.target.result}" style="width: 100%; max-width: 100%; height: auto;">${figCaptionHtml}</figure><br>`;
+          insertSavedImageHtml(html);
+        };
+        reader.readAsDataURL(selectedImageFile);
+      } else {
+        const r = new FileReader();
+        r.onload = (ev) => {
+          const img = new Image();
+          img.onload = () => {
+            iCan.width = targetWidth;
+            iCan.height = (img.height * targetWidth) / img.width;
+            iCan
+              .getContext("2d")
+              .drawImage(img, 0, 0, targetWidth, iCan.height);
+            // Increased quality factor from 0.8 to 0.95
+            const dataUrl = iCan.toDataURL("image/webp", 0.95);
+            // Added box-sizing: border-box to the figure style
+            const html = `<figure style="display: inline-block; margin: 10px; border: 1px solid #ddd; padding: 5px; background: #f9f9f9; box-sizing: border-box; width: ${targetWidth}px;"><img src="${dataUrl}" style="width: 100%; max-width: 100%; height: auto;">${figCaptionHtml}</figure><br>`;
+            insertSavedImageHtml(html);
+          };
+          img.src = ev.target.result;
+        };
+        r.readAsDataURL(selectedImageFile);
+      }
     };
 
     articleBody.querySelector("#wiki-save-btn").onclick = async () => {
@@ -1009,6 +1191,13 @@ function openWikiOverlay(db, currentUsername, userRole) {
     if (currentArticleId) {
       const cur = articles.find((a) => a.id === currentArticleId);
       if (cur) renderArticle(cur);
+    }
+  });
+
+  onSnapshot(doc(db, "wiki_settings", "category_order"), (snap) => {
+    if (snap.exists()) {
+      categoryOrderArray = snap.data().order || [];
+      renderSidebar();
     }
   });
 
@@ -1111,13 +1300,11 @@ export function initWiki(db, currentUsername, userRole) {
     openWikiOverlay(db, currentUsername, activeRole);
   };
 
-  // --- RELATIVE DRAG LOGIC ---
   const makeIconDraggable = (icon, saveKey, clickCallback) => {
     let isDragging = false;
     let wasDragged = false;
     let startX, startY, initialLeft, initialTop;
 
-    // 1. Load saved VW/VH positions
     const savedPos = JSON.parse(localStorage.getItem(saveKey));
     if (savedPos) {
       icon.style.left = savedPos.left;
@@ -1127,9 +1314,9 @@ export function initWiki(db, currentUsername, userRole) {
     }
 
     icon.addEventListener("mousedown", (e) => {
-      if (e.button !== 0) return; // Only allow left-clicks to drag
+      if (e.button !== 0) return;
 
-      e.preventDefault(); // KILLS THE NATIVE HIGHLIGHTING/IMAGE DRAGGING
+      e.preventDefault();
       document.body.style.userSelect = "none";
 
       startX = e.clientX;
@@ -1146,7 +1333,6 @@ export function initWiki(db, currentUsername, userRole) {
         const dx = moveEvent.clientX - startX;
         const dy = moveEvent.clientY - startY;
 
-        // Threshold to distinguish a drag from a simple click
         if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
           wasDragged = true;
         }
@@ -1170,7 +1356,6 @@ export function initWiki(db, currentUsername, userRole) {
         if (wasDragged) {
           const finalRect = icon.getBoundingClientRect();
 
-          // Prevent icon from being dragged completely out of the window
           const safeLeft = Math.max(
             0,
             Math.min(finalRect.left, window.innerWidth - 64),
@@ -1180,7 +1365,6 @@ export function initWiki(db, currentUsername, userRole) {
             Math.min(finalRect.top, window.innerHeight - 64),
           );
 
-          // 2. Convert raw pixels to Viewport Width (vw) and Height (vh)
           const vwPos = (safeLeft / window.innerWidth) * 100;
           const vhPos = (safeTop / window.innerHeight) * 100;
 
@@ -1191,7 +1375,6 @@ export function initWiki(db, currentUsername, userRole) {
 
           localStorage.setItem(saveKey, JSON.stringify(relativePos));
         } else {
-          // If the user didn't move the mouse past the threshold, it was just a click
           if (clickCallback) clickCallback(e);
         }
       };
@@ -1201,13 +1384,11 @@ export function initWiki(db, currentUsername, userRole) {
     });
   };
 
-  // Bind the Horsepedia icon
   makeIconDraggable(wikiIcon, "wiki_icon_pos", (e) => {
     e.stopPropagation();
     launch();
   });
 
-  // Restore window if it was left open
   if (localStorage.getItem("wiki_is_open") === "true") {
     launch();
   }
