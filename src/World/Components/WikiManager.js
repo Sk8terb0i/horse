@@ -1237,6 +1237,43 @@ function openWikiOverlay(db, currentUsername, userRole) {
         alert("Error saving article.");
       }
     };
+    // --- EMBED MEDIA LOGIC ---
+    const embedModal = overlay.querySelector("#wiki-embed-modal");
+    let savedEmbedRange = null;
+
+    articleBody.querySelector("#tool-embed").onclick = () => {
+      // Save cursor position before opening modal
+      const sel = window.getSelection();
+      if (sel.rangeCount > 0) {
+        savedEmbedRange = sel.getRangeAt(0);
+      } else {
+        savedEmbedRange = null;
+      }
+
+      embedModal.style.display = "flex";
+      overlay.querySelector("#wiki-embed-url").value = "";
+    };
+
+    overlay.querySelector("#wiki-insert-embed-btn").onclick = () => {
+      const url = overlay.querySelector("#wiki-embed-url").value.trim();
+      if (!url) return;
+
+      embedModal.style.display = "none";
+      ed.focus();
+
+      // Restore cursor position
+      if (savedEmbedRange) {
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(savedEmbedRange);
+      }
+
+      // Basic embed logic: Treats the URL as an image source.
+      // If you want to support YouTube or iFrames later, you can check the URL string here.
+      const html = `<figure style="display: inline-block; margin: 10px 0; max-width: 100%;"><img src="${url}" style="width: 100%; max-width: 100%; height: auto; border: 1px solid #ddd; padding: 5px; background: #f9f9f9; box-sizing: border-box;"></figure><br>`;
+
+      document.execCommand("insertHTML", false, html);
+    };
     articleBody.querySelector("#wiki-cancel-btn").onclick = () =>
       isNew ? renderSidebar() : renderArticle(article);
   };
