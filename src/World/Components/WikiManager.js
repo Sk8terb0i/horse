@@ -140,8 +140,21 @@ function openWikiOverlay(db, currentUsername, userRole) {
         <div id="wiki-link-modal" class="wiki-tool-modal">
           <div class="wiki-modal-close" onclick="this.parentElement.style.display='none'">X</div>
           <h3 class="wiki-modal-title">Link to Article</h3>
-          <input type="text" id="wiki-link-search" class="wiki-editor-input" placeholder="Search or paste URL..." />
-          <div id="wiki-link-results" class="wiki-link-results"></div>
+          
+          <div id="link-search-ui">
+            <input type="text" id="wiki-link-search" class="wiki-editor-input" placeholder="Search or paste URL..." />
+            <div id="wiki-link-results" class="wiki-link-results"></div>
+          </div>
+
+          <div id="link-create-ui" style="display: none;">
+            <input type="text" id="new-link-title" class="wiki-editor-input" placeholder="New Article Title" />
+            <input type="text" id="new-link-category" list="new-cat-datalist" class="wiki-editor-input" placeholder="Assign Category..." style="margin-top: 10px;" />
+            <datalist id="new-cat-datalist"></datalist>
+            <div class="wiki-modal-btn-row" style="margin-top: 15px;">
+              <button class="wiki-btn" id="confirm-create-link">Create & Link</button>
+              <button class="wiki-btn wiki-cancel-btn" id="cancel-create-link">Back</button>
+            </div>
+          </div>
         </div>
         
         <div id="wiki-image-modal" class="wiki-tool-modal image-modal">
@@ -338,15 +351,20 @@ function openWikiOverlay(db, currentUsername, userRole) {
 
   const parseMarkdownAndLinks = (text) => {
     if (!text) return "";
-    if (text.trim().startsWith('<div class="rich-text-content">')) return text;
+
     let parsed = text.replace(/\[\[(.*?)\]\]/g, (match, inner) => {
       const parts = inner.split("|");
       return `<span class="obsidian-link" data-target="${parts[0].trim()}">${(parts[1] || parts[0]).trim()}</span>`;
     });
+
+    if (parsed.trim().startsWith('<div class="rich-text-content">'))
+      return parsed;
+
     parsed = parsed
       .replace(/^### (.*$)/gim, "<h3>$1</h3>")
       .replace(/^## (.*$)/gim, "<h2>$1</h2>")
       .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+
     let inList = false;
     let inOrderedList = false;
     parsed = parsed
@@ -893,6 +911,7 @@ function openWikiOverlay(db, currentUsername, userRole) {
         <button class="wiki-tool-btn" data-cmd="italic"><i>I</i></button>
         <button class="wiki-tool-btn" data-cmd="formatBlock" data-val="H2">H2</button>
         <button class="wiki-tool-btn" data-cmd="formatBlock" data-val="H3">H3</button>
+        <button class="wiki-tool-btn" data-cmd="formatBlock" data-val="blockquote">“ Quote</button>
         <button class="wiki-tool-btn" id="tool-link">🔗 Link</button>
         <button class="wiki-tool-btn" id="tool-image">🖼️ Image</button>
         <button class="wiki-tool-btn" id="tool-embed">🎬 Embed</button>
@@ -918,8 +937,17 @@ function openWikiOverlay(db, currentUsername, userRole) {
     });
 
     const linkModal = overlay.querySelector("#wiki-link-modal");
+    const linkSearchUi = overlay.querySelector("#link-search-ui");
+    const linkCreateUi = overlay.querySelector("#link-create-ui");
     const linkSearch = overlay.querySelector("#wiki-link-search");
     const linkResults = overlay.querySelector("#wiki-link-results");
+
+    const newLinkTitle = overlay.querySelector("#new-link-title");
+    const newLinkCategory = overlay.querySelector("#new-link-category");
+    const newCatDatalist = overlay.querySelector("#new-cat-datalist");
+
+    newCatDatalist.innerHTML = categoryOptionsHtml;
+
     let savedRange = null;
 
     articleBody.querySelector("#tool-link").onclick = () => {
@@ -931,6 +959,9 @@ function openWikiOverlay(db, currentUsername, userRole) {
         savedRange = null;
         linkSearch.value = "";
       }
+
+      linkSearchUi.style.display = "block";
+      linkCreateUi.style.display = "none";
       linkModal.style.display = "flex";
       renderLinkResults(linkSearch.value);
     };
@@ -960,12 +991,60 @@ function openWikiOverlay(db, currentUsername, userRole) {
         };
         linkResults.appendChild(d);
       });
+
+      const exactMatch = matches.find((m) => m.title.toLowerCase() === q);
+      if (!exactMatch && !q.startsWith("http")) {
+        const createBtn = document.createElement("div");
+        createBtn.className = "wiki-link-item create-new-link";
+        createBtn.style.color = "#00fbff";
+        createBtn.style.fontWeight = "bold";
+        createBtn.innerHTML = `➕ Create & Link: "${queryText}"`;
+        createBtn.onclick = () => {
+          linkSearchUi.style.display = "none";
+          linkCreateUi.style.display = "block";
+          newLinkTitle.value = queryText;
+          newLinkCategory.value = "";
+        };
+        linkResults.appendChild(createBtn);
+      }
     };
 
     linkSearch.oninput = (e) => renderLinkResults(e.target.value);
 
+    overlay.querySelector("#cancel-create-link").onclick = () => {
+      linkSearchUi.style.display = "block";
+      linkCreateUi.style.display = "none";
+    };
+
+    overlay.querySelector("#confirm-create-link").onclick = async () => {
+      const title = newLinkTitle.value.trim();
+      const cat = newLinkCategory.value.trim();
+
+      if (!title || !cat) return alert("Title and Category are required.");
+
+      try {
+        await addDoc(collection(db, "wiki_articles"), {
+          title,
+          category: cat,
+          content: "",
+          references: "",
+          section: currentSection,
+          author: currentUsername,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        insertLinkHtml(`[[${title}]]`);
+      } catch (err) {
+        console.error("Error creating article:", err);
+        alert("Failed to create article.");
+      }
+    };
+
     function insertLinkHtml(html) {
       linkModal.style.display = "none";
+      linkSearchUi.style.display = "block";
+      linkCreateUi.style.display = "none";
+
       ed.focus();
       if (savedRange) {
         const sel = window.getSelection();
@@ -1014,7 +1093,6 @@ function openWikiOverlay(db, currentUsername, userRole) {
     let savedImageRange = null;
 
     articleBody.querySelector("#tool-image").onclick = () => {
-      // Save cursor position right before opening the modal
       const sel = window.getSelection();
       if (sel.rangeCount > 0) {
         savedImageRange = sel.getRangeAt(0);
@@ -1081,7 +1159,6 @@ function openWikiOverlay(db, currentUsername, userRole) {
       if (selectedImageFile.type === "image/gif") {
         const reader = new FileReader();
         reader.onload = (ev) => {
-          // Added box-sizing: border-box to the figure style
           const html = `<figure style="display: inline-block; margin: 10px; border: 1px solid #ddd; padding: 5px; background: #f9f9f9; box-sizing: border-box; width: ${targetWidth}px;"><img src="${ev.target.result}" style="width: 100%; max-width: 100%; height: auto;">${figCaptionHtml}</figure><br>`;
           insertSavedImageHtml(html);
         };
@@ -1096,9 +1173,7 @@ function openWikiOverlay(db, currentUsername, userRole) {
             iCan
               .getContext("2d")
               .drawImage(img, 0, 0, targetWidth, iCan.height);
-            // Increased quality factor from 0.8 to 0.95
-            const dataUrl = iCan.toDataURL("image/webp", 0.95);
-            // Added box-sizing: border-box to the figure style
+            const dataUrl = iCan.toDataURL("image/png");
             const html = `<figure style="display: inline-block; margin: 10px; border: 1px solid #ddd; padding: 5px; background: #f9f9f9; box-sizing: border-box; width: ${targetWidth}px;"><img src="${dataUrl}" style="width: 100%; max-width: 100%; height: auto;">${figCaptionHtml}</figure><br>`;
             insertSavedImageHtml(html);
           };
@@ -1264,17 +1339,13 @@ export function initWiki(db, currentUsername, userRole) {
     <div class="wiki-desktop-icon-svg-wrapper">
       <svg viewBox="0 0 100 100" width="100%" height="100%">
         <circle cx="50" cy="50" r="45" fill="#f8f9fa" stroke="#a2a9b1" stroke-width="2"/>
-        
         <path d="M 15,25 C 30,35 40,20 50,25 C 60,30 70,15 85,25" fill="none" stroke="#c8ccd1" stroke-width="1.5"/>
         <path d="M 5,50 C 25,50 35,40 50,50 C 65,60 75,50 95,50" fill="none" stroke="#c8ccd1" stroke-width="1.5"/>
         <path d="M 15,75 C 30,65 40,80 50,75 C 60,70 70,85 85,75" fill="none" stroke="#c8ccd1" stroke-width="1.5"/>
-        
         <path d="M 25,15 C 35,30 20,40 25,50 C 30,60 15,70 25,85" fill="none" stroke="#c8ccd1" stroke-width="1.5"/>
         <path d="M 50,5 C 50,25 40,35 50,50 C 60,65 40,75 50,95" fill="none" stroke="#c8ccd1" stroke-width="1.5"/>
         <path d="M 75,15 C 65,30 80,40 75,50 C 70,60 85,70 75,85" fill="none" stroke="#c8ccd1" stroke-width="1.5"/>
-
         <path d="M 15,10 C 25,5 35,8 45,10 C 40,15 35,25 25,25 C 15,20 10,15 15,10 Z" fill="#e8ecef" stroke="#a2a9b1" stroke-width="1.5"/>
-
         <svg x="6" y="6" width="88" height="88" viewBox="-1000 -1000 14500 14500" preserveAspectRatio="xMidYMid meet">
           <g transform="translate(12500, 12000) scale(-1, -1)">
             <path d="M10630 11425 c-110 -31 -227 -113 -355 -246 -72 -76 -100 -110 -188 -231 -35 -48 -182 -165 -390 -312 l-169 -118 -81 21 c-448 112 -1127 54 -1968 -169 -1070 -284 -2300 -825 -2794 -1231 -38 -31 -131 -112 -205 -179 -442 -399 -518 -464 -713 -604 -344 -248 -755 -443 -1182 -560 -49 -13 -178 -41 -285 -61 -461 -85 -765 -170 -1120 -313 -432 -173 -1035 -513 -1111 -627 -84 -124 -87 -363 -7 -655 111 -407 391 -1007 791 -1695 964 -1657 2575 -3762 3298 -4309 156 -119 248 -153 324 -122 118 50 308 210 428 362 335 426 599 1162 743 2074 22 142 26 202 29 430 1 146 8 310 14 365 43 381 134 695 293 1010 78 154 107 197 307 445 287 359 591 776 881 1210 289 434 427 618 575 766 217 219 486 363 825 440 153 35 149 36 189 -43 42 -81 124 -185 187 -237 118 -98 294 -177 464 -207 36 -6 155 -12 265 -14 277 -4 482 -37 700 -112 325 -113 566 -305 687 -549 45 -92 76 -121 232 -228 264 -179 566 -238 747 -146 35 18 36 18 85 -6 195 -96 365 -7 449 235 14 39 25 76 25 83 0 6 18 39 40 72 52 82 104 196 132 292 29 103 31 285 4 384 -36 131 -70 183 -237 360 -407 432 -638 717 -810 1001 -138 229 -202 402 -245 663 -47 294 -80 359 -267 543 -133 130 -193 214 -255 361 -40 94 -44 111 -39 162 7 81 45 149 119 212 167 141 264 259 341 413 87 174 128 350 128 547 0 204 -37 298 -117 298 -47 0 -77 -31 -193 -196 -108 -153 -275 -320 -386 -386 -97 -58 -245 -115 -245 -94 0 25 47 139 114 276 95 193 175 454 176 568 0 37 -3 44 -27 53 -47 18 -144 20 -203 4z" fill="#002bb8"/>
