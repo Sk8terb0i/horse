@@ -1,3 +1,4 @@
+// 1. Import Firestore functions separately
 import {
   collection,
   query,
@@ -11,11 +12,11 @@ import {
   getDoc,
   where,
   orderBy,
-  getStorage,
-  ref,
-  uploadBytes,
-  getDownloadURL,
 } from "firebase/firestore";
+
+// 2. Import Storage functions from the correct library
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+
 import "./wiki.css";
 
 let wikiWindowRef = null;
