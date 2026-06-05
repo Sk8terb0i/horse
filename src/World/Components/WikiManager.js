@@ -11,6 +11,10 @@ import {
   getDoc,
   where,
   orderBy,
+  getStorage,
+  ref,
+  uploadBytes,
+  getDownloadURL,
 } from "firebase/firestore";
 import "./wiki.css";
 
@@ -1107,26 +1111,30 @@ function openWikiOverlay(db, currentUsername, userRole) {
       selectedImageFile = null;
     };
 
-    overlay.querySelector("#wiki-image-file").onchange = (e) => {
-      const f = e.target.files[0];
-      if (!f) return;
-      selectedImageFile = f;
+    overlay.querySelector("#wiki-image-file").onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
 
-      if (f.type !== "image/gif") {
-        const r = new FileReader();
-        r.onload = (ev) => {
-          const img = new Image();
-          img.onload = () => {
-            iCan.style.display = "block";
-            iCan.width = 800;
-            iCan.height = (img.height * 800) / img.width;
-            iCan.getContext("2d").drawImage(img, 0, 0, 800, iCan.height);
-          };
-          img.src = ev.target.result;
-        };
-        r.readAsDataURL(f);
-      } else {
-        iCan.style.display = "none";
+      const storage = getStorage(); // Initialize storage
+      const storageRef = ref(storage, `wiki_images/${Date.now()}_${file.name}`);
+
+      try {
+        // 1. Upload the file
+        const snapshot = await uploadBytes(storageRef, file);
+
+        // 2. Get the public URL
+        const url = await getDownloadURL(snapshot.ref);
+
+        // 3. Insert into the editor as a standard <img> tag
+        const html = `<img src="${url}" style="max-width: 100%; height: auto;">`;
+        document.execCommand("insertHTML", false, html);
+
+        // 4. Hide the modal
+        overlay.querySelector("#wiki-image-modal").style.display = "none";
+        e.target.value = ""; // Clear the file input
+      } catch (error) {
+        console.error("Upload failed:", error);
+        alert("Upload failed. Check your Firebase Storage rules.");
       }
     };
 
