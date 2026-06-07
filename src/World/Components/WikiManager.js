@@ -188,6 +188,12 @@ function openWikiOverlay(db, currentUsername, userRole) {
           <button class="wiki-btn" id="wiki-insert-embed-btn">Embed</button>
         </div>
 
+        <div id="wiki-pdf-modal" class="wiki-tool-modal">
+          <div class="wiki-modal-close" onclick="this.parentElement.style.display='none'">X</div>
+          <h3 class="wiki-modal-title">Embed PDF</h3>
+          <input type="file" id="wiki-pdf-file" accept="application/pdf" class="wiki-editor-input" />
+          <button class="wiki-btn" id="wiki-insert-pdf-btn" style="margin-top: 15px;">Upload & Embed</button>
+        </div>
         <div class="vista-resize-handle" id="wiki-resize-handle" title="Drag to Resize"></div>
       </div>
     </div>
@@ -920,6 +926,7 @@ function openWikiOverlay(db, currentUsername, userRole) {
         <button class="wiki-tool-btn" id="tool-link">🔗 Link</button>
         <button class="wiki-tool-btn" id="tool-image">🖼️ Image</button>
         <button class="wiki-tool-btn" id="tool-embed">🎬 Embed</button>
+        <button class="wiki-tool-btn" id="tool-pdf">📄 PDF</button> 
         <button class="wiki-tool-btn" id="tool-mic">🎙️ Mic</button>
       </div>
       <div id="edit-content" class="wiki-editor-textarea rich-text-content" contenteditable="true">${initC}</div>
@@ -1295,6 +1302,58 @@ function openWikiOverlay(db, currentUsername, userRole) {
       const html = `<figure style="display: inline-block; margin: 10px 0; max-width: 100%;"><img src="${url}" style="width: 100%; max-width: 100%; height: auto; border: 1px solid #ddd; padding: 5px; background: #f9f9f9; box-sizing: border-box;"></figure><br>`;
 
       document.execCommand("insertHTML", false, html);
+    };
+    // --- EMBED PDF LOGIC ---
+    const pdfModal = overlay.querySelector("#wiki-pdf-modal");
+    let savedPdfRange = null;
+
+    articleBody.querySelector("#tool-pdf").onclick = () => {
+      const sel = window.getSelection();
+      if (sel.rangeCount > 0) savedPdfRange = sel.getRangeAt(0);
+      else savedPdfRange = null;
+
+      pdfModal.style.display = "flex";
+      overlay.querySelector("#wiki-pdf-file").value = "";
+    };
+
+    overlay.querySelector("#wiki-insert-pdf-btn").onclick = async () => {
+      const fileInput = overlay.querySelector("#wiki-pdf-file");
+      const file = fileInput.files[0];
+      if (!file) return;
+
+      const btn = overlay.querySelector("#wiki-insert-pdf-btn");
+      const origText = btn.innerText;
+      btn.innerText = "Uploading PDF...";
+      btn.disabled = true;
+
+      try {
+        const storage = getStorage();
+        const storageRef = ref(storage, `wiki_pdfs/${Date.now()}_${file.name}`);
+
+        // Critical: Set contentType so the browser knows to display it, not download it
+        const metadata = { contentType: "application/pdf" };
+        const snapshot = await uploadBytes(storageRef, file, metadata);
+        const url = await getDownloadURL(snapshot.ref);
+
+        pdfModal.style.display = "none";
+        ed.focus();
+
+        if (savedPdfRange) {
+          const sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(savedPdfRange);
+        }
+
+        // #view=FitH forces the PDF to fit horizontally. The browser handles the page controls.
+        const html = `<figure style="display: block; margin: 15px 0; width: 100%; height: 600px;"><iframe src="${url}#view=FitH&page=1" width="100%" height="100%" style="border: 1px solid #aaaaaa;"></iframe></figure><br>`;
+        document.execCommand("insertHTML", false, html);
+      } catch (error) {
+        console.error("PDF upload failed:", error);
+        alert("Upload failed. Check console.");
+      } finally {
+        btn.innerText = origText;
+        btn.disabled = false;
+      }
     };
     articleBody.querySelector("#wiki-cancel-btn").onclick = () =>
       isNew ? renderSidebar() : renderArticle(article);
