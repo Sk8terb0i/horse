@@ -1345,7 +1345,7 @@ function openWikiOverlay(db, currentUsername, userRole) {
         }
 
         // #view=FitH forces the PDF to fit horizontally. The browser handles the page controls.
-        const html = `<figure style="display: block; margin: 15px 0; width: 100%; height: 600px;"><iframe src="${url}#view=FitH&page=1" width="100%" height="100%" style="border: 1px solid #aaaaaa;"></iframe></figure><br>`;
+        const html = `<figure style="display: block; margin: 15px 0; width: 100%;"><iframe src="${url}#view=FitH&page=1" width="100%" height="600" style="border: 1px solid #aaaaaa; display: block;"></iframe></figure><div><br></div>`;
         document.execCommand("insertHTML", false, html);
       } catch (error) {
         console.error("PDF upload failed:", error);
