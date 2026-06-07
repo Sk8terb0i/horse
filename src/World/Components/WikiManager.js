@@ -1112,30 +1112,26 @@ function openWikiOverlay(db, currentUsername, userRole) {
       selectedImageFile = null;
     };
 
-    overlay.querySelector("#wiki-image-file").onchange = async (e) => {
+    overlay.querySelector("#wiki-image-file").onchange = (e) => {
       const file = e.target.files[0];
       if (!file) return;
 
-      const storage = getStorage(); // Initialize storage
-      const storageRef = ref(storage, `wiki_images/${Date.now()}_${file.name}`);
+      selectedImageFile = file; // Cache file reference for the submit button
 
-      try {
-        // 1. Upload the file
-        const snapshot = await uploadBytes(storageRef, file);
-
-        // 2. Get the public URL
-        const url = await getDownloadURL(snapshot.ref);
-
-        // 3. Insert into the editor as a standard <img> tag
-        const html = `<img src="${url}" style="max-width: 100%; height: auto;">`;
-        document.execCommand("insertHTML", false, html);
-
-        // 4. Hide the modal
-        overlay.querySelector("#wiki-image-modal").style.display = "none";
-        e.target.value = ""; // Clear the file input
-      } catch (error) {
-        console.error("Upload failed:", error);
-        alert("Upload failed. Check your Firebase Storage rules.");
+      // Render a local canvas preview if it's not an animated GIF
+      if (file.type !== "image/gif") {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const img = new Image();
+          img.onload = () => {
+            iCan.style.display = "block";
+            iCan.width = 200; // Standard thumbnail preview sizing
+            iCan.height = (img.height * 200) / img.width;
+            iCan.getContext("2d").drawImage(img, 0, 0, 200, iCan.height);
+          };
+          img.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
       }
     };
 
@@ -1150,9 +1146,22 @@ function openWikiOverlay(db, currentUsername, userRole) {
       document.execCommand("insertHTML", false, html);
     };
 
-    overlay.querySelector("#wiki-insert-image-btn").onclick = () => {
-      if (!selectedImageFile) return;
+    const insertSavedImageHtml = (html) => {
+      iMod.style.display = "none";
+      ed.focus();
+      if (savedImageRange) {
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(savedImageRange);
+      }
+      document.execCommand("insertHTML", false, html);
+    };
 
+    overlay.querySelector("#wiki-insert-image-btn").onclick = async () => {
+      if (!selectedImageFile)
+        return alert("Please select an image file first.");
+
+      // Pull customized layout variables from the open modal wizard
       const sizeRadio = overlay.querySelector(
         'input[name="wiki-img-size"]:checked',
       );
@@ -1165,30 +1174,42 @@ function openWikiOverlay(db, currentUsername, userRole) {
         ? `<figcaption style="font-size: 0.85em; color: #555; text-align: center; margin-top: 5px;">${captionText}</figcaption>`
         : "";
 
-      if (selectedImageFile.type === "image/gif") {
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-          const html = `<figure style="display: inline-block; margin: 10px; border: 1px solid #ddd; padding: 5px; background: #f9f9f9; box-sizing: border-box; width: ${targetWidth}px;"><img src="${ev.target.result}" style="width: 100%; max-width: 100%; height: auto;">${figCaptionHtml}</figure><br>`;
-          insertSavedImageHtml(html);
-        };
-        reader.readAsDataURL(selectedImageFile);
-      } else {
-        const r = new FileReader();
-        r.onload = (ev) => {
-          const img = new Image();
-          img.onload = () => {
-            iCan.width = targetWidth;
-            iCan.height = (img.height * targetWidth) / img.width;
-            iCan
-              .getContext("2d")
-              .drawImage(img, 0, 0, targetWidth, iCan.height);
-            const dataUrl = iCan.toDataURL("image/png");
-            const html = `<figure style="display: inline-block; margin: 10px; border: 1px solid #ddd; padding: 5px; background: #f9f9f9; box-sizing: border-box; width: ${targetWidth}px;"><img src="${dataUrl}" style="width: 100%; max-width: 100%; height: auto;">${figCaptionHtml}</figure><br>`;
-            insertSavedImageHtml(html);
-          };
-          img.src = ev.target.result;
-        };
-        r.readAsDataURL(selectedImageFile);
+      const storage = getStorage();
+      const storageRef = ref(
+        storage,
+        `wiki_images/${Date.now()}_${selectedImageFile.name}`,
+      );
+
+      try {
+        // Change button text to provide a clear processing indicator
+        const insertBtn = overlay.querySelector("#wiki-insert-image-btn");
+        const originalBtnText = insertBtn.innerText;
+        insertBtn.innerText = "Uploading...";
+        insertBtn.disabled = true;
+
+        // 1. Upload original asset file securely to Cloud Storage
+        const snapshot = await uploadBytes(storageRef, selectedImageFile);
+
+        // 2. Retrieve secure public token download URL
+        const url = await getDownloadURL(snapshot.ref);
+
+        // 3. Assemble structural wrapper to anchor custom widths and captions
+        const html = `<figure style="display: inline-block; margin: 10px; border: 1px solid #ddd; padding: 5px; background: #f9f9f9; box-sizing: border-box; width: ${targetWidth}px;"><img src="${url}" style="width: 100%; max-width: 100%; height: auto;">${figCaptionHtml}</figure><br>`;
+
+        // 4. Fire node insertion and close window
+        insertSavedImageHtml(html);
+
+        // Cleanup interface states
+        insertBtn.innerText = originalBtnText;
+        insertBtn.disabled = false;
+        overlay.querySelector("#wiki-image-file").value = "";
+      } catch (error) {
+        console.error("Upload failed:", error);
+        alert("Upload failed. Check your Firebase Storage rules.");
+
+        const insertBtn = overlay.querySelector("#wiki-insert-image-btn");
+        insertBtn.innerText = "Insert Image";
+        insertBtn.disabled = false;
       }
     };
 
