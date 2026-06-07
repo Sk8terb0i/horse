@@ -721,3 +721,11 @@
   text-shadow: none;
   font-family: Arial, sans-serif;
 }
+
+.wiki-text-content figure img {
+    display: block !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    height: auto !important;
+    box-sizing: border-box !important;
+}
