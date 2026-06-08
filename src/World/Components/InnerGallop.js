@@ -19,6 +19,8 @@ let pauseStarted = Date.now();
 let meditationClock = 0;
 let lastThoughtIndex = -1;
 
+let handleStrikeInput;
+
 // Coordinates for the standalone window frame
 let windowPos = { x: 120, y: 150 };
 
@@ -580,7 +582,12 @@ export function initInnerGallop() {
 }
 
 export function unmountInnerGallop() {
-  window.removeEventListener("keydown", handleStrikeInput);
+  // Check if the listener exists before removing to prevent ReferenceErrors
+  if (handleStrikeInput) {
+    window.removeEventListener("keydown", handleStrikeInput);
+    if (trackZone)
+      trackZone.removeEventListener("mousedown", handleStrikeInput);
+  }
 
   if (gameLoopId) cancelAnimationFrame(gameLoopId);
   if (beatIntervalId) clearInterval(beatIntervalId);

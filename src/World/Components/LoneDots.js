@@ -387,7 +387,25 @@ export function createLoneDots() {
       (colorPicker.style.display =
         colorPicker.style.display === "none" ? "flex" : "none"),
     dispose: () => {
-      while (group.children.length > 0) group.remove(group.children[0]);
+      // 1. Explicitly rip the HTML elements out of the DOM
+      // to bypass the CSS2DRenderer layout leakage
+      [bhGroup, uGroup, ihGroup].forEach((g) => {
+        if (g && g.userData && g.userData.label && g.userData.label.element) {
+          g.userData.label.element.remove();
+        }
+      });
+
+      // 2. Clear all 3D objects from the Three.js group hierarchy
+      while (group.children.length > 0) {
+        group.remove(group.children[0]);
+      }
+
+      // 3. Nullify local references to ensure proper garbage collection
+      bhGroup = null;
+      uGroup = null;
+      ihGroup = null;
+      line1 = null;
+      line2 = null;
     },
   };
 }

@@ -292,16 +292,31 @@ async function init() {
   };
 
   const handleThemeChange = (themeId) => {
-    // Stop lone manager if we are switching away from it
-    if (themeId !== "lone" && horseDataRef) {
-      loneMgr.stop(horseDataRef);
-      unmountInnerGallop();
-      unmountHorseJudgement();
+    // Safely stop lone manager and catch broken unmounts without crashing
+    if (themeId !== "lone") {
+      if (horseDataRef) loneMgr.stop(horseDataRef);
+      if (typeof unmountInnerGallop === "function") {
+        try {
+          unmountInnerGallop();
+        } catch (e) {
+          console.warn("InnerGallop unmount bypassed.");
+        }
+      }
+
+      if (typeof unmountHorseJudgement === "function") {
+        try {
+          unmountHorseJudgement();
+        } catch (e) {
+          console.warn("HorseJudgement unmount bypassed.");
+        }
+      }
     }
 
     // Cleanup clicker if leaving dolphin pov
     if (themeId !== "dolphin pov") {
-      unmountDolphinClicker();
+      try {
+        unmountDolphinClicker();
+      } catch (err) {}
       const appsContainer = document.getElementById("taskbar-apps-container");
       if (appsContainer) appsContainer.style.display = "flex";
     }
@@ -310,7 +325,7 @@ async function init() {
       isVoidMode = true;
       renderer.domElement.style.display = "none";
       lDom.style.display = "none";
-      toggleDesktopIcons(false); // Hide icons in the void
+      toggleDesktopIcons(false);
       if (glueShelf.wrapper) glueShelf.wrapper.style.display = "none";
       const ui = document.getElementById("logged-in-ui");
       if (ui) ui.style.display = "none";
@@ -318,11 +333,11 @@ async function init() {
     } else if (themeId === "dolphin pov") {
       isVoidMode = false;
       voidMgr.stop();
-      if (horseDataRef) loneMgr.stop(horseDataRef);
 
-      // DO NOT hide the renderer or lDom here so the 3D horse stays visible!
+      // Explicitly keep horse visible
+      if (horseDataRef) horseDataRef.horseGroup.visible = true;
 
-      toggleDesktopIcons(false); // Hide icons
+      toggleDesktopIcons(false);
       if (glueShelf.wrapper) glueShelf.wrapper.style.display = "none";
       const ui = document.getElementById("logged-in-ui");
       if (ui) ui.style.display = "none";
@@ -340,12 +355,14 @@ async function init() {
         toggleDesktopIcons(false);
         if (glueShelf.wrapper) glueShelf.wrapper.style.display = "none";
 
+        // Explicitly hide horse when entering Lone
+        if (horseDataRef) horseDataRef.horseGroup.visible = false;
+
         applyShelfState(false, true);
 
         const ui = document.getElementById("logged-in-ui");
         if (ui) ui.style.display = "none";
 
-        // PASS THE USER COLOR TO LONE MANAGER
         const currentUserData = globalUsersData.find(
           (u) => u.username === currentUsername,
         );
@@ -357,13 +374,18 @@ async function init() {
         initInnerGallop();
       }
     } else {
+      // HERD THEME
       isVoidMode = false;
       voidMgr.stop();
       if (window.location.hash !== "#/ritual") {
         renderer.domElement.style.display = "block";
         lDom.style.display = "block";
+
+        // Explicitly restore horse visibility when returning to Herd
+        if (horseDataRef) horseDataRef.horseGroup.visible = true;
+
         if (currentUsername) {
-          toggleDesktopIcons(true); // Restore icons
+          toggleDesktopIcons(true);
           if (glueShelf.wrapper)
             glueShelf.wrapper.style.display = glueShelf.isExpanded()
               ? "flex"
@@ -387,12 +409,23 @@ async function init() {
     }
 
     const executeSwap = () => {
+      // Safe cleanup helper
+      const safeUnmountLone = () => {
+        if (horseDataRef) loneMgr.stop(horseDataRef);
+        try {
+          unmountInnerGallop();
+        } catch (e) {}
+        try {
+          unmountHorseJudgement();
+        } catch (e) {}
+      };
+
       if (isRitual) {
         voidMgr.stop();
-        if (horseDataRef) loneMgr.stop(horseDataRef);
+        safeUnmountLone();
         renderer.domElement.style.display = "none";
         lDom.style.display = "none";
-        toggleDesktopIcons(false); // Hide icons during ritual
+        toggleDesktopIcons(false);
         if (glueShelf.wrapper) glueShelf.wrapper.style.display = "none";
         taskbar.style.display = "none";
         applyShelfState(false, false);
@@ -405,11 +438,11 @@ async function init() {
         unmountGlueFactory();
         if (currentTheme === "void") {
           isVoidMode = true;
-          if (horseDataRef) loneMgr.stop(horseDataRef);
+          safeUnmountLone();
           renderer.domElement.style.display = "none";
           lDom.style.display = "none";
           taskbar.style.display = "flex";
-          toggleDesktopIcons(false); // Ensure hidden in void
+          toggleDesktopIcons(false);
           voidMgr.start(getManifestations(), globalVoidMessages);
         } else if (currentTheme === "lone") {
           isVoidMode = false;
@@ -417,19 +450,23 @@ async function init() {
           renderer.domElement.style.display = "block";
           lDom.style.display = "block";
           taskbar.style.display = "flex";
-          toggleDesktopIcons(false); // Ensure hidden in lone
+          toggleDesktopIcons(false);
           applyShelfState(false, false);
+          if (horseDataRef) horseDataRef.horseGroup.visible = false; // Hide 3D Horse
           const ui = document.getElementById("logged-in-ui");
           if (ui) ui.style.display = "none";
           loneMgr.start(currentUsername, horseDataRef);
         } else {
           isVoidMode = false;
           voidMgr.stop();
-          if (horseDataRef) loneMgr.stop(horseDataRef);
+          safeUnmountLone();
           renderer.domElement.style.display = "block";
           lDom.style.display = "block";
+
+          if (horseDataRef) horseDataRef.horseGroup.visible = true; // Restore 3D Horse
+
           if (currentUsername) {
-            toggleDesktopIcons(true); // Restore icons
+            toggleDesktopIcons(true);
             if (glueShelf.wrapper)
               glueShelf.wrapper.style.display = glueShelf.isExpanded()
                 ? "flex"
