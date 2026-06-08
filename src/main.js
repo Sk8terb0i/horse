@@ -14,6 +14,10 @@ import { createMemoryModal } from "./World/Components/MemoryModal.js";
 import { createXPLoader } from "./World/Components/XPLoader.js";
 import { createVoidManager } from "./World/Components/VoidManager.js";
 import { createLoneManager } from "./World/Components/LoneManager.js";
+import {
+  initHorseJudgement,
+  unmountHorseJudgement,
+} from "./World/Components/HorseJudgement.js";
 import { initWiki } from "./World/Components/WikiManager.js";
 import { runWikiSeeder } from "./World/Components/seedWiki.js";
 import { initDiscHorse } from "./World/Components/DiscHorse.js";
@@ -287,6 +291,7 @@ async function init() {
     // Stop lone manager if we are switching away from it
     if (themeId !== "lone" && horseDataRef) {
       loneMgr.stop(horseDataRef);
+      unmountHorseJudgement();
     }
 
     // Cleanup clicker if leaving dolphin pov
@@ -343,6 +348,7 @@ async function init() {
           ? currentUserData.innerColor
           : "#ffffff";
         loneMgr.start(currentUsername, userColor, horseDataRef, db);
+        initHorseJudgement(db, currentUsername);
       }
     } else {
       isVoidMode = false;

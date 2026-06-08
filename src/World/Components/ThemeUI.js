@@ -25,9 +25,9 @@ export function createThemeUI(scene) {
     {
       id: "lone",
       name: "Lone",
-      color: "#ffffff",
+      color: "#ffd3ed",
       orbGradient:
-        "radial-gradient(circle at 30% 30%, #ffffff, #888888 70%, #222222 100%)",
+        "radial-gradient(circle at 30% 30%, #cc69b0, #888888 70%, #222222 100%)",
       glow: "rgba(255, 255, 255, 0.5)",
     },
     {
