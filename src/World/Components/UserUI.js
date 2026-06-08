@@ -27,14 +27,48 @@ export function createUserUI(db, overlay, horseInstance) {
   // Track visibility state
   let herdVisible = !!localStorage.getItem("horse_herd_username");
 
+  // Normalize inputs across mobile devices and fix layout clipping
+  const styleEl = document.createElement("style");
+  styleEl.id = "dc-user-ui-overrides";
+  styleEl.innerHTML = `
+    #ui-container {
+      max-height: 85vh !important;
+      overflow-y: auto !important;
+      display: flex !important;
+      flex-direction: column !important;
+      box-sizing: border-box !important;
+    }
+    #input-fields {
+      display: flex !important;
+      flex-direction: column !important;
+      width: 100% !important;
+    }
+    #input-fields input[type="text"],
+    #input-fields input[type="password"] {
+      background: rgba(255, 255, 255, 0.1) !important;
+      color: #fff !important;
+      border: 1px solid rgba(255, 255, 255, 0.2) !important;
+      padding: 12px !important;
+      margin-bottom: 12px !important;
+      border-radius: 8px !important;
+      /* 16px font size completely prevents iOS Safari from force-zooming and cutting off top fields */
+      font-size: 16px !important; 
+      font-family: inherit !important;
+      box-sizing: border-box !important;
+      width: 100% !important;
+    }
+    #input-fields input::placeholder {
+      color: rgba(255, 255, 255, 0.4) !important;
+    }
+  `;
+  document.head.appendChild(styleEl);
+
   const toggleHerdVisibility = (visible) => {
     herdVisible = visible;
     if (horseInstance && horseInstance.activeSpheres) {
       horseInstance.activeSpheres.forEach((s) => {
         if (s.username !== "big horse") {
           s.mesh.visible = visible;
-          // no need to manually toggle label.element.style.display
-          // because Horse.js update() now handles s.label.visible
         }
       });
     }
@@ -51,9 +85,9 @@ export function createUserUI(db, overlay, horseInstance) {
     container.innerHTML = `
       <div id="ui-header">unite with horse; become a point of connection</div>
       <div id="input-fields">
-        <input type="text" id="nameInput" placeholder="your name" />
-        <input type="text" id="usernameInput" placeholder="unique username" />
-        <input type="password" id="passwordInput" placeholder="choose a password" />
+        <input type="text" id="nameInput" placeholder="your name" autocomplete="name" />
+        <input type="text" id="usernameInput" placeholder="unique username" autocomplete="username" />
+        <input type="password" id="passwordInput" placeholder="choose a password" autocomplete="new-password" />
       </div>
       <div id="remember-toggle" style="font-size: 10px; opacity: 0.4; cursor: pointer; margin-bottom: 10px;">
         [ x ] remember my connection
@@ -69,8 +103,8 @@ export function createUserUI(db, overlay, horseInstance) {
     container.innerHTML = `
       <div id="ui-header">welcome back to the marrow</div>
       <div id="input-fields">
-        <input type="text" id="usernameInput" placeholder="your username" />
-        <input type="password" id="passwordInput" placeholder="your password" />
+        <input type="text" id="usernameInput" placeholder="your username" autocomplete="username" />
+        <input type="password" id="passwordInput" placeholder="your password" autocomplete="current-password" />
       </div>
       <div id="remember-toggle" style="font-size: 10px; opacity: 0.4; cursor: pointer; margin-bottom: 10px;">
         [ x ] remember my connection
@@ -79,11 +113,6 @@ export function createUserUI(db, overlay, horseInstance) {
       <div id="toggle-ui">i need to join</div>
       <p id="msg"></p>
     `;
-
-    const usernameInput = container.querySelector("#usernameInput");
-    const passwordInput = container.querySelector("#passwordInput");
-    const uiHeader = container.querySelector("#ui-header");
-
     attachListeners(true);
   }
 
@@ -140,7 +169,6 @@ export function createUserUI(db, overlay, horseInstance) {
       msg.innerText = "";
 
       const auth = getAuth();
-      // Create a fake email behind the scenes for Firebase Auth
       const pseudoEmail = `${username}@horse.herd`;
 
       try {
@@ -148,32 +176,25 @@ export function createUserUI(db, overlay, horseInstance) {
 
         if (isLogin) {
           try {
-            // 1. Try modern Firebase Auth first
             await signInWithEmailAndPassword(auth, pseudoEmail, password);
             loginUser(username, rememberMeState);
           } catch (authError) {
-            // 2. MIGRATION FALLBACK: If Auth fails, check the old database
             const userSnap = await getDoc(userRef);
 
             if (userSnap.exists()) {
               const userData = userSnap.data();
               const enteredHash = await hashPassword(password);
 
-              // Verify the old password system
               if (
                 userData.password === enteredHash ||
                 userData.password === password
               ) {
-                // Success! Create their new secure Auth account
                 await createUserWithEmailAndPassword(
                   auth,
                   pseudoEmail,
                   password,
                 );
-
-                // Optional: Delete the exposed password hash from the database
                 await updateDoc(userRef, { password: deleteField() });
-
                 loginUser(username, rememberMeState);
               } else {
                 msg.innerText = "the password does not match the marrow.";
@@ -185,7 +206,6 @@ export function createUserUI(db, overlay, horseInstance) {
             }
           }
         } else {
-          // REGISTRATION: Brand new users
           const nameInput = document.getElementById("nameInput");
           const name = nameInput.value.trim();
 
@@ -203,10 +223,8 @@ export function createUserUI(db, overlay, horseInstance) {
           }
 
           try {
-            // Create Firebase Auth user
             await createUserWithEmailAndPassword(auth, pseudoEmail, password);
 
-            // Create database entry (WITHOUT saving the password!)
             const color = new THREE.Color().setHSL(Math.random(), 0.4, 0.7);
             await setDoc(userRef, {
               realName: name,
@@ -247,6 +265,5 @@ export function createUserUI(db, overlay, horseInstance) {
     toggleHerdVisibility(true);
   }
 
-  // Return the state for main.js to use
   return { isHerdVisible: () => herdVisible };
 }
