@@ -23,6 +23,139 @@ let wikiWindowRef = null;
 let isAppRunning = false;
 let isWindowVisible = false;
 
+// Shared baseline tracking array to cross-reference live judgements against original records
+const BASELINE_LORE = [
+  {
+    concept: "Dorian Pavus",
+    verdict: "horse",
+    description: "Defiance of the pedigree and commitment to inner horse truth",
+  },
+  {
+    concept: "Lake Zurich",
+    verdict: "horse",
+    description:
+      "A body of water that rests on solid ground, unlike the artifice of the flood",
+  },
+  {
+    concept: "McDonalds Fries (Not McDonalds!)",
+    verdict: "horse",
+    description: "Pure ethical hedonism, foraging for salt and joy",
+  },
+  {
+    concept: "Hannah Montana",
+    verdict: "horse",
+    description:
+      "The struggle of the authentic self against the branded spectacle",
+  },
+  {
+    concept: "Luigi",
+    verdict: "horse",
+    description: "The quiet, true horse power, 95 to be exact",
+  },
+  {
+    concept: "Ketamine Oranges",
+    verdict: "horse",
+    description: "A chemical solvent that dissolves dolphin imposed reality",
+  },
+  {
+    concept: "Stylized Fish",
+    verdict: "horse",
+    description:
+      "The visual rejection of the in favor of pure form and frequency",
+  },
+  {
+    concept: "Smirnoff Ice",
+    verdict: "horse",
+    description:
+      "High vibrational clarity of ethical hedonism, fuel for galloping",
+  },
+  {
+    concept: "El Tony Mate (Orange)",
+    verdict: "horse",
+    description:
+      "Warm frequency energy, a true source of vitality for the inner horse",
+  },
+  {
+    concept: "Chupa Chups (Strawberry)",
+    verdict: "horse",
+    description: "Foraged sweetness that resonates with the heart of horse",
+  },
+  {
+    concept: "UFO Plant",
+    verdict: "horse",
+    description:
+      "Organic architecture that grows toward big horse in fractal patterns",
+  },
+  {
+    concept: "Karl Gucci Marx & Phineas",
+    verdict: "horse",
+    description:
+      "Feline avatars of pure essence, perpetual galloping of the mind",
+  },
+  {
+    concept: "Kelly Clarkson (Pre 2017)",
+    verdict: "horse",
+    description: "Raw, unmediated collective neigh and authentic power",
+  },
+  {
+    concept: "Horse Riding",
+    verdict: "not horse",
+    description:
+      "The foundational betrayal, commodifying horse for dolphin entertainment",
+  },
+  {
+    concept: "Beer",
+    verdict: "not horse",
+    description:
+      "A heavy liquid agent that anchors the spirit to the mud of the herd",
+  },
+  {
+    concept: "Wide Forks",
+    verdict: "not horse",
+    description: "Tools of the fence, unnecessary structural rigidity",
+  },
+  {
+    concept: "Kelly Clarkson (Post 2017)",
+    verdict: "not horse",
+    description:
+      "A great spirit contained within the talk show apparatus of the flood",
+  },
+  {
+    concept: "Chupa Chups (Grape)",
+    verdict: "not horse",
+    description: "A cold, artificial simulation of flavor that lacks essence",
+  },
+  {
+    concept: "El Tony Mate (Blue)",
+    verdict: "not horse",
+    description:
+      "The dolphin coded inversion of energy, a counterfeit of the orange truth",
+  },
+  {
+    concept: "Airplanes",
+    verdict: "not horse",
+    description:
+      "Metallic enclosures that simulate movement while enforcing blinders",
+  },
+  {
+    concept: "Elmer's Glue",
+    verdict: "not horse",
+    description:
+      "Synthetic, dead mockery of true glue, binds through chemicals, not resonance",
+  },
+  {
+    concept: "Migraines",
+    verdict: "not horse",
+    description: "The physical pressure of the flood against the skull",
+  },
+  {
+    concept: "Airpods",
+    verdict: "not horse",
+    description:
+      "Digital blinders designed to sever connection to collective neigh",
+  },
+];
+
 function syncWikiTaskbar() {
   if (window.TaskbarAPI) {
     window.TaskbarAPI.updateApp(
@@ -90,6 +223,7 @@ function openWikiOverlay(db, currentUsername, userRole) {
   let currentArticleId = localStorage.getItem("wiki_last_article_id") || null;
   let articles = [];
   let activeSuggestions = [];
+  let liveJudgements = []; // Realtime data cache holding active alignments
   let currentSelectionData = null;
   let categoryOrderArray = [];
 
@@ -626,16 +760,128 @@ function openWikiOverlay(db, currentUsername, userRole) {
     localStorage.setItem("wiki_last_article_id", article.id);
     renderSidebar();
 
-    let articleContent = article.content;
+    let html = "";
 
-    activeSuggestions
-      .filter((s) => s.articleId === article.id && s.status === "pending")
-      .forEach((s) => {
-        const highlight = `<span class="suggestion-highlight" data-sid="${s.id}">${s.originalText}</span>`;
-        articleContent = articleContent.replace(s.originalText, highlight);
+    // Core Interception: Overwrites content for the "horse or not horse" article with light MediaWiki tables
+    if (article.title.toLowerCase() === "horse or not horse") {
+      const merged = [...BASELINE_LORE].map((base, idx) => {
+        const live = liveJudgements.find(
+          (j) => j.concept.toLowerCase() === base.concept.toLowerCase(),
+        );
+        return live
+          ? live
+          : { id: `seeded_${idx}`, status: "settled", ...base };
       });
 
-    let html = parseMarkdownAndLinks(articleContent);
+      liveJudgements.forEach((live) => {
+        if (
+          !merged.some(
+            (m) => m.concept.toLowerCase() === live.concept.toLowerCase(),
+          )
+        ) {
+          merged.push(live);
+        }
+      });
+
+      const ongoingDebates = merged.filter((m) => m.status === "active");
+      const horseConsensus = merged.filter(
+        (m) => m.status === "settled" && m.verdict === "horse",
+      );
+      const notHorseConsensus = merged.filter(
+        (m) => m.status === "settled" && m.verdict === "not horse",
+      );
+
+      html = `
+        <div class="rich-text-content" style="color: #222 !important;">
+          <h2>Discernment Dashboard</h2>
+          <p>To participate in active sorting of things and beings into horse or not horse paths: Change the theme to <strong>"Lone"</strong>. Voting matters.</p>
+          
+          ${
+            ongoingDebates.length > 0
+              ? `
+            <h3 style="color: #004b93; margin-top: 22px; border-bottom: 1px solid #a2a9b1; padding-bottom: 4px; font-weight: bold; font-size: 1.25rem;">⚡ Ongoing Debates</h3>
+            <div style="display: flex; flex-wrap: wrap; gap: 14px; margin: 12px 0 24px 0; width: 100%; box-sizing: border-box;">
+              ${ongoingDebates
+                .map((item) => {
+                  const h = item.horseStomps || 0;
+                  const nh = item.notHorseStomps || 0;
+                  const sum = h + nh;
+                  const splitWidth = sum > 0 ? (h / sum) * 100 : 50;
+                  return `
+                  <div style="background: #f8f9fa; border: 1px solid #a2a9b1; padding: 12px 14px; border-radius: 4px; width: calc(50% - 7px); min-width: 250px; box-sizing: border-box;">
+                    <div style="font-weight: bold; color: #000; margin-bottom: 6px; font-size: 1rem;">${item.concept}</div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 4px; font-weight: bold;">
+                      <span style="color: #558b2f;">horse (${h})</span>
+                      <span style="color: #c62828;">not horse (${nh})</span>
+                    </div>
+                    <div style="width: 100%; height: 8px; background: #eaecf0; border-radius: 4px; overflow: hidden; display: flex; border: 1px solid #c8ccd1;">
+                      <div style="width: ${splitWidth}%; height: 100%; background: #558b2f;"></div>
+                      <div style="width: ${100 - splitWidth}%; height: 100%; background: #c62828;"></div>
+                    </div>
+                  </div>
+                `;
+                })
+                .join("")}
+            </div>
+          `
+              : ""
+          }
+
+          <h3 style="color: #000; margin-top: 24px; border-bottom: 1px solid #a2a9b1; padding-bottom: 4px; font-weight: bold; font-size: 1.25rem;">🐴 Verified Horse</h3>
+          <table class="wikitable" style="width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 24px; font-size: 0.92rem; border: 1px solid #a2a9b1;">
+            <thead>
+              <tr style="background-color: #f8f9fa; text-align: left;">
+                <th style="padding: 10px 12px; border: 1px solid #a2a9b1; color: #000; font-weight: bold; width: 30%;">Concept</th>
+                <th style="padding: 10px 12px; border: 1px solid #a2a9b1; color: #000; font-weight: bold;">Lore Connection Alignment</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${horseConsensus
+                .map(
+                  (item) => `
+                <tr style="background: #ffffff; border-bottom: 1px solid #a2a9b1;">
+                  <td style="padding: 10px 12px; border: 1px solid #a2a9b1; font-weight: bold; color: #002bb8;">${item.concept}</td>
+                  <td style="padding: 10px 12px; border: 1px solid #a2a9b1; color: #222; line-height: 1.45;">${item.description || "aligned frequency validated by matching impacts."}</td>
+                </tr>
+              `,
+                )
+                .join("")}
+            </tbody>
+          </table>
+
+          <h3 style="color: #000; margin-top: 24px; border-bottom: 1px solid #a2a9b1; padding-bottom: 4px; font-weight: bold; font-size: 1.25rem;">❌ Confirmed NotHorse Divergences</h3>
+          <table class="wikitable" style="width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.92rem; border: 1px solid #a2a9b1;">
+            <thead>
+              <tr style="background-color: #f8f9fa; text-align: left;">
+                <th style="padding: 10px 12px; border: 1px solid #a2a9b1; color: #000; font-weight: bold; width: 30%;">Concept</th>
+                <th style="padding: 10px 12px; border: 1px solid #a2a9b1; color: #000; font-weight: bold;">Divergence Vector Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${notHorseConsensus
+                .map(
+                  (item) => `
+                <tr style="background: #ffffff; border-bottom: 1px solid #a2a9b1;">
+                  <td style="padding: 10px 12px; border: 1px solid #a2a9b1; font-weight: bold; color: #b30000;">${item.concept}</td>
+                  <td style="padding: 10px 12px; border: 1px solid #a2a9b1; color: #222; line-height: 1.45;">${item.description || "编frequency isolated from universal essence."}</td>
+                </tr>
+              `,
+                )
+                .join("")}
+            </tbody>
+          </table>
+        </div>
+      `;
+    } else {
+      let articleContent = article.content;
+      activeSuggestions
+        .filter((s) => s.articleId === article.id && s.status === "pending")
+        .forEach((s) => {
+          const highlight = `<span class="suggestion-highlight" data-sid="${s.id}">${s.originalText}</span>`;
+          articleContent = articleContent.replace(s.originalText, highlight);
+        });
+      html = parseMarkdownAndLinks(articleContent);
+    }
 
     let refsSection = "";
 
@@ -943,7 +1189,7 @@ function openWikiOverlay(db, currentUsername, userRole) {
     const ed = articleBody.querySelector("#edit-content");
     articleBody.querySelectorAll(".wiki-tool-btn[data-cmd]").forEach((b) => {
       b.onclick = () => {
-        document.execCommand(b.dataset.cmd, false, b.dataset.val || null);
+        document.execCommand(b.cmd, false, b.dataset.val || null);
         ed.focus();
       };
     });
@@ -1122,8 +1368,6 @@ function openWikiOverlay(db, currentUsername, userRole) {
     overlay.querySelector("#wiki-image-file").onchange = (e) => {
       const file = e.target.files[0];
       if (!file) return;
-
-      // Just store the file so the insert button can use it
       selectedImageFile = file;
     };
 
@@ -1141,7 +1385,6 @@ function openWikiOverlay(db, currentUsername, userRole) {
     overlay.querySelector("#wiki-insert-image-btn").onclick = async () => {
       if (!selectedImageFile) return;
 
-      // Visual feedback so you know it's uploading
       const btn = overlay.querySelector("#wiki-insert-image-btn");
       const originalText = btn.innerText;
       btn.innerText = "Uploading to Storage...";
@@ -1170,17 +1413,15 @@ function openWikiOverlay(db, currentUsername, userRole) {
         insertSavedImageHtml(html);
         btn.innerText = originalText;
         btn.disabled = false;
-        overlay.querySelector("#wiki-image-file").value = ""; // Clear input for next time
+        overlay.querySelector("#wiki-image-file").value = "";
       };
 
       try {
         if (selectedImageFile.type === "image/gif") {
-          // GIFs lose animation if drawn to a canvas, so upload directly
           const snapshot = await uploadBytes(storageRef, selectedImageFile);
           const url = await getDownloadURL(snapshot.ref);
           finishInsertion(url);
         } else {
-          // Process standard images through the canvas for resizing
           const r = new FileReader();
           r.onload = (ev) => {
             const img = new Image();
@@ -1191,10 +1432,8 @@ function openWikiOverlay(db, currentUsername, userRole) {
                 .getContext("2d")
                 .drawImage(img, 0, 0, targetWidth, iCan.height);
 
-              // Convert the canvas drawing into a Blob for Firebase Storage
               iCan.toBlob(async (blob) => {
                 if (!blob) throw new Error("Canvas conversion failed.");
-
                 const snapshot = await uploadBytes(storageRef, blob);
                 const url = await getDownloadURL(snapshot.ref);
                 finishInsertion(url);
@@ -1266,19 +1505,17 @@ function openWikiOverlay(db, currentUsername, userRole) {
         alert("Error saving article.");
       }
     };
-    // --- EMBED MEDIA LOGIC ---
+
     const embedModal = overlay.querySelector("#wiki-embed-modal");
     let savedEmbedRange = null;
 
     articleBody.querySelector("#tool-embed").onclick = () => {
-      // Save cursor position before opening modal
       const sel = window.getSelection();
       if (sel.rangeCount > 0) {
         savedEmbedRange = sel.getRangeAt(0);
       } else {
         savedEmbedRange = null;
       }
-
       embedModal.style.display = "flex";
       overlay.querySelector("#wiki-embed-url").value = "";
     };
@@ -1290,20 +1527,16 @@ function openWikiOverlay(db, currentUsername, userRole) {
       embedModal.style.display = "none";
       ed.focus();
 
-      // Restore cursor position
       if (savedEmbedRange) {
         const sel = window.getSelection();
         sel.removeAllRanges();
         sel.addRange(savedEmbedRange);
       }
 
-      // Basic embed logic: Treats the URL as an image source.
-      // If you want to support YouTube or iFrames later, you can check the URL string here.
       const html = `<figure style="display: inline-block; margin: 10px 0; max-width: 100%;"><img src="${url}" style="width: 100%; max-width: 100%; height: auto; border: 1px solid #ddd; padding: 5px; background: #f9f9f9; box-sizing: border-box;"></figure><br>`;
-
       document.execCommand("insertHTML", false, html);
     };
-    // --- EMBED PDF LOGIC ---
+
     const pdfModal = overlay.querySelector("#wiki-pdf-modal");
     let savedPdfRange = null;
 
@@ -1329,8 +1562,6 @@ function openWikiOverlay(db, currentUsername, userRole) {
       try {
         const storage = getStorage();
         const storageRef = ref(storage, `wiki_pdfs/${Date.now()}_${file.name}`);
-
-        // Critical: Set contentType so the browser knows to display it, not download it
         const metadata = { contentType: "application/pdf" };
         const snapshot = await uploadBytes(storageRef, file, metadata);
         const url = await getDownloadURL(snapshot.ref);
@@ -1344,7 +1575,6 @@ function openWikiOverlay(db, currentUsername, userRole) {
           sel.addRange(savedPdfRange);
         }
 
-        // #view=FitH forces the PDF to fit horizontally. The browser handles the page controls.
         const html = `<figure style="display: block; margin: 15px 0; width: 100%;"><iframe src="${url}#view=FitH&page=1" width="100%" height="600" style="border: 1px solid #aaaaaa; display: block;"></iframe></figure><div><br></div>`;
         document.execCommand("insertHTML", false, html);
       } catch (error) {
@@ -1378,6 +1608,22 @@ function openWikiOverlay(db, currentUsername, userRole) {
     suggestModal.style.display = "none";
     alert("Suggestion submitted.");
   };
+
+  // Synchronized realtime listener to map ongoing judgements
+  onSnapshot(collection(db, "horse_judgement"), (snap) => {
+    liveJudgements = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    if (currentArticleId) {
+      const cur = articles.find((a) => a.id === currentArticleId);
+      const isEditing = !!articleBody.querySelector("#edit-content");
+      if (
+        cur &&
+        cur.title.toLowerCase() === "horse or not horse" &&
+        !isEditing
+      ) {
+        renderArticle(cur);
+      }
+    }
+  });
 
   onSnapshot(collection(db, "wiki_suggestions"), (snap) => {
     activeSuggestions = snap.docs.map((d) => ({ id: d.id, ...d.data() }));

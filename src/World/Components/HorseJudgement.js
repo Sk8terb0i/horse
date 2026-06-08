@@ -160,9 +160,18 @@ export function initHorseJudgement(db, currentUsername) {
     ? currentUsername.replace(/\./g, "_")
     : "anonymous";
 
+  const storageKey = `hj_hidden_popups_${safeUser}`;
+
   window.__hjPopupPositions = window.__hjPopupPositions || {};
-  window.__hjHiddenPopups = window.__hjHiddenPopups || new Set();
   window.__highestVistaZIndex = window.__highestVistaZIndex || 12000;
+
+  // Core Fix: Synchronize initial state to localStorage to persist choices through system reloads
+  try {
+    const cached = localStorage.getItem(storageKey);
+    window.__hjHiddenPopups = cached ? new Set(JSON.parse(cached)) : new Set();
+  } catch (e) {
+    window.__hjHiddenPopups = window.__hjHiddenPopups || new Set();
+  }
 
   const styleEl = document.createElement("style");
   styleEl.id = "hj-styles";
@@ -349,6 +358,11 @@ export function initHorseJudgement(db, currentUsername) {
       <div id="hj-error-msg" style="color: #ff6666; font-size: 0.85rem; margin: 8px 0 0 16px; display: none; font-style: italic;"></div>
     </div>
     
+    <div id="hj-hidden-container" style="margin-top: 12px; display: none; flex-direction: column; gap: 6px; padding: 0 4px;">
+      <span style="font-size: 0.8rem; font-weight: bold; opacity: 0.65; lowercase; letter-spacing: 0.5px;">ongoing votes:</span>
+      <div id="hj-hidden-items-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 140px; overflow-y: auto;"></div>
+    </div>
+    
     <div class="hj-scroll-box">
       <div id="hj-drawer-toggle" class="hj-drawer-bar">
         <span id="hj-drawer-title" style="font-size: 0.95rem; font-weight: bold; opacity: 0.85; lowercase">▶ view settled voting matters</span>
@@ -382,6 +396,8 @@ export function initHorseJudgement(db, currentUsername) {
   const drawerToggle = judgementRoot.querySelector("#hj-drawer-toggle");
   const drawerTitle = judgementRoot.querySelector("#hj-drawer-title");
   const drawerCounter = judgementRoot.querySelector("#hj-drawer-counter");
+  const hiddenContainer = judgementRoot.querySelector("#hj-hidden-container");
+  const hiddenItemsList = judgementRoot.querySelector("#hj-hidden-items-list");
 
   let localRegistryItems = [];
   let activeCount = 1;
@@ -437,8 +453,10 @@ export function initHorseJudgement(db, currentUsername) {
     let activeHTML = "";
     let settledHorseHTML = "";
     let settledNotHorseHTML = "";
+    let hiddenActiveHTML = "";
     let activeUserSlots = 0;
     let settledCount = 0;
+    let hasHiddenActive = false;
 
     localRegistryItems.forEach((item) => {
       if (item.status === "active" && item.creator === safeUser)
@@ -472,7 +490,16 @@ export function initHorseJudgement(db, currentUsername) {
       const userVoted = item.voters && item.voters[safeUser];
 
       if (item.status === "active") {
-        if (window.__hjHiddenPopups.has(item.id)) return;
+        if (window.__hjHiddenPopups.has(item.id)) {
+          hasHiddenActive = true;
+          hiddenActiveHTML += `
+            <div class="hj-compact-row" style="margin-bottom: 0; padding: 6px 12px; flex-direction: row; justify-content: space-between; align-items: center; gap: 10px;">
+              <span style="font-weight: bold; color: #fff; font-size: 0.85rem; lowercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 280px;">${item.concept}</span>
+              <button class="hj-btn-gel summon-popup-btn" data-id="${item.id}" style="font-size: 0.65rem; padding: 4px 10px; border-radius: 4px; margin: 0; height: auto; line-height: 1; border-color: rgba(0, 242, 254, 0.45);">results</button>
+            </div>
+          `;
+          return;
+        }
 
         const themeIndex =
           Math.abs(
@@ -552,7 +579,6 @@ export function initHorseJudgement(db, currentUsername) {
         settledCount++;
         const finalVerdict = item.verdict === "horse";
 
-        // Compact Dossier Grid Component Block
         const segmentHTML = `
           <div class="hj-compact-row" title="${item.description || ""}">
             <span style="font-weight: bold; color: #fff; font-size: 0.95rem; lowercase; line-height: 1.2;">${item.concept}</span>
@@ -573,7 +599,34 @@ export function initHorseJudgement(db, currentUsername) {
     drawerCounter.innerText = settledCount;
     popdeck.innerHTML = activeHTML;
 
-    // Distribute content smoothly across specific database tracks
+    if (hasHiddenActive) {
+      hiddenContainer.style.display = "flex";
+      hiddenItemsList.innerHTML = hiddenActiveHTML;
+      hiddenItemsList.querySelectorAll(".summon-popup-btn").forEach((btn) => {
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          const targetId = btn.dataset.id;
+          window.__hjHiddenPopups.delete(targetId);
+
+          try {
+            localStorage.setItem(
+              storageKey,
+              JSON.stringify(Array.from(window.__hjHiddenPopups)),
+            );
+          } catch (err) {}
+
+          window.__highestVistaZIndex++;
+          if (window.__hjPopupPositions[targetId]) {
+            window.__hjPopupPositions[targetId].z = window.__highestVistaZIndex;
+          }
+          renderRegistry();
+        };
+      });
+    } else {
+      hiddenContainer.style.display = "none";
+      hiddenItemsList.innerHTML = "";
+    }
+
     judgementRoot.querySelector("#hj-matrix-horse-list").innerHTML =
       settledHorseHTML ||
       `<div style="font-style: italic; opacity: 0.4; font-size: 0.8rem; padding: 5px; text-align: center;">vacant</div>`;
@@ -597,6 +650,14 @@ export function initHorseJudgement(db, currentUsername) {
       closeBtn.onclick = (e) => {
         e.stopPropagation();
         window.__hjHiddenPopups.add(id);
+
+        try {
+          localStorage.setItem(
+            storageKey,
+            JSON.stringify(Array.from(window.__hjHiddenPopups)),
+          );
+        } catch (err) {}
+
         renderRegistry();
       };
 
@@ -680,6 +741,16 @@ export function initHorseJudgement(db, currentUsername) {
             updatedHorseCount > updatedNotHorseCount ? "horse" : "not horse";
           if (window.__hjPopupPositions[id])
             delete window.__hjPopupPositions[id];
+
+          if (window.__hjHiddenPopups.has(id)) {
+            window.__hjHiddenPopups.delete(id);
+            try {
+              localStorage.setItem(
+                storageKey,
+                JSON.stringify(Array.from(window.__hjHiddenPopups)),
+              );
+            } catch (err) {}
+          }
         }
 
         await updateDoc(doc(db, "horse_judgement", id), finalUpdate);
@@ -690,7 +761,15 @@ export function initHorseJudgement(db, currentUsername) {
       btn.onclick = async () => {
         const id = btn.dataset.id;
         const targetRecord = localRegistryItems.find((i) => i.id === id);
-        if (window.__hjHiddenPopups.has(id)) window.__hjHiddenPopups.delete(id);
+        if (window.__hjHiddenPopups.has(id)) {
+          window.__hjHiddenPopups.delete(id);
+          try {
+            localStorage.setItem(
+              storageKey,
+              JSON.stringify(Array.from(window.__hjHiddenPopups)),
+            );
+          } catch (err) {}
+        }
 
         if (id.startsWith("seeded_")) {
           await setDoc(doc(db, "horse_judgement", id), {

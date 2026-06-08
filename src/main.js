@@ -15,6 +15,10 @@ import { createXPLoader } from "./World/Components/XPLoader.js";
 import { createVoidManager } from "./World/Components/VoidManager.js";
 import { createLoneManager } from "./World/Components/LoneManager.js";
 import {
+  initInnerGallop,
+  unmountInnerGallop,
+} from "./World/Components/InnerGallop.js";
+import {
   initHorseJudgement,
   unmountHorseJudgement,
 } from "./World/Components/HorseJudgement.js";
@@ -291,6 +295,7 @@ async function init() {
     // Stop lone manager if we are switching away from it
     if (themeId !== "lone" && horseDataRef) {
       loneMgr.stop(horseDataRef);
+      unmountInnerGallop();
       unmountHorseJudgement();
     }
 
@@ -349,6 +354,7 @@ async function init() {
           : "#ffffff";
         loneMgr.start(currentUsername, userColor, horseDataRef, db);
         initHorseJudgement(db, currentUsername);
+        initInnerGallop();
       }
     } else {
       isVoidMode = false;
