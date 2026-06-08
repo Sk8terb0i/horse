@@ -17,6 +17,10 @@ import { createLoneManager } from "./World/Components/LoneManager.js";
 import { initWiki } from "./World/Components/WikiManager.js";
 import { runWikiSeeder } from "./World/Components/seedWiki.js";
 import { initDiscHorse } from "./World/Components/DiscHorse.js";
+import {
+  initDolphinClicker,
+  unmountDolphinClicker,
+} from "./World/Components/DolphinClicker.js";
 import { initializeApp } from "firebase/app";
 import {
   getFirestore,
@@ -285,6 +289,13 @@ async function init() {
       loneMgr.stop(horseDataRef);
     }
 
+    // Cleanup clicker if leaving dolphin pov
+    if (themeId !== "dolphin pov") {
+      unmountDolphinClicker();
+      const appsContainer = document.getElementById("taskbar-apps-container");
+      if (appsContainer) appsContainer.style.display = "flex";
+    }
+
     if (themeId === "void") {
       isVoidMode = true;
       renderer.domElement.style.display = "none";
@@ -294,6 +305,22 @@ async function init() {
       const ui = document.getElementById("logged-in-ui");
       if (ui) ui.style.display = "none";
       voidMgr.start(getManifestations(), globalVoidMessages);
+    } else if (themeId === "dolphin pov") {
+      isVoidMode = false;
+      voidMgr.stop();
+      if (horseDataRef) loneMgr.stop(horseDataRef);
+
+      // DO NOT hide the renderer or lDom here so the 3D horse stays visible!
+
+      toggleDesktopIcons(false); // Hide icons
+      if (glueShelf.wrapper) glueShelf.wrapper.style.display = "none";
+      const ui = document.getElementById("logged-in-ui");
+      if (ui) ui.style.display = "none";
+
+      const appsContainer = document.getElementById("taskbar-apps-container");
+      if (appsContainer) appsContainer.style.display = "none";
+
+      initDolphinClicker(db, currentUsername);
     } else if (themeId === "lone") {
       isVoidMode = false;
       voidMgr.stop();
