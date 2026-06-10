@@ -1189,7 +1189,8 @@ function openWikiOverlay(db, currentUsername, userRole) {
     const ed = articleBody.querySelector("#edit-content");
     articleBody.querySelectorAll(".wiki-tool-btn[data-cmd]").forEach((b) => {
       b.onclick = () => {
-        document.execCommand(b.cmd, false, b.dataset.val || null);
+        // Access the data-cmd attribute correctly
+        document.execCommand(b.dataset.cmd, false, b.dataset.val || null);
         ed.focus();
       };
     });
