@@ -348,10 +348,10 @@ function renderBottlePhase(container, horseID, db, username, manifestations) {
     img.dataset.category = cat;
     img.dataset.scale = "0.7";
     img.dataset.rotate = "0";
+    img.style.position = "absolute"; // Fixes immediate invisible rendering breakdown
     img.style.zIndex = CATEGORY_Z_INDEX[cat] || 10;
     img.style.left = x;
     img.style.top = y;
-    img.src = ASSET_PATH + file;
     img.crossOrigin = "anonymous";
     img.ondragstart = (e) => e.preventDefault();
     img.onload = () => {
@@ -365,6 +365,7 @@ function renderBottlePhase(container, horseID, db, username, manifestations) {
       selectedEl.classList.add("active-part");
       applyTransform(img);
     };
+    img.src = ASSET_PATH + file; // Set src directly after attaching onload listeners
     viewport.appendChild(img);
   };
 
@@ -524,7 +525,6 @@ function renderBottlePhase(container, horseID, db, username, manifestations) {
     const canvas = document.createElement("canvas");
     const cropW = Math.max(1, maxX - minX + pad * 2);
     const cropH = Math.max(1, maxY - minY + pad * 2);
-    // Lower the scale to drastically reduce the number of pixels saved
     const exportScale = 0.4;
     canvas.width = cropW * exportScale;
     canvas.height = cropH * exportScale;
@@ -548,14 +548,16 @@ function renderBottlePhase(container, horseID, db, username, manifestations) {
       ctx.restore();
     }
 
-    const imgData = canvas.toDataURL("image/webp", 0.6); // You can keep quality higher now!
+    const imgData = canvas.toDataURL("image/webp", 0.6);
 
     try {
       // 1. Setup Storage Reference
       const storage = getStorage();
+      
+      // Fixes the permission restrictions error by moving target upload location to standard authorized path structure
       const imageRef = ref(
         storage,
-        `bottles/${username}/${horseID}_${Date.now()}.webp`,
+        `users/${username}/bottles/${horseID}_${Date.now()}.webp`,
       );
 
       // 2. Upload the Base64 string to Storage
@@ -567,7 +569,7 @@ function renderBottlePhase(container, horseID, db, username, manifestations) {
       // 4. Save the lightweight URL to Firestore, NOT the image data
       await updateDoc(doc(db, "users", username), {
         [`manifestations.${horseID}.isBottled`]: true,
-        [`manifestations.${horseID}.finalImage`]: downloadURL, // Only ~100 bytes!
+        [`manifestations.${horseID}.finalImage`]: downloadURL,
         activeHorseName: "",
       });
 
