@@ -6,7 +6,8 @@ import { getAuth, signOut } from "firebase/auth";
 import { createColorPicker } from "./ColorPickerUI.js";
 import { getNearestColorName } from "../Utils/ColorUtils.js";
 
-export function createOverlayUI(scene, db, getUsername) {
+// Added userRole as an optional parameter
+export function createOverlayUI(scene, db, getUsername, userRole) {
   const ASSET_PATH = import.meta.env.BASE_URL + "assets/";
 
   const uiContainer = document.createElement("div");
@@ -20,7 +21,6 @@ export function createOverlayUI(scene, db, getUsername) {
   const manifestOverlay = document.createElement("div");
   manifestOverlay.id = "loading-overlay";
 
-  // REFINED RE-WRAPPER: Handles multiline content and filters out empty space highlights
   const processedContent = ManifestoContent.replace(
     /<div id="close-manifesto".*?><\/div>/g,
     "",
@@ -34,7 +34,6 @@ export function createOverlayUI(scene, db, getUsername) {
       '<strong class="aero-header-text"><span>$1</span></strong>',
     )
     .replace(/<p>([\s\S]*?)<\/p>/g, (match, p1) => {
-      // If the paragraph is empty, just a space, or a line break, don't highlight it
       if (!p1.trim() || p1 === "<br>" || p1 === "&nbsp;") return "";
       return `<p><span class="aero-body-text">${p1}</span></p>`;
     });
@@ -101,13 +100,12 @@ export function createOverlayUI(scene, db, getUsername) {
 
     .vista-content-area {
       flex-grow: 1; 
-      padding: 20px 50px 10px 50px; /* REDUCED TOP PADDING TO FIX DEAD SPACE */
+      padding: 20px 50px 10px 50px; 
       overflow-y: auto;
       background: url('${ASSET_PATH}aero_bg.jpg') center/cover no-repeat;
       color: #000 !important;
     }
 
-    /* VISTA SCROLLBAR */
     .vista-content-area::-webkit-scrollbar { width: 14px; }
     .vista-content-area::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.1); }
     .vista-content-area::-webkit-scrollbar-thumb { 
@@ -116,7 +114,6 @@ export function createOverlayUI(scene, db, getUsername) {
       box-shadow: inset 0 0 2px rgba(0,0,0,0.2);
     }
 
-    /* HIGHLIGHTER SYSTEM */
     .aero-body-text {
       display: inline !important;
       -webkit-box-decoration-break: clone;
@@ -128,7 +125,6 @@ export function createOverlayUI(scene, db, getUsername) {
       font-size: 15px; font-weight: 600;
     }
 
-    /* FIX: Ensure empty spans or whitespace-only spans don't render a background */
     .aero-body-text:empty { display: none !important; }
 
     .vista-content-area .aero-header-text span {
@@ -169,13 +165,12 @@ export function createOverlayUI(scene, db, getUsername) {
 
   const icon = document.createElement("div");
   icon.id = "manifesto-icon";
-  // FIX: Force the container to center the oversized icon perfectly
   icon.style.cssText = `
     pointer-events: auto;
     display: flex;
     align-items: center;
     justify-content: center;
-    overflow: visible; /* Allows the 48px icon to sit over the 30px CSS circle */
+    overflow: visible; 
   `;
   icon.innerHTML = `<img src="${ASSET_PATH}manifesto_btn.png" alt="Manifesto" style="height: 60px; width: auto; display: block; filter: drop-shadow(1px 1px 2px rgba(0,0,0,0.3));">`;
   userContainer.appendChild(icon);
@@ -198,8 +193,9 @@ export function createOverlayUI(scene, db, getUsername) {
 
   const logoutBtn = document.createElement("div");
   logoutBtn.id = "logout-btn";
+  // Updated display property based on the userRole
   logoutBtn.style.cssText = `
-    display: flex; align-items: center; justify-content: center;
+    display: ${userRole === "exhibit" ? "none" : "flex"}; align-items: center; justify-content: center;
     opacity: 0.3; cursor: pointer; transition: opacity 0.3s ease;
     pointer-events: auto;
   `;
@@ -220,19 +216,14 @@ export function createOverlayUI(scene, db, getUsername) {
   logoutBtn.onmouseenter = () => (logoutBtn.style.opacity = "1");
   logoutBtn.onmouseleave = () => (logoutBtn.style.opacity = "0.3");
   logoutBtn.onclick = async () => {
-    // 1. Tell Firebase to officially kill the secure session
     try {
       const auth = getAuth();
       await signOut(auth);
     } catch (err) {
       console.error("Error signing out of Firebase:", err);
     }
-
-    // 2. Wipe the browser's UI memory
     localStorage.removeItem("horse_herd_username");
     sessionStorage.removeItem("horse_herd_username");
-
-    // 3. Reload to reset the app back to the login screen
     window.location.reload();
   };
 
@@ -342,6 +333,10 @@ export function createOverlayUI(scene, db, getUsername) {
     },
     setUsername: (name) => {
       if (name) usernameDisplay.innerText = name;
+    },
+    // Added helper to set role dynamically if role loads asynchronously
+    setRole: (role) => {
+      logoutBtn.style.display = role === "exhibit" ? "none" : "flex";
     },
   };
 }
