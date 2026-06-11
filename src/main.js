@@ -695,6 +695,10 @@ async function init() {
 
       // 2. Initialize the desktop applications so their DOM nodes exist
       const userRole = currentUserData ? currentUserData.role : "user";
+      
+      // ADD THIS LINE TO APPLY THE ROLE TO THE OVERLAY UI
+      if (typeof overlay.setRole === "function") overlay.setRole(userRole);
+
       initWiki(db, currentUsername, userRole);
       initDiscHorse(db, currentUsername, userRole);
 
