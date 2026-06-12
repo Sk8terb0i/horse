@@ -57,6 +57,9 @@ window.__highestVistaZIndex = window.__highestVistaZIndex || 12000;
 document.addEventListener(
   "mousedown",
   (e) => {
+    // Don't interfere with the glue factory game screen
+    if (window.location.hash === "#/ritual") return;
+
     // Check for the forum window class
     const win = e.target.closest(
       ".wiki-overlay, #dischorse-overlay, .wiki-window, .forum-window, .vista-window, .void-window",
@@ -695,7 +698,7 @@ async function init() {
 
       // 2. Initialize the desktop applications so their DOM nodes exist
       const userRole = currentUserData ? currentUserData.role : "user";
-      
+
       // ADD THIS LINE TO APPLY THE ROLE TO THE OVERLAY UI
       if (typeof overlay.setRole === "function") overlay.setRole(userRole);
 
