@@ -956,6 +956,8 @@ function openWikiOverlay(db, currentUsername, userRole) {
       </div>
     `;
 
+    articleBody.scrollTop = 0;
+
     const loadComments = () => {
       const comContainer = articleBody.querySelector(
         "#wiki-comments-container",
