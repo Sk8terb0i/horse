@@ -644,11 +644,12 @@ async function init() {
       1,
     );
 
-    // Force timescale to 0 (pause) if a blocking window is visibly open or if paused by sphere hover
-    if (interactions.getIsPaused() || isBlockingWindowOpen()) {
+    const blocking = isBlockingWindowOpen();
+    controls.enabled = !blocking;
+    if (interactions.getIsPaused() || blocking) {
       timeScale = 0;
       // Resume interactions if we zoom out and no blocking windows are open
-      if (camDistFromOrigin >= FULL_SPEED_DIST && !isBlockingWindowOpen()) {
+      if (camDistFromOrigin >= FULL_SPEED_DIST && !blocking) {
         interactions.setIsPaused(false);
       }
     }
