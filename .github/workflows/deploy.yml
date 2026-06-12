@@ -3,10 +3,17 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: ["master"] #fork
+  # Added this so you can manually trigger a run from the Actions tab if needed
+  workflow_dispatch:
+
 permissions:
   contents: read
   pages: write
   id-token: write
+
+# Opt into Node 24 for the GitHub runner actions to clear the warning
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build-and-deploy:
@@ -28,7 +35,7 @@ jobs:
         run: npm run build
 
       - name: Setup Pages
-        uses: actions/configure-pages@v4
+        uses: actions/configure-pages@v5
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
