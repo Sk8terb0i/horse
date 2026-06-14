@@ -46,6 +46,7 @@ import { createAudioManager } from "./World/Components/AudioManager.js";
 
 // MOVED TO TOP LEVEL
 import { createHorseSignaturesUI } from "./World/Components/HorseSignaturesUI.js";
+import { createHintManager } from "./World/Components/HintManager.js";
 import {
   initGlueFactory,
   unmountGlueFactory,
@@ -294,7 +295,14 @@ async function init() {
     });
   };
 
-  const handleThemeChange = (themeId) => {
+  const handleThemeChange = (themeId, isUserAction = true) => {
+    if (currentUsername && isUserAction) {
+      localStorage.setItem(
+        `last_theme_switch_time_${currentUsername}`,
+        Date.now().toString(),
+      );
+    }
+
     // Safely stop lone manager and catch broken unmounts without crashing
     if (themeId !== "lone") {
       if (horseDataRef) loneMgr.stop(horseDataRef);
@@ -706,9 +714,12 @@ async function init() {
       initWiki(db, currentUsername, userRole);
       initDiscHorse(db, currentUsername, userRole);
 
+      // Initialize the new hint manager logic
+      createHintManager(currentUsername, userRole);
+
       // 3. ENFORCE THE THEME: This instantly hides the UI, icons, and 3D canvas if in Void or Lone
       const currentTheme = localStorage.getItem("horse_herd_theme") || "herd";
-      handleThemeChange(currentTheme);
+      handleThemeChange(currentTheme, false);
     }
   };
 

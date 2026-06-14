@@ -193,7 +193,7 @@ export function createTaskbar(scene, onThemeChange) {
     }
   };
 
-  const setTheme = (t) => {
+  const setTheme = (t, isUserAction = true) => {
     document.documentElement.setAttribute("data-theme", t.id);
     localStorage.setItem("horse_herd_theme", t.id);
     themeOrb.style.background = t.grad;
@@ -208,8 +208,8 @@ export function createTaskbar(scene, onThemeChange) {
     const bgColor = style.getPropertyValue("--bg-color").trim();
     gsap.to(scene.background, { ...new THREE.Color(bgColor), duration: 1.5 });
 
-    // TRIGGER CALLBACK FOR MAIN.JS
-    if (onThemeChange) onThemeChange(t.id);
+    // TRIGGER CALLBACK FOR MAIN.JS (Passes whether it was a real click)
+    if (onThemeChange) onThemeChange(t.id, isUserAction);
   };
 
   themeOrb.onclick = (e) => {
@@ -228,7 +228,11 @@ export function createTaskbar(scene, onThemeChange) {
   });
 
   const savedThemeId = localStorage.getItem("horse_herd_theme") || "herd";
-  setTheme(themes.find((t) => t.id === savedThemeId));
+  // Pass 'false' so the timer doesn't reset on page load
+  setTheme(
+    themes.find((t) => t.id === savedThemeId),
+    false,
+  );
 
   return bar;
 }
