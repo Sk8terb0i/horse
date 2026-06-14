@@ -267,6 +267,22 @@ const horsepediaLogo = `
   </svg>`;
 
 export async function downloadThesisPDF(db) {
+  // 1. INSTANT UI FEEDBACK: Show a loading overlay
+  const loaderId = "thesis-pdf-loader";
+  let loader = document.getElementById(loaderId);
+  if (!loader) {
+    loader = document.createElement("div");
+    loader.id = loaderId;
+    loader.innerHTML = `
+      <div style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(255,255,255,0.8); z-index: 99999; display: flex; flex-direction: column; justify-content: center; align-items: center; font-family: sans-serif; color: #002bb8; backdrop-filter: blur(2px);">
+        <div style="width: 50px; height: 50px; border: 4px solid #eaecf0; border-top: 4px solid #002bb8; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+        <p style="margin-top: 20px; font-weight: bold; font-size: 1.1em;">Compiling Herd Knowledge Base...</p>
+        <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+      </div>
+    `;
+    document.body.appendChild(loader);
+  }
+
   const currentMonthYear = new Date().toLocaleString("en-US", {
     month: "long",
     year: "numeric",
@@ -414,7 +430,7 @@ export async function downloadThesisPDF(db) {
           
           ${debatesHtml}
 
-          <h3 style="break-after: avoid; page-break-after: avoid;">🐴 Verified Horse</h3>
+          <h3 style="break-after: avoid; page-break-after: avoid;">🐴 Horse</h3>
           <table style="width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 24px; font-size: 11pt; border: 1px solid #aaaaaa; break-inside: auto; page-break-inside: auto;">
             <thead>
               <tr style="background-color: #f6f6f6; text-align: left; break-inside: avoid; page-break-inside: avoid;">
@@ -436,7 +452,7 @@ export async function downloadThesisPDF(db) {
             </tbody>
           </table>
 
-          <h3 style="break-after: avoid; page-break-after: avoid;">❌ Confirmed NotHorse Divergences</h3>
+          <h3 style="break-after: avoid; page-break-after: avoid;">❌ Not Horse</h3>
           <table style="width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11pt; border: 1px solid #aaaaaa; break-inside: auto; page-break-inside: auto;">
             <thead>
               <tr style="background-color: #f6f6f6; text-align: left; break-inside: avoid; page-break-inside: avoid;">
@@ -523,11 +539,13 @@ export async function downloadThesisPDF(db) {
     <html lang="en">
     <head>
       <meta charset="UTF-8">
-      <title>dolphins shouldn't exist - Noe Mael Arnold</title>
+      <title>dolphins shouldn't exist - noe mael arnold</title>
+      <link href="https://fonts.googleapis.com/css2?family=Noto+Emoji:wght@400&display=swap" rel="stylesheet">
       <style>
         /* CORE RESET FOR PRINTING */
         html, body {
-          font-family: Arial, Helvetica, sans-serif;
+          /* Added Noto Emoji to the font family stack */
+          font-family: Arial, Helvetica, "Noto Emoji", sans-serif;
           color: #000;
           background: #fff;
           margin: 0;
@@ -632,28 +650,33 @@ export async function downloadThesisPDF(db) {
       ${articlesHTML}
       
       <script>
-        window.onload = () => {
+        // Smarter loading: wait exactly for fonts, no arbitrary 1.5s delay
+        window.onload = async () => {
+          // Wait for the Noto Emoji web font to confirm it is fully loaded
+          await document.fonts.ready;
+          
+          // Give the browser a microsecond to render the loaded font
           setTimeout(() => {
-            // 1. Save your main website's current title
+            // Remove the loading screen from the main website
+            const loader = window.parent.document.getElementById("thesis-pdf-loader");
+            if (loader) loader.remove();
+
+            // Handle the title swap and print
             const originalTitle = window.parent.document.title;
+            window.parent.document.title = "dolphins shouldn't exist - noe mael arnold";
             
-            // 2. Temporarily change the main title to your desired PDF file name
-            window.parent.document.title = "dolphins shouldn't exist - Noe Mael Arnold";
-            
-            // 3. Focus and trigger the print dialog
             window.focus(); 
             window.print(); 
             
-            // 4. Instantly restore your website's original title
             window.parent.document.title = originalTitle;
             
-            // Optional cleanup: remove the iframe from the DOM 
+            // Clean up the iframe
             setTimeout(() => {
               if (window.frameElement) {
                 window.parent.document.body.removeChild(window.frameElement);
               }
             }, 1000);
-          }, 1000);
+          }, 100); 
         };
       </script>
     </body>

@@ -843,7 +843,7 @@ function openWikiOverlay(db, currentUsername, userRole) {
               : ""
           }
 
-          <h3 style="color: #000; margin-top: 24px; border-bottom: 1px solid #a2a9b1; padding-bottom: 4px; font-weight: bold; font-size: 1.25rem;">🐴 Verified Horse</h3>
+          <h3 style="color: #000; margin-top: 24px; border-bottom: 1px solid #a2a9b1; padding-bottom: 4px; font-weight: bold; font-size: 1.25rem;">🐴 Horse</h3>
           <table class="wikitable" style="width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 24px; font-size: 0.92rem; border: 1px solid #a2a9b1;">
             <thead>
               <tr style="background-color: #f8f9fa; text-align: left;">
@@ -865,7 +865,7 @@ function openWikiOverlay(db, currentUsername, userRole) {
             </tbody>
           </table>
 
-          <h3 style="color: #000; margin-top: 24px; border-bottom: 1px solid #a2a9b1; padding-bottom: 4px; font-weight: bold; font-size: 1.25rem;">❌ Confirmed NotHorse Divergences</h3>
+          <h3 style="color: #000; margin-top: 24px; border-bottom: 1px solid #a2a9b1; padding-bottom: 4px; font-weight: bold; font-size: 1.25rem;">❌ Not Horse</h3>
           <table class="wikitable" style="width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.92rem; border: 1px solid #a2a9b1;">
             <thead>
               <tr style="background-color: #f8f9fa; text-align: left;">
