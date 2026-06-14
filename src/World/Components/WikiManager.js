@@ -16,6 +16,7 @@ import {
 
 // 2. Import Storage functions from the correct library
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { downloadThesisPDF } from "./WikiThesisDownloader.js";
 
 import "./wiki.css";
 
@@ -601,6 +602,9 @@ function openWikiOverlay(db, currentUsername, userRole) {
 
   const renderSidebar = () => {
     sidebar.innerHTML = "";
+
+    sidebar.innerHTML += `<button class="wiki-btn" id="wiki-download-thesis" style="background: #00fbff; color: #000; border-color: #00fbff; font-weight: bold; margin-bottom: 10px;">📄 Download Thesis</button>`;
+
     if (userRole === "admin") {
       sidebar.innerHTML += `<button class="wiki-btn" id="wiki-new-article">+ Create Entry</button>`;
     }
@@ -753,6 +757,18 @@ function openWikiOverlay(db, currentUsername, userRole) {
           section: currentSection,
           author: currentUsername,
         });
+
+    //downloader
+    const dlBtn = sidebar.querySelector("#wiki-download-thesis");
+    if (dlBtn) {
+      dlBtn.onclick = (e) => {
+        e.stopPropagation();
+        dlBtn.innerText = "Generating...";
+        downloadThesisPDF(db).finally(() => {
+          dlBtn.innerText = "📄 Download Thesis";
+        });
+      };
+    }
   };
 
   const renderArticle = (article) => {
