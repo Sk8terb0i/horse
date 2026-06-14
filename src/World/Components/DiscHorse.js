@@ -11,7 +11,8 @@ import {
   orderBy,
 } from "firebase/firestore";
 import gsap from "gsap";
-import "./dischorse.css"; // IMPORTANT: Import your new CSS file
+import { spawnRelativeHint } from "./HintManager.js";
+import "./dischorse.css";
 
 let forumWindowRef = null;
 let isAppRunning = false;
@@ -553,6 +554,17 @@ function openForum(db, currentUsername, userRole) {
 
     setupSignatureIcon(topic.author, mainView.querySelector("#author-img"));
 
+    // HINT: If the current user just loaded their own topic
+    if (topic.author === currentUsername) {
+      setTimeout(() => {
+        spawnRelativeHint(
+          mainView.querySelector("#author-img"),
+          "Did you know? The default avatar is a dolphin-imposed blinder. Click the blank profile picture next to your posts to reveal your true drawn horse signature.",
+          "hint_dischorse_sig",
+        );
+      }, 500); // Tiny delay ensures the image element exists in the DOM
+    }
+
     if (canEditTopic) {
       mainView.querySelector("#edit-topic-btn").onclick = () =>
         renderEditor(topic);
@@ -725,6 +737,18 @@ function openForum(db, currentUsername, userRole) {
         `;
           container.appendChild(div);
           setupSignatureIcon(com.author, div.querySelector(`#sig-${com.id}`));
+
+          // HINT: If the current user just loaded their own comment
+          if (com.author === currentUsername) {
+            setTimeout(() => {
+              spawnRelativeHint(
+                div.querySelector(`#sig-${com.id}`),
+                "Did you know? The default avatar is a dolphin-imposed blinder. Click the blank profile picture next to your posts to reveal your true drawn horse signature.",
+                "hint_dischorse_sig",
+              );
+            }, 500);
+          }
+
           bindEditComment(com.id, com.text, com.isEdited);
 
           if (userRole === "admin") {
@@ -773,6 +797,18 @@ function openForum(db, currentUsername, userRole) {
                 reply.author,
                 rDiv.querySelector(`#sig-${reply.id}`),
               );
+
+              // HINT: If the current user just loaded their own reply
+              if (reply.author === currentUsername) {
+                setTimeout(() => {
+                  spawnRelativeHint(
+                    rDiv.querySelector(`#sig-${reply.id}`),
+                    "Did you know? The default avatar is a dolphin-imposed blinder. Click the blank profile picture next to your posts to reveal your true drawn horse signature.",
+                    "hint_dischorse_sig",
+                  );
+                }, 500);
+              }
+
               bindEditComment(reply.id, reply.text, reply.isEdited);
 
               if (userRole === "admin") {

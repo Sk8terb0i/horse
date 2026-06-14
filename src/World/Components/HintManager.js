@@ -205,3 +205,125 @@ export function createHintManager(username, role) {
     taskbarOrb.addEventListener("click", hideHint);
   }
 }
+
+// NEW EXPORT: Spawns a hint anchored to a specific element on the screen
+export function spawnRelativeHint(targetElement, text, storageKey) {
+  if (!targetElement) return;
+  if (localStorage.getItem(storageKey) === "true") return;
+  if (document.getElementById(`hint-${storageKey}`)) return; // Prevent duplicates
+
+  const win = document.createElement("div");
+  win.id = `hint-${storageKey}`;
+  win.style.cssText = `
+    position: fixed;
+    width: 320px;
+    background-color: #c0c0c0;
+    border-top: 2px solid #ffffff;
+    border-left: 2px solid #ffffff;
+    border-right: 2px solid #0a0a0a;
+    border-bottom: 2px solid #0a0a0a;
+    box-shadow: inset -1px -1px #808080, inset 1px 1px #dfdfdf, 0 4px 15px rgba(0,0,0,0.4);
+    font-family: 'MS Sans Serif', 'Segoe UI', Tahoma, sans-serif;
+    font-size: 12px;
+    color: #000;
+    z-index: 16000;
+    display: flex;
+    flex-direction: column;
+  `;
+
+  // Title Bar
+  const titleBar = document.createElement("div");
+  titleBar.style.cssText = `
+    background: #000080; color: white; padding: 2px 4px; font-weight: bold;
+    display: flex; justify-content: space-between; align-items: center; margin: 2px;
+  `;
+  titleBar.innerHTML = `<span>Hint</span>`;
+
+  const closeBtn = document.createElement("div");
+  closeBtn.innerText = "x";
+  closeBtn.style.cssText = `
+    background: #c0c0c0; color: black; width: 14px; height: 14px; text-align: center;
+    line-height: 10px; cursor: pointer; font-weight: bold; border-top: 1px solid #fff;
+    border-left: 1px solid #fff; border-right: 1px solid #000; border-bottom: 1px solid #000;
+  `;
+  titleBar.appendChild(closeBtn);
+  win.appendChild(titleBar);
+
+  // Body
+  const body = document.createElement("div");
+  body.style.cssText = "padding: 15px;";
+  body.innerHTML = `
+    <div style="margin-bottom: 20px; display: flex; gap: 15px; align-items: center;">
+      <div style="font-size: 24px; color: #000080; font-family: serif; font-weight: bold; background: white; border-radius: 50%; min-width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; box-shadow: inset 1px 1px #808080, inset -1px -1px #dfdfdf;">i</div>
+      <div>${text}</div>
+    </div>
+  `;
+
+  // Buttons
+  const btnContainer = document.createElement("div");
+  btnContainer.style.cssText =
+    "display: flex; justify-content: center; gap: 10px;";
+
+  const createBtn = (btnText, onClick) => {
+    const b = document.createElement("button");
+    b.innerText = btnText;
+    b.style.cssText = `
+      background: #c0c0c0; border-top: 1px solid #fff; border-left: 1px solid #fff;
+      border-right: 1px solid #000; border-bottom: 1px solid #000; padding: 4px 12px;
+      cursor: pointer; font-family: inherit; font-size: 11px; outline: none;
+    `;
+    b.onmousedown = () =>
+      (b.style.boxShadow = "inset 1px 1px #808080, inset -1px -1px #dfdfdf");
+    b.onmouseup = () => (b.style.boxShadow = "none");
+    b.onclick = onClick;
+    return b;
+  };
+
+  // Add a highlight ring to the target element to draw attention
+  const origShadow = targetElement.style.boxShadow;
+  targetElement.style.boxShadow =
+    "0 0 0 3px #000080, 0 0 10px rgba(0,0,128,0.5)";
+
+  const orb = document.getElementById("tray-theme-orb");
+
+  // Define cleanup first so we can attach it to the orb
+  const cleanup = () => {
+    targetElement.style.boxShadow = origShadow;
+    if (storageKey === "hint_wiki_lone" && orb) {
+      orb.classList.remove("hint-active-orb");
+      orb.removeEventListener("click", cleanup); // Remove the listener so it doesn't leak
+    }
+    win.remove();
+  };
+
+  // Make the theme orb react if this is the theme switching hint
+  if (storageKey === "hint_wiki_lone" && orb) {
+    orb.classList.add("hint-active-orb");
+    orb.addEventListener("click", cleanup); // Close the hint if they click the orb
+  }
+
+  closeBtn.onclick = cleanup;
+  btnContainer.appendChild(
+    createBtn("Don't remind me again", () => {
+      localStorage.setItem(storageKey, "true");
+      cleanup();
+    }),
+  );
+  btnContainer.appendChild(createBtn("OK", cleanup));
+
+  body.appendChild(btnContainer);
+  win.appendChild(body);
+
+  // Smart Positioning: Anchor to the right, but flip left if it goes off-screen
+  const rect = targetElement.getBoundingClientRect();
+  let left = rect.right + 15;
+  let top = rect.top;
+
+  if (left + 320 > window.innerWidth) left = rect.left - 335;
+  if (top + 150 > window.innerHeight) top = window.innerHeight - 160;
+
+  win.style.left = Math.max(0, left) + "px";
+  win.style.top = Math.max(0, top) + "px";
+
+  document.body.appendChild(win);
+}

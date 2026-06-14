@@ -195,7 +195,7 @@ export function createOverlayUI(scene, db, getUsername, userRole) {
   logoutBtn.id = "logout-btn";
   // Updated display property based on the userRole
   logoutBtn.style.cssText = `
-    display: ${userRole === "exhibit" ? "none" : "flex"}; align-items: center; justify-content: center;
+    display: ${userRole === "exhibiter" ? "none" : "flex"}; align-items: center; justify-content: center;
     opacity: 0.3; cursor: pointer; transition: opacity 0.3s ease;
     pointer-events: auto;
   `;
@@ -336,7 +336,7 @@ export function createOverlayUI(scene, db, getUsername, userRole) {
     },
     // Added helper to set role dynamically if role loads asynchronously
     setRole: (role) => {
-      logoutBtn.style.display = role === "exhibit" ? "none" : "flex";
+      logoutBtn.style.display = role === "exhibiter" ? "none" : "flex";
     },
   };
 }

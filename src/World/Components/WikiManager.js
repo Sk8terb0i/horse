@@ -17,6 +17,7 @@ import {
 // 2. Import Storage functions from the correct library
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { downloadThesisPDF } from "./WikiThesisDownloader.js";
+import { spawnRelativeHint } from "./HintManager.js";
 
 import "./wiki.css";
 
@@ -1694,11 +1695,56 @@ function openWikiOverlay(db, currentUsername, userRole) {
     };
   });
 
+  // --- HINT LOGIC START ---
+  let wikiIdleTimer;
+  const resetWikiIdle = () => {
+    clearTimeout(wikiIdleTimer);
+    if (isWindowVisible) {
+      wikiIdleTimer = setTimeout(() => {
+        const icon = document.getElementById("wiki-desktop-icon");
+        spawnRelativeHint(
+          icon,
+          "Did you know? True knowledge is a collective neigh. Highlight any text within Horsepedia to project your suggested truth to the rest of the herd.",
+          "hint_wiki_edit",
+        );
+      }, 120000); // Triggers after 2 minutes of idle time
+    }
+  };
+
+  overlay.addEventListener("mousemove", resetWikiIdle);
+  overlay.addEventListener("keydown", resetWikiIdle);
+  overlay.addEventListener("click", resetWikiIdle);
+  resetWikiIdle();
+
+  const handleWikiCloseOrMin = () => {
+    clearTimeout(wikiIdleTimer);
+    const curArt = articles.find((a) => a.id === currentArticleId);
+    const theme = document.documentElement.getAttribute("data-theme") || "herd";
+
+    // If closing the discernment page while in herd mode, remind them 10 seconds later
+    if (
+      curArt &&
+      curArt.title.toLowerCase() === "horse or not horse" &&
+      theme === "herd"
+    ) {
+      setTimeout(() => {
+        const icon = document.getElementById("wiki-desktop-icon");
+        spawnRelativeHint(
+          icon,
+          "Did you know? The herd relies on your inner truth. Isolate your frequency by switching to the 'Lone' theme to cast your judgments on the Discernment Dashboard.",
+          "hint_wiki_lone",
+        );
+      }, 500); // 10 seconds after closing
+    }
+  };
+  // --- HINT LOGIC END ---
+
   overlay.querySelector("#wiki-minimize").onclick = (e) => {
     e.stopPropagation();
     isWindowVisible = false;
     overlay.style.display = "none";
     syncWikiTaskbar();
+    handleWikiCloseOrMin();
   };
   overlay.querySelector("#wiki-close").onclick = (e) => {
     e.stopPropagation();
@@ -1708,6 +1754,7 @@ function openWikiOverlay(db, currentUsername, userRole) {
     isAppRunning = false;
     isWindowVisible = false;
     syncWikiTaskbar();
+    handleWikiCloseOrMin();
   };
 }
 

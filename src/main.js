@@ -717,6 +717,94 @@ async function init() {
       // Initialize the new hint manager logic
       createHintManager(currentUsername, userRole);
 
+      // --- EXHIBITION KIOSK IDLE RESET ---
+      if (userRole === "exhibiter") {
+        let exhibiterIdleTimer;
+
+        const resetExhibitionIdle = () => {
+          clearTimeout(exhibiterIdleTimer);
+          exhibiterIdleTimer = setTimeout(() => {
+            // 1. Center open windows
+            const centerWindow = (selector, storageKey) => {
+              const win = document.querySelector(selector);
+              if (win && win.style.display !== "none") {
+                win.style.transition =
+                  "top 0.8s cubic-bezier(0.16, 1, 0.3, 1), left 0.8s cubic-bezier(0.16, 1, 0.3, 1)";
+                const left = Math.max(
+                  0,
+                  (window.innerWidth - win.offsetWidth) / 2,
+                );
+                const top = Math.max(
+                  0,
+                  (window.innerHeight - win.offsetHeight) / 2,
+                );
+
+                win.style.left = left + "px";
+                win.style.top = top + "px";
+                localStorage.setItem(storageKey, JSON.stringify({ top, left }));
+
+                setTimeout(() => {
+                  win.style.transition = "none";
+                }, 800);
+              }
+            };
+
+            centerWindow(".wiki-window", "wiki_window_pos");
+            centerWindow(".forum-window", "dischorse_pos");
+
+            // 2. Rescue icons ONLY if they are dragged off-screen
+            const resetIconIfOffscreen = (
+              id,
+              defaultLeft,
+              defaultTop,
+              storageKey,
+            ) => {
+              const icon = document.getElementById(id);
+              if (!icon) return;
+
+              const rect = icon.getBoundingClientRect();
+              const isOffScreen =
+                rect.right < 20 ||
+                rect.left > window.innerWidth - 20 ||
+                rect.bottom < 20 ||
+                rect.top > window.innerHeight - 20;
+
+              if (isOffScreen) {
+                icon.style.transition = "top 0.8s ease, left 0.8s ease";
+                icon.style.left = defaultLeft;
+                icon.style.top = defaultTop;
+                localStorage.setItem(
+                  storageKey,
+                  JSON.stringify({ left: defaultLeft, top: defaultTop }),
+                );
+                setTimeout(() => {
+                  icon.style.transition = "none";
+                }, 800);
+              }
+            };
+
+            resetIconIfOffscreen(
+              "wiki-desktop-icon",
+              "5vw",
+              "10vh",
+              "wiki_icon_pos",
+            );
+            resetIconIfOffscreen(
+              "dischorse-icon",
+              "85vw",
+              "10vh",
+              "dischorse_icon_pos",
+            );
+          }, 120000); // 2 minutes
+        };
+
+        document.addEventListener("mousemove", resetExhibitionIdle);
+        document.addEventListener("mousedown", resetExhibitionIdle);
+        document.addEventListener("keydown", resetExhibitionIdle);
+        resetExhibitionIdle();
+      }
+      // ------------------------------------
+
       // 3. ENFORCE THE THEME: This instantly hides the UI, icons, and 3D canvas if in Void or Lone
       const currentTheme = localStorage.getItem("horse_herd_theme") || "herd";
       handleThemeChange(currentTheme, false);
