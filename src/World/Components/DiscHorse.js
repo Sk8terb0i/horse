@@ -461,16 +461,27 @@ function openForum(db, currentUsername, userRole) {
         ? topic.poll.expiresAt.toDate()
         : null;
       const isLocked = expires && now > expires;
+
       const votes = topic.poll.votes || {};
-      const totalVotes = Object.keys(votes).length;
+      let totalVotes = 0;
+      Object.values(votes).forEach((v) => {
+        if (Array.isArray(v)) totalVotes += v.length;
+        else if (v !== null && v !== undefined) totalVotes += 1;
+      });
       const userVote = votes[currentUsername];
 
       let optionsHtml = topic.poll.options
         .map((opt, index) => {
-          let optVotes = Object.values(votes).filter((v) => v === index).length;
+          let optVotes = 0;
+          Object.values(votes).forEach((v) => {
+            if (Array.isArray(v) && v.includes(index)) optVotes++;
+            else if (v === index) optVotes++;
+          });
           let percent =
             totalVotes === 0 ? 0 : Math.round((optVotes / totalVotes) * 100);
-          let isVoted = userVote === index;
+          let isVoted = Array.isArray(userVote)
+            ? userVote.includes(index)
+            : userVote === index;
 
           return `
           <div class="poll-option ${!isLocked ? "votable" : ""} ${isVoted ? "voted" : ""}" data-index="${index}" style="cursor: ${!isLocked ? "pointer" : "default"};">
@@ -591,8 +602,25 @@ function openForum(db, currentUsername, userRole) {
         optEl.onclick = async () => {
           const index = parseInt(optEl.dataset.index);
           const currentVotes = topic.poll.votes || {};
+
+          let newVote;
+          if (topic.poll.allowMultiple) {
+            let existing = currentVotes[currentUsername];
+            if (!Array.isArray(existing)) {
+              existing =
+                existing !== undefined && existing !== null ? [existing] : [];
+            }
+            if (existing.includes(index)) {
+              newVote = existing.filter((v) => v !== index);
+            } else {
+              newVote = [...existing, index];
+            }
+          } else {
+            newVote = index;
+          }
+
           await updateDoc(doc(db, "wiki_articles", topic.id), {
-            "poll.votes": { ...currentVotes, [currentUsername]: index },
+            "poll.votes": { ...currentVotes, [currentUsername]: newVote },
           });
         };
       });
@@ -904,12 +932,13 @@ function openForum(db, currentUsername, userRole) {
           <h3 class="poll-creator-title">📊 Add a Poll (Optional)</h3>
         </div>
         
-        <div class="poll-creator-grid">
+        <div class="poll-creator-grid" id="poll-options-grid">
           <input type="text" class="poll-input" placeholder="Option 1">
           <input type="text" class="poll-input" placeholder="Option 2">
           <input type="text" class="poll-input" placeholder="Option 3 (Optional)">
           <input type="text" class="poll-input" placeholder="Option 4 (Optional)">
         </div>
+        <button class="forum-btn small-btn" id="add-poll-option-btn" style="margin-top: 10px; margin-bottom: 10px;">+ Add Option</button>
 
         <label class="editor-label">Poll Duration</label>
         <select id="poll-duration" class="poll-select">
@@ -918,6 +947,11 @@ function openForum(db, currentUsername, userRole) {
           <option value="24">24 Hours</option>
           <option value="168">7 Days</option>
         </select>
+        
+        <label class="editor-label" style="display:flex; align-items:center; gap:8px; margin-top:15px; cursor:pointer;">
+          <input type="checkbox" id="poll-allow-multiple" style="width:16px; height:16px; cursor:pointer;">
+          Allow multiple selections
+        </label>
       </div>`
           : ""
       }
@@ -937,6 +971,21 @@ function openForum(db, currentUsername, userRole) {
         document.execCommand(btn.dataset.cmd, false, btn.dataset.val || null);
       };
     });
+
+    const addPollOptionBtn = mainView.querySelector("#add-poll-option-btn");
+    if (addPollOptionBtn) {
+      addPollOptionBtn.onclick = (e) => {
+        e.preventDefault();
+        const pollGrid = mainView.querySelector("#poll-options-grid");
+        const currentCount = pollGrid.querySelectorAll(".poll-input").length;
+        if (currentCount >= 20) return alert("Maximum of 20 options allowed.");
+        const input = document.createElement("input");
+        input.type = "text";
+        input.className = "poll-input";
+        input.placeholder = `Option ${currentCount + 1} (Optional)`;
+        pollGrid.appendChild(input);
+      };
+    }
 
     const emojiBtn = mainView.querySelector("#editor-btn-emoji");
     const emojiPicker = mainView.querySelector("#editor-emoji-picker");
@@ -1045,10 +1094,14 @@ function openForum(db, currentUsername, userRole) {
           if (hours > 0) {
             expiresAt = new Date(Date.now() + hours * 60 * 60 * 1000);
           }
+          const allowMultiple = mainView.querySelector(
+            "#poll-allow-multiple",
+          ).checked;
           pollData = {
             options: pollInputs,
             votes: {},
             expiresAt: expiresAt,
+            allowMultiple: allowMultiple,
           };
         }
 
