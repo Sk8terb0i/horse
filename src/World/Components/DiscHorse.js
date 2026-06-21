@@ -341,6 +341,14 @@ function openForum(db, currentUsername, userRole) {
   const mainView = overlay.querySelector("#topic-content");
   const topicList = overlay.querySelector("#topic-list");
 
+  mainView.addEventListener("click", (e) => {
+    const link = e.target.closest("a");
+    if (link && link.href) {
+      e.preventDefault();
+      window.open(link.href, "_blank");
+    }
+  });
+
   const minBtn = overlay.querySelector("#forum-min");
   const closeBtn = overlay.querySelector("#forum-close");
   const resizer = overlay.querySelector("#forum-resizer");
