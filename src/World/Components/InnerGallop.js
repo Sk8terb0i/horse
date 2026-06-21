@@ -195,7 +195,13 @@ export function initInnerGallop() {
       0% { opacity: 1; transform: translateY(0) scale(1); }
       100% { opacity: 0; transform: translateY(-40px) scale(1.2); }
     }
-  `;
+  
+  @media (max-width: 768px) {
+      .ig-window-frame { top: 5% !important; left: 5% !important; width: 90% !important; }
+      .ig-dock-capsule { width: 90% !important; bottom: 10px !important; justify-content: center; }
+      .ig-track-zone { width: 120px !important; height: 120px !important; margin: 10px 0; }
+    }
+    `;
   document.head.appendChild(styleEl);
 
   rhythmRoot = document.createElement("div");

@@ -341,7 +341,17 @@ export function initHorseJudgement(db, currentUsername) {
       cursor: pointer;
     }
     .hj-drawer-bar:hover { background: rgba(255, 255, 255, 0.1); border-color: var(--theme-color); }
-  `;
+  
+  @media (max-width: 768px) {
+      .hj-sidebar-menu { top: 2% !important; right: 2% !important; left: 2% !important; width: 96% !important; max-height: 90vh !important; padding: 15px !important; }
+      .hj-popup-ad { top: 10% !important; left: 5% !important; width: 90% !important; transform: none !important; }
+      .hj-settled-matrix { flex-direction: column !important; }
+      .hj-clear-capsule { flex-direction: column; align-items: stretch; }
+      .hj-btn-gel { width: 100%; text-align: center; margin-top: 5px; }
+      #hj-concept-input { width: 100% !important; }
+    }
+
+    `;
   document.head.appendChild(styleEl);
 
   judgementRoot = document.createElement("div");

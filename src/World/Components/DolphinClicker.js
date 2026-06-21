@@ -361,7 +361,20 @@ export function initDolphinClicker(db, currentUsername) {
       pointer-events: none;
       filter: grayscale(1);
     }
-  `;
+  
+  @media (max-width: 768px) {
+      #dc-header { left: 5% !important; top: 5% !important; width: 90% !important; }
+      #dc-title { font-size: 2.2rem !important; }
+      #dc-subtitle { font-size: 0.9rem !important; }
+      #dc-target-img { width: 280px !important; height: 280px !important; }
+      #dc-progress-wrapper { width: 90% !important; bottom: 5% !important; right: 5% !important; padding: 15px !important; }
+      .scroll-panel { width: 90% !important; right: 5% !important; left: 5% !important; max-height: 50vh !important; top: auto !important; bottom: 20% !important; }
+      .sabotage-item { font-size: 2.5rem !important; }
+      .aero-stat-card { padding: 6px 10px !important; }
+      .stat-value { font-size: 1rem !important; }
+      #dc-shop-btn, #dc-horstory-btn { padding: 8px 12px !important; font-size: 0.9rem !important; }
+    }
+    `;
   document.head.appendChild(styleEl);
 
   clickerRoot = document.createElement("div");

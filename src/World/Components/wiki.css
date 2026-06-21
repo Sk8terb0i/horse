@@ -729,3 +729,178 @@
     height: auto !important;
     box-sizing: border-box !important;
 }
+
+/* --- MOBILE RESPONSIVENESS OVERRIDES --- */
+@media (max-width: 768px) {
+  .wiki-window {
+    top: 2% !important;
+    left: 2% !important;
+    width: 96% !important;
+    height: 96% !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  /* Reset the heavy left padding on mobile since the sidebar is no longer occupying that space */
+  .wiki-nav {
+    padding-left: 10px !important;
+  }
+
+  /* Restore row layout so the absolute sidebar sits relative to the reading pane */
+  .wiki-content {
+    flex-direction: row !important;
+    position: relative !important;
+    flex: 1 !important;
+    height: calc(100% - 40px) !important;
+    overflow: hidden !important;
+  }
+
+  /* Turn sidebar into a hidden slide-out drawer */
+  .wiki-sidebar {
+    position: absolute !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    left: -240px !important; /* Hide 240px off-screen */
+    width: 240px !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    flex: none !important;
+    z-index: 1000 !important;
+    
+    /* Delay closing animation so scrolling doesn't snap it shut */
+    transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1) 0.5s !important;
+    
+    border-right: 3px solid #aaaaaa !important;
+    border-bottom: none !important;
+    box-shadow: 10px 0px 20px rgba(0,0,0,0.3) !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    box-sizing: border-box !important;
+    
+    /* Forces mobile browsers to treat the drawer as a sticky hover element */
+    cursor: pointer !important;
+  }
+
+  /* Turn sidebar into a hidden slide-out drawer */
+  .wiki-sidebar {
+    position: absolute !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    left: -240px !important; /* Hide 240px off-screen */
+    width: 240px !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    flex: none !important;
+    z-index: 1000 !important;
+    
+    /* Delay closing animation so scrolling doesn't snap it shut */
+    transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1) 0.5s !important;
+    
+    border-right: 3px solid #aaaaaa !important;
+    border-bottom: none !important;
+    box-shadow: 10px 0px 20px rgba(0,0,0,0.3) !important;
+    
+    /* CRITICAL FIX: Must be visible so the MENU tab isn't chopped off! */
+    overflow-y: visible !important;
+    overflow-x: visible !important; 
+    box-sizing: border-box !important;
+    
+    /* Forces mobile browsers to treat the drawer as a sticky hover element */
+    cursor: pointer !important;
+  }
+
+  .wiki-sidebar * {
+    cursor: pointer !important;
+  }
+
+  /* The MENU tab attached to the right edge */
+  .wiki-sidebar::after {
+    content: '▶';
+    position: absolute;
+    top: 40%;
+    left: 95%; /* Attaches it perfectly to the outer right edge */
+    width: 29px;
+    background: #ebebeb;
+    color: #002bb8;
+    font-weight: bold;
+    font-size: 12px;
+    padding: 15px 0;
+    text-align: left;
+    border: 1px solid #aaaaaa;
+    border-left: none;
+    writing-mode: vertical-rl;
+    user-select: none;
+    box-sizing: border-box;
+    box-shadow: 4px 0px 8px rgba(0,0,0,0.1); /* Slight shadow to make it pop */
+  }
+
+  /* Open instantly when hovered, touched, or focused */
+  .wiki-sidebar:hover,
+  .wiki-sidebar:focus,
+  .wiki-sidebar:focus-within,
+  .wiki-sidebar:active {
+    transform: translateX(240px) !important;
+    transition-delay: 0s !important;
+    outline: none !important;
+  }
+
+  /* Change the tab text when open */
+  .wiki-sidebar:hover::after,
+  .wiki-sidebar:focus::after,
+  .wiki-sidebar:focus-within::after,
+  .wiki-sidebar:active::after {
+    content: '◀';
+  }
+
+  /* Expand main view to fill screen */
+  .wiki-article-view {
+    width: 100% !important;
+    flex: 1 !important;
+    height: 100% !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    box-sizing: border-box !important;
+    padding: 15px 12px 15px 42px !important; /* Keep text clear of the MENU tab */
+    border-left: none !important;
+  }
+
+  /* Text Wrapping Overrides */
+  .wiki-text-content, .rich-text-content, .wiki-article-view * {
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .wiki-tool-modal {
+    width: 90% !important;
+    left: 5% !important;
+    top: 10% !important;
+    transform: none !important;
+    box-sizing: border-box !important;
+  }
+
+  /* App Dock Placement for Horsepedia */
+  .wiki-desktop-icon {
+    position: fixed !important;
+    top: 15px !important;
+    left: 15px !important;
+    margin: 0 !important;
+    transform: none !important;
+    z-index: 5000 !important;
+  }
+}
+
+/* --- HORSEPEDIA MOBILE ICON DOCK --- */
+@media (max-width: 768px) {
+  .wiki-desktop-icon {
+    position: fixed !important;
+    top: 15px !important;
+    left: 15px !important;
+    right: auto !important;
+    bottom: auto !important;
+    margin: 0 !important;
+    transform: none !important;
+    z-index: 5000 !important;
+  }
+}

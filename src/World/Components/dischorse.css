@@ -350,3 +350,141 @@ a, button, .topic-card, .forum-emoji, .action-text-btn, .rep-toggle, .edit-toggl
 #dischorse-icon:hover { transform: scale(1.2) rotate(-5deg); filter: hue-rotate(90deg); }
 .dischorse-icon-img { width: 64px; height: 64px; filter: drop-shadow(4px 4px 0px rgba(0,0,0,0.8)); }
 .dischorse-icon-text { color: #ffff00; font-size: 16px; text-shadow: 2px 2px 0px #000, -1px -1px 0px #ff00ff; margin-top: 5px; font-family: 'Comic Sans MS', serif; font-weight: 900; background: rgba(0,0,255,0.5); padding: 2px 5px; border: 2px dotted #00ffff;}
+
+/* --- MOBILE RESPONSIVENESS OVERRIDES --- */
+@media (max-width: 768px) {
+  .forum-window {
+    top: 2% !important;
+    left: 2% !important;
+    width: 96% !important;
+    height: 96% !important;
+  }
+  
+  /* App Dock Placement for Disc:Horse */
+  #dischorse-icon {
+    position: fixed !important;
+    top: 15px !important;
+    left: 95px !important; /* Space it cleanly next to Horsepedia */
+    right: auto !important;
+    bottom: auto !important;
+    margin: 0 !important;
+    transform: none !important;
+    z-index: 5000 !important;
+  }
+  
+  #dischorse-icon:hover {
+    transform: none !important;
+  }
+}
+
+/* OVERRIDE THE JS-INJECTED CONTAINER QUERY */
+@container (max-width: 650px) {
+  /* Restore row layout to place sidebar beside the main content */
+  div.forum-body-container { 
+    flex-direction: row !important; 
+    position: relative !important;
+  }
+
+  /* Turn sidebar into a hidden slide-out drawer */
+  div.forum-sidebar { 
+    position: absolute !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    left: -260px !important; /* Hide 260px off-screen */
+    width: 260px !important; 
+    height: 100% !important;
+    max-height: 100% !important;
+    flex: none !important;
+    z-index: 1000 !important;
+    
+    /* Delay the closing animation by 0.5s so scrolling doesn't snap it shut */
+    transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1) 0.5s !important; 
+    
+    border-bottom: none !important;
+    border-right: 4px ridge #ff00ff !important;
+    box-shadow: 10px 0px 20px rgba(0,0,0,0.8) !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    
+    /* CRITICAL: Forces iOS/Android to treat the whole drawer as a sticky clickable element */
+    cursor: pointer !important; 
+  }
+
+  /* Reset cursor for the children inside the drawer so they act normally */
+  div.forum-sidebar * {
+    cursor: url('https://cur.cursors-4u.net/nature/nat-10/nat975.cur'), pointer !important;
+  }
+
+  /* The MENU tab, attached directly to the right edge of the sidebar */
+  div.forum-sidebar::after {
+    content: '▶ MENU';
+    position: absolute;
+    top: 40%;
+    right: -36px; /* Hangs completely outside the sidebar */
+    width: 24px;
+    background: #0000ff;
+    color: #ffff00;
+    font-weight: 900;
+    font-size: 14px;
+    padding: 15px 4px;
+    border: 3px outset #00ffff;
+    border-left: none;
+    writing-mode: vertical-rl;
+    text-shadow: 1px 1px 0px #000;
+    user-select: none;
+  }
+
+  /* Open instantly (0s delay) when hovered, touched, or focused */
+  div.forum-sidebar:hover,
+  div.forum-sidebar:focus,
+  div.forum-sidebar:focus-within,
+  div.forum-sidebar:active {
+    transform: translateX(260px) !important;
+    transition-delay: 0s !important; 
+    outline: none !important;
+  }
+  
+  /* Change the tab text when open */
+  div.forum-sidebar:hover::after,
+  div.forum-sidebar:focus::after,
+  div.forum-sidebar:focus-within::after,
+  div.forum-sidebar:active::after {
+    content: '◀ CLOSE';
+  }
+
+  /* Expand main view to fill screen */
+  div.forum-main { 
+    width: 100% !important; 
+    flex: 1 !important; 
+    height: 100% !important; 
+    padding: 15px 12px 15px 45px !important; /* Padding keeps text clear of the closed MENU tab */
+    box-sizing: border-box !important;
+  }
+
+  /* Fix huge titles to prevent horizontal scrolling */
+  h1.topic-view-title, div.topic-view-title {
+    font-size: 22px !important;
+    line-height: 1.2 !important;
+    letter-spacing: 0px !important;
+    word-wrap: break-word !important;
+  }
+  
+  h1.topic-view-title::before, h1.topic-view-title::after,
+  div.topic-view-title::before, div.topic-view-title::after {
+    display: none !important;
+  }
+}
+
+/* --- DISC:HORSE MOBILE ICON DOCK --- */
+@media (max-width: 768px) {
+  #dischorse-icon {
+    position: fixed !important;
+    top: 15px !important;
+    left: 95px !important; /* Safely spaced 80px to the right of Horsepedia */
+    right: auto !important;
+    bottom: auto !important;
+    margin: 0 !important;
+    transform: none !important;
+    z-index: 5000 !important;
+  }
+}

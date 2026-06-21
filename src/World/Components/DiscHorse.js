@@ -316,7 +316,7 @@ function openForum(db, currentUsername, userRole) {
         </div>
       </div>
       <div class="forum-body-container">
-        <div class="forum-sidebar">
+        <div class="forum-sidebar" tabindex="0">
           <div class="forum-sidebar-padding">
             <button class="forum-btn full-width" id="new-topic-btn">+ NEW TOPIC</button>
           </div>

@@ -265,7 +265,7 @@ function openWikiOverlay(db, currentUsername, userRole) {
         <div class="wiki-tab active" data-section="lore">Horse Knowledge</div>
       </div>
       <div class="wiki-content">
-        <div class="wiki-sidebar" id="wiki-article-list"></div>
+        <div class="wiki-sidebar" id="wiki-article-list" tabindex="0"></div>
         <div class="wiki-article-view" id="wiki-article-body"></div>
         
         <div id="wiki-suggest-btn" class="suggest-float-btn">✨ Suggest Edit</div>
